@@ -226,6 +226,62 @@ export const BIOLOGICAL_ENTITIES: Record<string, BioEntity> = {
     source: "UniProt",
     parentId: "neuronal_cell"
   },
+  "lysosome": {
+    id: "lysosome",
+    name: "Lysosome",
+    category: "organelle",
+    description: "Acidic membrane-bound recycling organelles packed with hydrolytic enzymes. Degrades exhausted cellular scrap and redundant macromolecules.",
+    metricSize: "500 nm",
+    facts: [
+      "Maintains an aggressive internal pH of 4.5 to 5.0 via active v-ATPase proton pumping.",
+      "Contains over 60 distinct acid hydrolases to break down lipids, proteins, and DNA safely.",
+      "Directs cellular autophagy, digesting damaged organelles to recover vital raw materials."
+    ],
+    source: "UniProt",
+    parentId: "neuronal_cell"
+  },
+  "peroxisome": {
+    id: "peroxisome",
+    name: "Peroxisome",
+    category: "organelle",
+    description: "Specialized metabolic organelle centered on oxidative processing, lipid beta-oxidation, and metabolic detoxification.",
+    metricSize: "400 nm",
+    facts: [
+      "Generates toxic hydrogen peroxide (H2O2) byproduct and disarms it using Catalase enzymes.",
+      "Crucial for synthesizing plasmalogens, the most abundant class of myelin sheath membrane lipids.",
+      "Conducts critical long-chain fatty acid oxidation loops to sustain metabolic health."
+    ],
+    source: "Reactome",
+    parentId: "neuronal_cell"
+  },
+  "ribosome": {
+    id: "ribosome",
+    name: "Ribosome Desk",
+    category: "organelle",
+    description: "Dense, non-membranous ribonuclear machines that compile mRNA instruction lines onto growing polypeptide chains.",
+    metricSize: "30 nm",
+    facts: [
+      "Assembles from large 60S and small 40S subunits comprising ribosomal RNA (rRNA) strands.",
+      "Translates mRNA nucleotide sequences into peptide structures at a speed of 4-6 amino acids per second.",
+      "Found either floating suspended incytoplasm or bound onto the rough endoplasmic reticulum walls."
+    ],
+    source: "UniProt",
+    parentId: "neuronal_cell"
+  },
+  "centrosome": {
+    id: "centrosome",
+    name: "Centrosome Hub",
+    category: "organelle",
+    description: "The primary microtubule organizing center (MTOC) of human cells, directing internal physical architecture and cellular division spikes.",
+    metricSize: "1 µm",
+    facts: [
+      "Unfolds twin orthogonal barrel-shaped centrioles wrapped in dense pericentriolar matrix proteins.",
+      "Launches microtubule tracks that govern vesicle placement and mitotic structural division.",
+      "Controls somatic polarization and spindle formation key to neural migration pathways."
+    ],
+    source: "UniProt",
+    parentId: "neuronal_cell"
+  },
 
   // PROTEIN COMPLEX SCALE
   "atp_synthase": {

@@ -1,12 +1,13 @@
 import React from "react";
-import { Search, Bookmark, Share2, Compass } from "lucide-react";
+import { Search, Bookmark, Share2, Compass, Info } from "lucide-react";
 
 interface HeaderProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
+  onOpenInfo: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentTab, onTabChange }) => {
+export const Header: React.FC<HeaderProps> = ({ currentTab, onTabChange, onOpenInfo }) => {
   const tabs = ["GALAXY VIEW", "MOLECULAR MAP", "SYSTEMS", "DATA CORE", "SIMULATION"];
 
   return (
@@ -52,6 +53,15 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onTabChange }) => {
       {/* Right Actions */}
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-4 text-slate-400">
+          <button 
+            onClick={onOpenInfo}
+            id="header-info-btn"
+            className="hover:text-cyan-400 transition cursor-pointer p-1 flex items-center gap-1" 
+            title="Observation Methodology & Reference Sources ('i')"
+          >
+            <Info className="w-4 h-4 text-cyan-400" />
+            <span className="text-[9.5px] font-mono tracking-wider font-extrabold hidden md:inline">CALC REF</span>
+          </button>
           <button className="hover:text-cyan-400 transition cursor-pointer p-1" title="Search Databases">
             <Search className="w-4 h-4" />
           </button>
