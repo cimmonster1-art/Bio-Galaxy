@@ -11,6 +11,18 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      // Split the large rendering and framework libraries into their own
+      // chunks so the main bundle stays cacheable and within budget.
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            three: ['three'],
+            react: ['react', 'react-dom'],
+          },
+        },
+      },
+    },
     server: {
       // HMR is disabled via DISABLE_HMR env var.
       // Do not modify--file watching is disabled to prevent flickering.
