@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Gauge, ListTree, Pause, Play, Sparkles } from 'lucide-react';
 import { Scale } from '../types';
-import { COSMIC_TIMELINE, eraForScale } from '../data/cosmos';
+import { HISTORY_CHAPTERS } from '../data/history';
 
 interface Props { scale: Scale; onSelectScale: (scale: Scale) => void; }
 type TimelineTab = 'eras' | 'playback';
