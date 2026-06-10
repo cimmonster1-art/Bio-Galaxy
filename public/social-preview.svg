@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Bio Galaxy, one continuous atlas from cosmos to atom</title>
+  <desc id="desc">A luminous cyan biological galaxy connects cosmic, taxonomic, cellular, and molecular scales.</desc>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="75%"><stop stop-color="#10263b"/><stop offset=".52" stop-color="#07101e"/><stop offset="1" stop-color="#02040a"/></radialGradient>
+    <radialGradient id="core"><stop stop-color="#e7fbff"/><stop offset=".2" stop-color="#67e8f9"/><stop offset="1" stop-color="#0891b2" stop-opacity="0"/></radialGradient>
+    <linearGradient id="line"><stop stop-color="#67e8f9"/><stop offset="1" stop-color="#8fbfff"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#67e8f9" stroke-opacity=".05"/></pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/><rect width="1200" height="630" fill="url(#grid)"/>
+  <g opacity=".65" fill="#dffaff"><circle cx="89" cy="86" r="2"/><circle cx="1101" cy="111" r="2"/><circle cx="1040" cy="530" r="1.5"/><circle cx="149" cy="510" r="1.5"/><circle cx="852" cy="77" r="1"/><circle cx="329" cy="126" r="1"/></g>
+  <g transform="translate(870 315)" fill="none" filter="url(#glow)"><ellipse rx="235" ry="72" stroke="url(#line)" stroke-width="3" transform="rotate(-24)" opacity=".8"/><ellipse rx="205" ry="58" stroke="#67e8f9" stroke-width="2" transform="rotate(48)" opacity=".55"/><ellipse rx="150" ry="45" stroke="#8fbfff" stroke-width="2" transform="rotate(105)" opacity=".4"/><circle r="78" fill="url(#core)"/><circle cx="-205" cy="86" r="11" fill="#67e8f9"/><circle cx="158" cy="-104" r="8" fill="#8fbfff"/><circle cx="105" cy="145" r="6" fill="#fff1d6"/></g>
+  <g font-family="DejaVu Sans, Arial, sans-serif" fill="#f1f5f9"><text x="82" y="122" font-size="25" font-weight="700" letter-spacing="3" fill="#67e8f9">BIO GALAXY</text><text x="82" y="239" font-size="58" font-weight="700">One continuous atlas,</text><text x="82" y="310" font-size="58" font-weight="700" fill="#a5f3fc">from cosmos to atom.</text><text x="82" y="378" font-size="22" fill="#a7b4c7">Interactive 3D biology • 22 connected scales • Public scientific data</text></g>
+  <g transform="translate(82 478)" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" fill="#93a4ba"><circle cy="-6" r="5" fill="#67e8f9"/><text x="18">UniProt</text><circle cx="116" cy="-6" r="5" fill="#67e8f9"/><text x="134">Reactome</text><circle cx="266" cy="-6" r="5" fill="#67e8f9"/><text x="284">RCSB PDB</text><circle cx="417" cy="-6" r="5" fill="#67e8f9"/><text x="435">Ensembl</text><circle cx="541" cy="-6" r="5" fill="#67e8f9"/><text x="559">HPA</text><circle cx="634" cy="-6" r="5" fill="#67e8f9"/><text x="652">NCBI</text></g>
+</svg>

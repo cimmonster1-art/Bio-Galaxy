@@ -1,0 +1,19 @@
+{
+  "name": "Bio Galaxy: Interactive 3D Biological Atlas",
+  "short_name": "Bio Galaxy",
+  "description": "Explore 22 connected scales from the cosmos and Tree of Life to cells, proteins, molecules, and atoms.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#02040a",
+  "theme_color": "#02040a",
+  "categories": ["education", "science", "visualization"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
