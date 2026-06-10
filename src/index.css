@@ -100,3 +100,33 @@ body {
 .scroll-thin::-webkit-scrollbar-thumb:hover {
   background: rgba(39, 196, 217, 0.4);
 }
+
+.timeline-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 0.375rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.65rem;
+  color: #71839a;
+  transition: color 160ms ease, background 160ms ease;
+}
+
+.timeline-tab:hover,
+.timeline-tab-active {
+  background: rgba(39, 196, 217, 0.1);
+  color: #b9f4fb;
+}
+
+.timeline-range {
+  accent-color: #27c4d9;
+  cursor: pointer;
+}
+
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid rgba(39, 196, 217, 0.8);
+  outline-offset: 2px;
+}
