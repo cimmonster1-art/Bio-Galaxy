@@ -12,9 +12,9 @@ export class SceneLightingRig {
   constructor(scene: THREE.Scene) {
     this.group.name = 'LightingRig';
 
-    this.group.add(new THREE.AmbientLight(0x4a6a85, 0.85));
+    this.group.add(new THREE.AmbientLight(0x4a6a85, 0.58));
 
-    const key = new THREE.DirectionalLight(0xbfe9ff, 1.15);
+    const key = new THREE.DirectionalLight(0xbfe9ff, 1.35);
     key.position.set(20, 30, 40);
     this.group.add(key);
 
@@ -22,7 +22,7 @@ export class SceneLightingRig {
     warm.position.set(-30, 10, -20);
     this.group.add(warm);
 
-    const rim = new THREE.PointLight(0x27c4d9, 0.9, 600, 1.6);
+    const rim = new THREE.PointLight(0x27c4d9, 0.38, 600, 1.6);
     rim.position.set(-40, -20, 30);
     this.group.add(rim);
 

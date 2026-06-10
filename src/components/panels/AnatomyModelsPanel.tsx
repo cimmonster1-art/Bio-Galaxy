@@ -20,9 +20,14 @@ interface Props {
 export const AnatomyModelsPanel: React.FC<Props> = ({ activeId, status, onLoad }) => (
   <Panel eyebrow="Organism models" title="Open 3D Models">
     <p className="mb-2.5 text-[11px] leading-relaxed text-slate-500">
+<<<<<<< HEAD
       Real glTF organism meshes, loaded at the organism scale. The human body and skeleton ship from
       Z-Anatomy; the animal meshes stream from open GitHub repositories.
+=======
+      The default layered human atlas follows the open Z-Anatomy and BodyParts3D reference. Optional animated glTF figures can be loaded at organism scale.
+>>>>>>> origin/main
     </p>
+    <a href="https://github.com/Z-Anatomy/Models-of-human-anatomy" target="_blank" rel="noreferrer" className="mb-2.5 flex items-center justify-between rounded-sm border border-cyan-500/30 bg-cyan-500/[.06] px-2.5 py-2 text-[11px] text-cyan-100 hover:border-cyan-300/50"><span><strong className="block">Layered human anatomy</strong><span className="meta-label">Z-Anatomy reference</span></span><ExternalLink className="h-3 w-3" /></a>
     <ul className="space-y-1.5">
       {MODEL_CATALOG.map((entry) => {
         const active = entry.id === activeId;

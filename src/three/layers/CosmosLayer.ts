@@ -96,7 +96,7 @@ export class CosmosLayer implements SceneLayer {
       const z = Math.sin(angle) * radius + (Math.random() - 0.5) * spread;
       const y = (Math.random() - 0.5) * (3 + (1 - t) * 8);
       dummy.position.set(x, y, z);
-      dummy.scale.setScalar(0.5 + Math.random() * 1.4);
+      dummy.scale.setScalar(0.75 + Math.random() * 1.65);
       dummy.updateMatrix();
       this.spiral.setMatrixAt(i, dummy.matrix);
       color.copy(cool).lerp(warm, Math.max(0, 1 - t * 1.6));
@@ -191,8 +191,9 @@ export class CosmosLayer implements SceneLayer {
   }
 
   update(dt: number, elapsed: number): void {
-    const galaxyWeight = this.currentScale >= Scale.Galaxy ? 1 : 0.35;
-    const fieldWeight = this.currentScale <= Scale.Cosmos ? 1 : 0.5;
+    const galaxyWeight = this.currentScale >= Scale.Galaxy ? 1 : 0.32;
+    // Pull the deep field back at galaxy scale so the Milky Way remains legible.
+    const fieldWeight = this.currentScale === Scale.Cosmos ? 0.72 : 0.12;
     fadeMaterial(this.coreMat, this.intensity, dt);
     fadeMaterial(this.fieldMat, this.intensity * fieldWeight, dt);
     fadeMaterial(this.spiralMat, this.intensity * galaxyWeight, dt);

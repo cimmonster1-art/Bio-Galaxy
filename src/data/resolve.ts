@@ -1,5 +1,6 @@
 import { BioObject, RANK_SCALE, Scale, TaxonRank } from '../types';
 import { BIO_OBJECTS } from './registry';
+import { ANATOMY_OBJECTS } from './anatomy';
 import { TaxonNode, allTaxa, lineageOf } from './taxonomy';
 
 // Resolves a pick id coming from any scene layer into a full BioObject.
@@ -79,6 +80,7 @@ function speciesToOrganism(node: TaxonNode): BioObject {
   };
 }
 
+<<<<<<< HEAD
 // Organ-system and organ records surfaced by the anatomy layer.
 const anatomyObjects: Record<string, BioObject> = {
   'system:cardiovascular': {
@@ -114,6 +116,8 @@ const anatomyObjects: Record<string, BioObject> = {
     wikipedia: 'Heart',
   },
 };
+=======
+>>>>>>> origin/main
 
 // Cosmic bodies surfaced by the cosmos and solar-system layers. These are not
 // backed by a biological database, so they carry a plain provenance note for
@@ -160,6 +164,7 @@ const cosmicObjects: Record<string, BioObject> = {
   'planet:neptune': planet('neptune', 'Neptune', 'The outermost planet, a deep blue ice giant.', ['Strongest winds in the solar system.', 'Triton orbits in reverse.'], Scale.SolarSystem),
 };
 
+
 export function resolveObject(id: string): BioObject | undefined {
-  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? anatomyObjects[id] ?? cosmicObjects[id];
+  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? cosmicObjects[id];
 }

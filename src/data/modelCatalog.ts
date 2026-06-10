@@ -35,8 +35,13 @@ const THREE_BASE = 'https://raw.githubusercontent.com/mrdoob/three.js/master/exa
 export const MODEL_CATALOG: ModelEntry[] = [
   {
     id: 'human',
+<<<<<<< HEAD
     label: 'Human body (Z-Anatomy)',
     organism: 'Homo sapiens',
+=======
+    label: 'Animated reference figure',
+    organism: 'General human proportion reference',
+>>>>>>> origin/main
     taxonHint: 'homo_sapiens',
     scale: Scale.Organism,
     format: 'glb',

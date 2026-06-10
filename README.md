@@ -28,6 +28,10 @@ typed client wrappers in `src/data/clients`:
 - Human Protein Atlas: tissue and cell expression
 - NCBI: literature and taxonomy
 
+The browser clients use an allowlisted same-origin gateway at `/api/science`. It deduplicates concurrent requests, caches successful upstream responses in memory, serves recent stale data when a public provider briefly fails, and never accepts or exposes API keys.
+
+The landing page also credits the astronomy, planetary texture, open model, and rendering ecosystem behind the atlas. Swiss Ephemeris, NASA/JPL Horizons, and Z-Anatomy are explicitly labeled as compatible reference ecosystems rather than live integrations.
+
 All endpoints are public and key free, so no secrets are required.
 
 ## Architecture

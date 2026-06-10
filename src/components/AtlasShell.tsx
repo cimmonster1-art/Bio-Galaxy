@@ -6,9 +6,8 @@ import { lineageOf } from '../data/taxonomy';
 import { resolveObject } from '../data/resolve';
 import { rcsb } from '../data/clients';
 import { useAsync } from '../hooks/useAsync';
-import { MODEL_CATALOG, ModelEntry } from '../data/modelCatalog';
+import { ModelEntry } from '../data/modelCatalog';
 
-const DEFAULT_MODEL = MODEL_CATALOG.find((m) => m.id === 'human') ?? MODEL_CATALOG[0];
 import { BioGalaxyCanvas, OrganismModelRequest, StructurePayload } from './BioGalaxyCanvas';
 import { GlobalSearch } from './GlobalSearch';
 import { TimeScrubber } from './TimeScrubber';
@@ -21,8 +20,13 @@ import { AnatomyModelsPanel, ModelStatus } from './panels/AnatomyModelsPanel';
 import { AtlasSidebar } from './panels/AtlasSidebar';
 import { SceneControls } from './panels/SceneControls';
 import { ActivityStrip } from './panels/ActivityStrip';
+<<<<<<< HEAD
 import { createSoundscape, Soundscape } from '../audio/soundscape';
 import { Epoch } from '../data/epochs';
+=======
+import { AnatomyExplorer } from './AnatomyExplorer';
+import { AtlasCopilot } from './AtlasCopilot';
+>>>>>>> origin/main
 
 interface Props {
   onExit: () => void;
@@ -40,6 +44,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const [selected, setSelected] = useState<BioObject | null>(null);
   const [hovered, setHovered] = useState<BioObject | null>(null);
   const [focusTaxonId, setFocusTaxonId] = useState<string | null>(null);
+<<<<<<< HEAD
   // The human model loads by default so the organism scale shows a real mesh.
   const [organismModel, setOrganismModel] = useState<OrganismModelRequest | null>({
     url: DEFAULT_MODEL.url,
@@ -84,6 +89,12 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
     },
     [wakeSound],
   );
+=======
+  // The layered Z-Anatomy reference visualization is the always-available default.
+  const [organismModel, setOrganismModel] = useState<OrganismModelRequest | null>(null);
+  const [activeModelId, setActiveModelId] = useState<string | null>(null);
+  const [modelStatus, setModelStatus] = useState<ModelStatus>('idle');
+>>>>>>> origin/main
 
   // Apply a resolved object's natural scale and phylogenetic focus.
   const applySelection = useCallback((obj: BioObject) => {
@@ -95,7 +106,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
     } else if (obj.id.startsWith('organism:')) {
       setFocusTaxonId(`taxon:${stripTaxon(obj.id)}`);
       setScale(Scale.Organism);
-    } else if (obj.id.startsWith('planet:')) {
+    } else {
       setScale(obj.scale);
     }
   }, []);
@@ -197,6 +208,11 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const selectedTaxonId = focusTaxonId ? stripTaxon(focusTaxonId) : null;
   const selectedOrganelleId = selected?.kind === 'organelle' ? selected.id : null;
   const anatomyScale = scale >= Scale.Organism && scale <= Scale.Tissue;
+<<<<<<< HEAD
+=======
+  const cosmicScale = scale <= Scale.Planet;
+  const coreAnatomyScale = scale >= Scale.Organism && scale <= Scale.Organ;
+>>>>>>> origin/main
 
   return (
     <div className="flex h-screen w-screen flex-col bg-[#02040a] text-slate-100">
@@ -285,6 +301,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
             onScaleSettled={handleScaleSettled}
             onModelResult={handleModelResult}
           />
+<<<<<<< HEAD
 
           {/* Evolution tab: a dense 2D cladogram over the live scene. */}
           {view === 'evolution' && (
@@ -304,6 +321,11 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
               />
             </>
           )}
+=======
+          <SceneControls scale={scale} hovered={hovered} onStep={stepScale} />
+          {cosmicScale && <CosmicTimeline scale={scale} onSelectScale={setScale} />}
+          {coreAnatomyScale && <AnatomyExplorer scale={scale} selectedId={selected?.id} onSelect={navigateTo} onScaleChange={setScale} />}
+>>>>>>> origin/main
         </main>
 
         {/* Right column: the third-of-screen detail sidebar with copilot. */}
@@ -313,6 +335,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
       </div>
 
       <ActivityStrip scale={scale} selected={selected} lineage={lineage} />
+      <AtlasCopilot scale={scale} selected={selected} onNavigate={navigateTo} />
     </div>
   );
 };
