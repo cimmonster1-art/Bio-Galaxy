@@ -5,6 +5,8 @@ import { BioGalaxyScene } from '../three/BioGalaxyScene';
 interface Props {
   scale: Scale;
   selectedId: string | null;
+  /** Taxon id (with `taxon:` prefix) to focus in the Tree of Life. */
+  focusTaxonId?: string | null;
   onHover: (tag: PickTag | null) => void;
   onSelect: (tag: PickTag | null) => void;
   onScaleSettled: (scale: Scale) => void;
@@ -18,6 +20,7 @@ interface Props {
 export const BioGalaxyCanvas: React.FC<Props> = ({
   scale,
   selectedId,
+  focusTaxonId = null,
   onHover,
   onSelect,
   onScaleSettled,
@@ -52,6 +55,10 @@ export const BioGalaxyCanvas: React.FC<Props> = ({
   useEffect(() => {
     sceneRef.current?.setSelected(selectedId);
   }, [selectedId]);
+
+  useEffect(() => {
+    sceneRef.current?.setFocusTaxon(focusTaxonId);
+  }, [focusTaxonId]);
 
   return <div ref={containerRef} className="absolute inset-0" />;
 };

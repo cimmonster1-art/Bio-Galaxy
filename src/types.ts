@@ -1,21 +1,29 @@
 // Core domain types for the Bio Galaxy spatial atlas.
 
 /**
- * Continuous biological scale ladder, from the universe of life down to a
- * single atom. The index doubles as the position along the zoom axis.
+ * Continuous biological scale ladder, from the Tree of Life down to a single
+ * atom. The index doubles as the position along the zoom axis, so the navigator
+ * can ease between adjacent values and layers can index it directly.
  */
 export enum Scale {
-  Universe = 0,
-  Taxonomy = 1,
-  Organism = 2,
-  OrganSystem = 3,
-  Organ = 4,
-  Tissue = 5,
-  Cell = 6,
-  Organelle = 7,
-  ProteinComplex = 8,
-  Molecule = 9,
-  Atom = 10,
+  TreeOfLife = 0,
+  Domain = 1,
+  Kingdom = 2,
+  Phylum = 3,
+  Class = 4,
+  Order = 5,
+  Family = 6,
+  Genus = 7,
+  Species = 8,
+  Organism = 9,
+  OrganSystem = 10,
+  Organ = 11,
+  Tissue = 12,
+  Cell = 13,
+  Organelle = 14,
+  ProteinComplex = 15,
+  Molecule = 16,
+  Atom = 17,
 }
 
 export interface ScaleLevel {
@@ -58,6 +66,7 @@ export interface BioObject {
   name: string;
   scale: Scale;
   kind:
+    | 'clade'
     | 'taxon'
     | 'organism'
     | 'system'
@@ -68,6 +77,10 @@ export interface BioObject {
     | 'complex'
     | 'molecule'
     | 'atom';
+  /** Taxonomic rank when this object is a node in the Tree of Life. */
+  rank?: TaxonRank;
+  /** NCBI Taxonomy identifier, when known, for deep links and E-utilities. */
+  ncbiTaxId?: number;
   summary: string;
   size: string;
   facts: string[];
@@ -88,3 +101,26 @@ export interface PickTag {
   id: string;
   scale: Scale;
 }
+
+/** Linnaean ranks used by the Tree of Life navigation, ordered broad to fine. */
+export type TaxonRank =
+  | 'domain'
+  | 'kingdom'
+  | 'phylum'
+  | 'class'
+  | 'order'
+  | 'family'
+  | 'genus'
+  | 'species';
+
+/** The scale each taxonomic rank maps onto in the ladder. */
+export const RANK_SCALE: Record<TaxonRank, Scale> = {
+  domain: Scale.Domain,
+  kingdom: Scale.Kingdom,
+  phylum: Scale.Phylum,
+  class: Scale.Class,
+  order: Scale.Order,
+  family: Scale.Family,
+  genus: Scale.Genus,
+  species: Scale.Species,
+};

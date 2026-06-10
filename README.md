@@ -1,15 +1,16 @@
 # Bio Galaxy
 
-A 3D biological atlas for exploring proteins, pathways, cells, genes, organisms,
-and molecular structures through public scientific datasets. Bio Galaxy is a
-visual interface over open biological databases, built around a real Three.js
-spatial navigation system that zooms continuously from the universe of life down
-to a single atom.
+A 3D biological atlas for exploring proteins, pathways, taxonomy, anatomy,
+genes, expression, and molecular structures through public scientific datasets.
+Bio Galaxy is a visual interface over open biological databases, built around a
+real Three.js spatial navigation system that zooms continuously from the Tree of
+Life down to a single atom.
 
 ## Scale ladder
 
-Universe of Life → Taxonomic Tree → Organism → Organ System → Organ → Tissue →
-Cell → Organelle → Protein Complex → Molecule → Atom
+Tree of Life → Domain → Kingdom → Phylum → Class → Order → Family → Genus →
+Species → Organism → Organ System → Organ → Tissue → Cell → Organelle → Protein
+Complex → Molecule → Atom
 
 ## Data sources
 
@@ -30,22 +31,29 @@ All endpoints are public and key free, so no secrets are required.
 ```
 src/
   three/                 Three.js scene system
-    BioGalaxyScene.ts    renderer, camera, controls, lifecycle, raycasting
-    ScaleNavigator.ts    scale transitions and camera targets
-    layers/              OrganismField, TissueField, CellScene,
-                         OrganelleDetailView, ProteinStructureLayer
-    core/                SceneLayer contract and disposal helpers
+    BioGalaxyScene.ts    orchestrator: renderer, scene graph, loop, teardown
+    ScaleNavigator.ts    eased position along the scale ladder
+    core/                SceneLayer contract, lighting rig, camera-scale
+                         controller, selection raycaster, performance manager,
+                         post-processing (bloom), disposal helpers
+    shaders/             open-source GLSL: membrane and nebula materials
+    textures/            procedural canvas textures (no binary assets)
+    layers/              TreeOfLifeLayer, AnatomyModelLayer, TissueField,
+                         CellScene, OrganelleDetailView, ProteinStructureLayer
   data/
-    clients/             UniProt, Reactome, RCSB, Ensembl, HPA, NCBI wrappers
-    registry.ts          curated biological objects
-    organisms.ts         sampled taxonomy for the organism field
-    scales.ts            the scale ladder
+    clients/             NCBI Taxonomy, UniProt, Reactome, RCSB, Ensembl, HPA,
+                         NCBI wrappers (timeout, retry, cache, normalization)
+    taxonomy.ts          curated Tree of Life with NCBI tax ids
+    registry.ts          curated subcellular objects
+    scales.ts            the 18-step scale ladder
   components/            React shell, panels, and UI primitives
   hooks/                 data-loading helpers
 ```
 
 Scene logic is kept separate from the React UI panels, and API clients are kept
-separate from the rendering layers.
+separate from the rendering layers. Organism anatomy is loaded through a
+GLTF/GLB/FBX loader architecture (with a procedural fallback) so open models
+such as Z-Anatomy can be dropped in with cited provenance.
 
 ## Run locally
 

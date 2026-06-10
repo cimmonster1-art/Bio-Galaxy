@@ -6,6 +6,7 @@ import { UniProtSection } from './detail/UniProtSection';
 import { StructureSection } from './detail/StructureSection';
 import { MitochondrialProteins } from './detail/MitochondrialProteins';
 import { PathwaySection } from './detail/PathwaySection';
+import { TaxonomySection } from './detail/TaxonomySection';
 
 interface Props {
   selected: BioObject | null;
@@ -50,6 +51,12 @@ export const DetailPanel: React.FC<Props> = ({ selected }) => {
               </li>
             ))}
           </ul>
+        )}
+
+        {selected.rank && (
+          <div className="border-t border-white/10 pt-3">
+            <TaxonomySection selected={selected} />
+          </div>
         )}
 
         {selected.id === 'mitochondrion' && (

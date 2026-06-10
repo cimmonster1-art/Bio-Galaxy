@@ -1,9 +1,14 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Scale, PickTag } from '../types';
-import { ScaleNavigator } from './ScaleNavigator';
 import { SceneLayer } from './core/SceneLayer';
-import { OrganismField } from './layers/OrganismField';
+import { SceneLightingRig } from './core/SceneLightingRig';
+import { CameraScaleController } from './core/CameraScaleController';
+import { SelectionRaycaster } from './core/SelectionRaycaster';
+import { PerformanceManager } from './core/PerformanceManager';
+import { PostFX } from './core/PostFX';
+import { createNebulaBackground } from './shaders/nebula';
+import { TreeOfLifeLayer } from './layers/TreeOfLifeLayer';
+import { AnatomyModelLayer, ModelProvenance } from './layers/AnatomyModelLayer';
 import { TissueField } from './layers/TissueField';
 import { CellScene } from './layers/CellScene';
 import { OrganelleDetailView } from './layers/OrganelleDetailView';
@@ -16,74 +21,71 @@ export interface SceneCallbacks {
 }
 
 /**
- * Main orchestrator. Owns the renderer, camera, controls, lighting, scene
- * graph, animation loop, and lifecycle. Layers own their own geometry; this
- * class drives them through the ScaleNavigator and routes raycast selection.
- *
- * Performance and correctness measures:
- *   - render loop pauses when the canvas leaves the viewport
- *   - device pixel ratio is capped
- *   - hover raycasting is throttled
- *   - every geometry, material, control, listener, and RAF is disposed
+ * Main orchestrator. Owns the renderer, scene graph, post-processing, lighting,
+ * and animation loop, and drives a stack of scale-specific layers through the
+ * CameraScaleController. Selection runs through the SelectionRaycaster; demand
+ * rendering is gated by the PerformanceManager. Every GPU resource, observer,
+ * listener, and animation frame is released on dispose.
  */
 export class BioGalaxyScene {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
-  private readonly camera: THREE.PerspectiveCamera;
-  private readonly controls: OrbitControls;
-  private readonly navigator: ScaleNavigator;
+  private readonly lighting: SceneLightingRig;
+  private readonly cameraController: CameraScaleController;
+  private readonly raycaster: SelectionRaycaster;
+  private readonly performance: PerformanceManager;
+  private readonly postFX: PostFX;
+
+  private readonly nebula: THREE.Mesh;
+  private readonly nebulaMat: THREE.ShaderMaterial;
+
   private readonly layers: SceneLayer[];
+  private readonly tree: TreeOfLifeLayer;
+  private readonly anatomy: AnatomyModelLayer;
   private readonly cell: CellScene;
 
-  private readonly raycaster = new THREE.Raycaster();
-  private readonly pointer = new THREE.Vector2();
-  private pointerActive = false;
   private hoverTag: PickTag | null = null;
-
   private readonly clock = new THREE.Clock();
   private rafId = 0;
   private running = false;
-  private visible = true;
   private hoverAccumulator = 0;
-  private lastSettled: Scale;
+  private idleFrames = 0;
 
   private readonly resizeObserver: ResizeObserver;
-  private readonly intersectionObserver: IntersectionObserver;
 
   constructor(
     private readonly container: HTMLElement,
     initialScale: Scale,
     private readonly callbacks: SceneCallbacks = {},
   ) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const width = container.clientWidth || 1;
+    const height = container.clientHeight || 1;
+
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.scene.fog = new THREE.FogExp2(0x02060d, 0.0008);
+    this.renderer.setSize(width, height);
+    this.renderer.setClearColor(0x02040a, 1);
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
     container.appendChild(this.renderer.domElement);
 
-    this.camera = new THREE.PerspectiveCamera(
-      50,
-      container.clientWidth / container.clientHeight,
-      0.1,
-      2000,
-    );
-    this.camera.position.set(0, 12, 150);
+    this.scene.fog = new THREE.FogExp2(0x02040a, 0.0011);
 
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.08;
-    this.controls.minDistance = 6;
-    this.controls.maxDistance = 320;
-    this.controls.enablePan = false;
+    const bg = createNebulaBackground();
+    this.nebula = bg.mesh;
+    this.nebulaMat = bg.material;
+    this.scene.add(this.nebula);
 
-    this.addLights();
+    this.lighting = new SceneLightingRig(this.scene);
+    this.cameraController = new CameraScaleController(this.renderer.domElement, width / height, initialScale);
+    this.raycaster = new SelectionRaycaster(this.renderer.domElement);
 
-    this.navigator = new ScaleNavigator(initialScale);
-    this.lastSettled = initialScale;
-
+    this.tree = new TreeOfLifeLayer();
+    this.anatomy = new AnatomyModelLayer();
     this.cell = new CellScene();
     this.layers = [
-      new OrganismField(),
+      this.tree,
+      this.anatomy,
       new TissueField(),
       this.cell,
       new OrganelleDetailView(),
@@ -91,49 +93,34 @@ export class BioGalaxyScene {
     ];
     for (const layer of this.layers) this.scene.add(layer.root);
 
+    this.postFX = new PostFX(this.renderer, this.scene, this.cameraController.camera, width, height);
+
     this.renderer.domElement.addEventListener('pointermove', this.onPointerMove);
     this.renderer.domElement.addEventListener('pointerleave', this.onPointerLeave);
     this.renderer.domElement.addEventListener('click', this.onClick);
-    // Wheel zoom and momentum damping emit 'change' without a pointermove, so
-    // restart the loop on control changes to keep interaction responsive.
-    this.controls.addEventListener('change', this.onControlsChange);
+    this.cameraController.controls.addEventListener('change', this.onControlsChange);
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize());
     this.resizeObserver.observe(container);
 
-    this.intersectionObserver = new IntersectionObserver(
-      ([entry]) => {
-        this.visible = entry.isIntersecting;
-        if (this.visible) this.start();
-        else this.stop();
-      },
-      { threshold: 0.05 },
-    );
-    this.intersectionObserver.observe(container);
+    this.performance = new PerformanceManager(container, {
+      onActivate: () => this.start(),
+      onDeactivate: () => this.stop(),
+    });
 
     this.applyScale();
     this.start();
   }
 
-  private addLights(): void {
-    this.scene.add(new THREE.AmbientLight(0x4a6a85, 0.9));
-    const key = new THREE.DirectionalLight(0xbfe9ff, 1.1);
-    key.position.set(20, 30, 40);
-    this.scene.add(key);
-    const rim = new THREE.PointLight(0x27c4d9, 0.8, 400);
-    rim.position.set(-40, -20, 30);
-    this.scene.add(rim);
-  }
-
   // ---- public API ----------------------------------------------------------
 
   setScale(scale: Scale): void {
-    this.navigator.setScale(scale);
+    this.cameraController.setScale(scale);
     this.start();
   }
 
   stepScale(direction: 1 | -1): void {
-    this.navigator.step(direction);
+    this.cameraController.step(direction);
     this.start();
   }
 
@@ -142,14 +129,34 @@ export class BioGalaxyScene {
     this.cell.setSelected(id);
   }
 
+  /** Focus a taxonomic lineage in the Tree of Life and orient toward it. */
+  setFocusTaxon(id: string | null): void {
+    this.tree.setSelected(id);
+    if (id) {
+      this.tree.focusLineage(id.replace(/^taxon:/, ''));
+      this.anatomy.setOrganism(id.replace(/^taxon:/, ''));
+    }
+    this.start();
+  }
+
+  /** Load an external organism model (GLTF/GLB/FBX) with provenance. */
+  loadOrganismModel(url: string, provenance: ModelProvenance): Promise<boolean> {
+    this.start();
+    return this.anatomy.loadModel(url, provenance);
+  }
+
+  get organismProvenance(): ModelProvenance {
+    return this.anatomy.modelProvenance;
+  }
+
   get currentScale(): Scale {
-    return this.navigator.nearest;
+    return this.cameraController.nearestScale;
   }
 
   // ---- loop ----------------------------------------------------------------
 
   private start(): void {
-    if (this.running || !this.visible) return;
+    if (this.running || !this.performance.active) return;
     this.running = true;
     this.clock.getDelta();
     this.rafId = requestAnimationFrame(this.tick);
@@ -165,20 +172,14 @@ export class BioGalaxyScene {
     const dt = Math.min(this.clock.getDelta(), 0.05);
     const elapsed = this.clock.elapsedTime;
 
-    const moving = this.navigator.update(dt);
+    const camUpdate = this.cameraController.update(dt);
     this.applyScale();
-
-    if (moving) {
-      const dist = this.navigator.cameraDistance();
-      const dir = this.camera.position.clone().sub(this.controls.target).normalize();
-      const target = this.controls.target.clone().add(dir.multiplyScalar(dist));
-      this.camera.position.lerp(target, Math.min(1, dt * 4));
-    } else if (this.lastSettled !== this.navigator.nearest) {
-      this.lastSettled = this.navigator.nearest;
-      this.callbacks.onScaleSettled?.(this.lastSettled);
-    }
+    if (camUpdate.settled !== null) this.callbacks.onScaleSettled?.(camUpdate.settled);
 
     for (const layer of this.layers) layer.update(dt, elapsed);
+
+    this.nebulaMat.uniforms.uTime.value = elapsed;
+    this.nebula.rotation.y = elapsed * 0.003;
 
     this.hoverAccumulator += dt;
     if (this.hoverAccumulator > 0.06) {
@@ -186,14 +187,11 @@ export class BioGalaxyScene {
       this.updateHover();
     }
 
-    this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    this.postFX.render();
 
-    // Idle out the loop once settled and the user is not interacting, to save
-    // the GPU. Pointer and control events restart it.
-    if (!moving && !this.pointerActive) {
-      this.idleFrames++;
-      if (this.idleFrames > 90) {
+    // Idle the loop out once settled and the pointer is quiet, to save the GPU.
+    if (!camUpdate.moving && !this.raycaster.pointerActive) {
+      if (++this.idleFrames > 90) {
         this.stop();
         this.idleFrames = 0;
         return;
@@ -205,12 +203,10 @@ export class BioGalaxyScene {
     this.rafId = requestAnimationFrame(this.tick);
   };
 
-  private idleFrames = 0;
-
   private applyScale(): void {
-    const nearest = this.navigator.nearest;
+    const nearest = this.cameraController.nearestScale;
     for (const layer of this.layers) {
-      layer.onScaleChange(nearest, this.navigator.intensityFor(layer.activeScales));
+      layer.onScaleChange(nearest, this.cameraController.intensityFor(layer.activeScales));
     }
   }
 
@@ -222,21 +218,10 @@ export class BioGalaxyScene {
     return out;
   }
 
-  private raycast(): PickTag | null {
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-    const hits = this.raycaster.intersectObjects(this.gatherPickables(), true);
-    for (const hit of hits) {
-      const tag = findPickTag(hit.object);
-      if (tag) return tag;
-    }
-    return null;
-  }
-
   private updateHover(): void {
-    if (!this.pointerActive) return;
-    const tag = this.raycast();
-    const changed = tag?.id !== this.hoverTag?.id;
-    if (changed) {
+    if (!this.raycaster.pointerActive) return;
+    const tag = this.raycaster.pick(this.cameraController.camera, this.gatherPickables());
+    if (tag?.id !== this.hoverTag?.id) {
       this.hoverTag = tag;
       this.renderer.domElement.style.cursor = tag ? 'pointer' : 'default';
       this.callbacks.onHover?.(tag);
@@ -244,15 +229,12 @@ export class BioGalaxyScene {
   }
 
   private onPointerMove = (e: PointerEvent): void => {
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-    this.pointerActive = true;
+    this.raycaster.updatePointer(e);
     this.start();
   };
 
   private onPointerLeave = (): void => {
-    this.pointerActive = false;
+    this.raycaster.clear();
     if (this.hoverTag) {
       this.hoverTag = null;
       this.callbacks.onHover?.(null);
@@ -261,8 +243,8 @@ export class BioGalaxyScene {
   };
 
   private onClick = (): void => {
-    if (!this.pointerActive) return;
-    const tag = this.raycast();
+    if (!this.raycaster.pointerActive) return;
+    const tag = this.raycaster.pick(this.cameraController.camera, this.gatherPickables());
     this.callbacks.onSelect?.(tag);
   };
 
@@ -276,37 +258,31 @@ export class BioGalaxyScene {
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
     if (w === 0 || h === 0) return;
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    this.cameraController.setViewport(w / h);
     this.renderer.setSize(w, h);
+    this.postFX.setSize(w, h);
     this.start();
   }
 
   dispose(): void {
     this.stop();
     this.resizeObserver.disconnect();
-    this.intersectionObserver.disconnect();
+    this.performance.dispose();
     this.renderer.domElement.removeEventListener('pointermove', this.onPointerMove);
     this.renderer.domElement.removeEventListener('pointerleave', this.onPointerLeave);
     this.renderer.domElement.removeEventListener('click', this.onClick);
-    this.controls.removeEventListener('change', this.onControlsChange);
+    this.cameraController.controls.removeEventListener('change', this.onControlsChange);
+
     for (const layer of this.layers) layer.dispose();
-    this.controls.dispose();
+    this.nebula.geometry.dispose();
+    this.nebulaMat.dispose();
+    this.lighting.dispose();
+    this.cameraController.dispose();
+    this.postFX.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
     if (this.renderer.domElement.parentNode === this.container) {
       this.container.removeChild(this.renderer.domElement);
     }
   }
-}
-
-/** Walk up the parent chain to find the nearest pick tag. */
-function findPickTag(object: THREE.Object3D): PickTag | null {
-  let current: THREE.Object3D | null = object;
-  while (current) {
-    const tag = current.userData?.pick as PickTag | undefined;
-    if (tag) return tag;
-    current = current.parent;
-  }
-  return null;
 }

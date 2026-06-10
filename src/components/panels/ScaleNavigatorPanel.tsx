@@ -8,41 +8,62 @@ interface Props {
   onScaleChange: (scale: Scale) => void;
 }
 
+interface Group {
+  label: string;
+  from: Scale;
+  to: Scale;
+}
+
+// The ladder is long, so it is grouped into the four navigable regimes.
+const GROUPS: Group[] = [
+  { label: 'Phylogeny', from: Scale.TreeOfLife, to: Scale.Species },
+  { label: 'Anatomy', from: Scale.Organism, to: Scale.Tissue },
+  { label: 'Cellular', from: Scale.Cell, to: Scale.Organelle },
+  { label: 'Molecular', from: Scale.ProteinComplex, to: Scale.Atom },
+];
+
 /**
- * The scale ladder. Selecting a level commits the camera to that biological
- * scale; the active level is emphasized and annotated with magnitude.
+ * The scale ladder, grouped into phylogeny, anatomy, cellular, and molecular
+ * regimes. Selecting a level commits the camera to that biological scale.
  */
 export const ScaleNavigatorPanel: React.FC<Props> = ({ scale, onScaleChange }) => (
-  <Panel eyebrow="Navigate" title="Scale">
-    <ol className="space-y-px">
-      {SCALE_LEVELS.map((level) => {
-        const active = level.scale === scale;
-        return (
-          <li key={level.scale}>
-            <button
-              onClick={() => onScaleChange(level.scale)}
-              className={`group flex w-full items-center gap-3 rounded-sm px-2 py-1.5 text-left transition ${
-                active ? 'bg-cyan-500/10' : 'hover:bg-white/[0.03]'
-              }`}
-            >
-              <span
-                className={`h-4 w-px shrink-0 ${active ? 'bg-cyan-400' : 'bg-white/15'}`}
-                aria-hidden
-              />
-              <span className="min-w-0 flex-1">
-                <span
-                  className={`block truncate text-[12px] font-medium ${
-                    active ? 'text-cyan-200' : 'text-slate-300 group-hover:text-slate-100'
-                  }`}
-                >
-                  {level.name}
-                </span>
-              </span>
-              <span className="meta-label shrink-0">{level.magnitude}</span>
-            </button>
-          </li>
-        );
-      })}
-    </ol>
+  <Panel eyebrow="Navigate" title="Scale Ladder">
+    <div className="space-y-3">
+      {GROUPS.map((group) => (
+        <div key={group.label}>
+          <div className="meta-label mb-1">{group.label}</div>
+          <ol className="space-y-px">
+            {SCALE_LEVELS.slice(group.from, group.to + 1).map((level) => {
+              const active = level.scale === scale;
+              return (
+                <li key={level.scale}>
+                  <button
+                    onClick={() => onScaleChange(level.scale)}
+                    className={`group flex w-full items-center gap-2.5 rounded-sm px-2 py-1 text-left transition ${
+                      active ? 'bg-cyan-500/10' : 'hover:bg-white/[0.03]'
+                    }`}
+                  >
+                    <span
+                      className={`h-3.5 w-px shrink-0 ${active ? 'bg-cyan-400' : 'bg-white/15'}`}
+                      aria-hidden
+                    />
+                    <span
+                      className={`min-w-0 flex-1 truncate text-[12px] ${
+                        active
+                          ? 'font-medium text-cyan-200'
+                          : 'text-slate-300 group-hover:text-slate-100'
+                      }`}
+                    >
+                      {level.name}
+                    </span>
+                    <span className="meta-label shrink-0">{level.magnitude}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      ))}
+    </div>
   </Panel>
 );

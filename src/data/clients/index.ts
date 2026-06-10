@@ -2,6 +2,7 @@
 // scene logic never reaches directly into individual client modules.
 
 export * from './http';
+export * as taxonomy from './ncbiTaxonomyClient';
 export * as uniprot from './uniprotClient';
 export * as reactome from './reactomeClient';
 export * as rcsb from './rcsbClient';
