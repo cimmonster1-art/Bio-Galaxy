@@ -137,3 +137,39 @@ body {
   background-image: linear-gradient(rgba(103,232,249,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(103,232,249,.035) 1px, transparent 1px);
   background-size: 48px 48px;
 }
+
+/* Mobile layout primitives keep the atlas usable above browser chrome and notches. */
+.atlas-shell { height: 100dvh; overflow: hidden; }
+.mobile-icon-button { display:grid; height:2.5rem; width:2.5rem; flex:none; place-items:center; border-radius:.5rem; color:#94a3b8; }
+.mobile-atlas-dock { position:absolute; inset:0; z-index:70; pointer-events:none; }
+.mobile-atlas-toolbar { position:absolute; bottom:max(.65rem,env(safe-area-inset-bottom)); left:50%; display:flex; width:min(18rem,calc(100vw - 1.5rem)); transform:translateX(-50%); gap:.35rem; border:1px solid rgba(255,255,255,.12); border-radius:.9rem; padding:.35rem; background:rgba(4,9,17,.94); box-shadow:0 14px 40px rgba(0,0,0,.6); backdrop-filter:blur(18px); pointer-events:auto; }
+.mobile-dock-button { display:flex; min-height:2.75rem; flex:1; align-items:center; justify-content:center; gap:.45rem; border-radius:.65rem; color:#94a3b8; font-size:11px; font-weight:600; }
+.mobile-dock-button-active { background:rgba(39,196,217,.13); color:#cffafe; }
+.mobile-atlas-sheet { position:absolute; inset-inline:.5rem; bottom:calc(4.4rem + env(safe-area-inset-bottom)); display:flex; max-height:min(70dvh,38rem); flex-direction:column; overflow:hidden; border:1px solid rgba(255,255,255,.12); border-radius:1rem; background:rgba(4,9,17,.97); box-shadow:0 20px 60px rgba(0,0,0,.72); backdrop-filter:blur(18px); pointer-events:auto; }
+
+@media (max-width: 1023px) {
+  .workspace-overlay, .workspace-eras { inset:.5rem; border-radius:.8rem; }
+  .playback-overlay { inset:.5rem; border-radius:.8rem; }
+  .copilot-launcher { margin-bottom:4.15rem; }
+}
+
+@media (max-width: 767px) {
+  body { overflow-x:hidden; }
+  button, a, input, select { touch-action:manipulation; }
+  .atlas-header { flex-wrap:wrap; gap:.55rem; padding:.55rem .65rem; }
+  .atlas-header-tools { order:2; width:100%; flex-basis:100%; }
+  .atlas-header-tools > :first-child { max-width:none; }
+  .atlas-nav-button { min-height:2.25rem; min-width:2.25rem; justify-content:center; padding:.45rem; }
+  .workspace-overlay header { padding:.65rem .8rem; }
+  .playback-stage header { padding:.75rem; }
+  .playback-stage header > div:first-child { max-width:calc(100vw - 7rem); }
+  .playback-stage header .meta-label { white-space:normal; line-height:1.35; }
+  .playback-stage > div:last-child { padding-inline:.75rem; padding-bottom:max(.75rem,env(safe-area-inset-bottom)); }
+  .anatomy-scrubber { min-width:4rem; }
+  .hero-veil { background:linear-gradient(to bottom,rgba(2,4,10,.18),rgba(2,4,10,.25) 45%,rgba(2,4,10,.88)); }
+}
+
+@media (max-width: 639px) {
+  .meta-label { letter-spacing:.1em; }
+  .mobile-atlas-sheet .panel { background:rgba(7,12,22,.9); }
+}
