@@ -18,8 +18,9 @@ Marble Earth, and then the full biological ladder.
 
 ## Data sources
 
-Every database-backed object names its provenance. Records are read through
-typed client wrappers in `src/data/clients`:
+Every database-backed object names its provenance. Live records are read through
+typed client wrappers in `src/data/clients`; anatomy objects also name the open 3D
+references behind their visualization:
 
 - UniProt: protein sequence and function
 - Reactome: pathways and reactions
@@ -27,10 +28,12 @@ typed client wrappers in `src/data/clients`:
 - Ensembl: genes and genomic context
 - Human Protein Atlas: tissue and cell expression
 - NCBI: literature and taxonomy
+- Z-Anatomy: open human anatomy and layered 3D visualization reference
+- BodyParts3D: labeled 3D human anatomical structures
 
 The browser clients use an allowlisted same-origin gateway at `/api/science`. It deduplicates concurrent requests, caches successful upstream responses in memory, serves recent stale data when a public provider briefly fails, and never accepts or exposes API keys.
 
-The landing page also credits the astronomy, planetary texture, open model, and rendering ecosystem behind the atlas. Swiss Ephemeris, NASA/JPL Horizons, and Z-Anatomy are explicitly labeled as compatible reference ecosystems rather than live integrations.
+The landing page also credits the astronomy, planetary texture, open model, and rendering ecosystem behind the atlas. Swiss Ephemeris, NASA/JPL Horizons, Z-Anatomy, and BodyParts3D are explicitly labeled as compatible reference ecosystems rather than live integrations.
 
 All endpoints are public and key free, so no secrets are required.
 

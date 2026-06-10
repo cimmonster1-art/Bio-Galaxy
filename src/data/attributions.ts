@@ -53,7 +53,8 @@ export const ATTRIBUTION_GROUPS: AttributionGroup[] = [
       { name: 'glTF Sample Models', institution: 'Khronos Group', role: 'CesiumMan and Fox organism-scale models', url: 'https://github.com/KhronosGroup/glTF-Sample-Models', status: 'asset' },
       { name: 'CesiumMan', institution: 'Cesium', role: 'Open licensed rigged human model', url: 'https://github.com/KhronosGroup/glTF-Sample-Models/tree/master/2.0/CesiumMan', status: 'asset' },
       { name: 'three.js example models', institution: 'three.js contributors and mirada', role: 'Animated bird and horse models', url: 'https://github.com/mrdoob/three.js/tree/master/examples/models/gltf', status: 'asset' },
-      { name: 'Z-Anatomy', institution: 'Z-Anatomy project', role: 'Open anatomy model ecosystem supported by the external model loader', url: 'https://www.z-anatomy.com', status: 'compatible' },
+      { name: 'Z-Anatomy', institution: 'Z-Anatomy project', role: 'Open human anatomy models referenced by the layered atlas and supported by the external model loader', url: 'https://www.z-anatomy.com', status: 'compatible' },
+      { name: 'BodyParts3D', institution: 'Database Center for Life Science', role: 'Labeled 3D human anatomy structures referenced by the layered atlas', url: 'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/desc.html', status: 'compatible' },
     ],
   },
   {

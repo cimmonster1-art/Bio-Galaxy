@@ -8,7 +8,7 @@ interface Props {
   active: DataSourceId[];
 }
 
-/** Lists the integrated databases and marks which back the current view. */
+/** Lists the integrated data sources and references, marking those behind the current view. */
 export const DataSourcesPanel: React.FC<Props> = ({ active }) => {
   const activeSet = new Set(active);
   return (

@@ -35,7 +35,7 @@ export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {
           <div className="mt-12 flex w-full max-w-3xl items-center justify-between gap-1 rounded-lg border border-white/10 bg-[#02040a]/55 px-3 py-3 backdrop-blur-md">
             {SCALE_STOPS.map((stop, index) => <React.Fragment key={stop}><div className="flex flex-col items-center gap-2"><span className={`h-1.5 w-1.5 rounded-full ${index === 2 ? 'bg-cyan-300 shadow-[0_0_8px_#67e8f9]' : 'bg-slate-500'}`} /><span className="hidden text-[9px] uppercase tracking-[0.14em] text-slate-500 sm:block">{stop}</span></div>{index < SCALE_STOPS.length - 1 && <span className="h-px flex-1 bg-gradient-to-r from-white/5 via-cyan-400/20 to-white/5" />}</React.Fragment>)}
           </div>
-          <div className="mt-8"><div className="meta-label mb-3">Live records from</div><div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">{CREDIBILITY.map((name) => <span key={name} className="text-[11px] font-medium text-slate-400">{name}</span>)}</div></div>
+          <div className="mt-8"><div className="meta-label mb-3">Records and 3D references from</div><div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">{CREDIBILITY.map((name) => <span key={name} className="text-[11px] font-medium text-slate-400">{name}</span>)}</div></div>
         </div>
 
         <button

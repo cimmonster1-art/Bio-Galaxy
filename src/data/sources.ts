@@ -1,8 +1,8 @@
 import { DataSource, DataSourceId } from '../types';
 
 /**
- * Registry of the public scientific databases the atlas reads from. Every
- * database-backed object in the UI resolves its provenance through this list,
+ * Registry of the public scientific databases and 3D references used by the atlas.
+ * Every database-backed object in the UI resolves its provenance through this list,
  * so a source is named in exactly one place.
  */
 export const DATA_SOURCES: Record<DataSourceId, DataSource> = {
@@ -55,6 +55,22 @@ export const DATA_SOURCES: Record<DataSourceId, DataSource> = {
     description: 'Taxonomy identifiers and links to the primary literature.',
     homepage: 'https://www.ncbi.nlm.nih.gov',
   },
+  z_anatomy: {
+    id: 'z_anatomy',
+    name: 'Z-Anatomy',
+    short: 'Z-Anatomy',
+    domain: 'Open 3D anatomy',
+    description: 'Open human anatomy models used as a reference for layered 3D visualization.',
+    homepage: 'https://www.z-anatomy.com',
+  },
+  bodyparts3d: {
+    id: 'bodyparts3d',
+    name: 'BodyParts3D',
+    short: 'BodyParts3D',
+    domain: 'Anatomical structures in 3D',
+    description: 'Anatomical concepts represented as labeled segments of a 3D human body model.',
+    homepage: 'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/desc.html',
+  },
 };
 
 export const DATA_SOURCE_ORDER: DataSourceId[] = [
@@ -64,6 +80,8 @@ export const DATA_SOURCE_ORDER: DataSourceId[] = [
   'ensembl',
   'hpa',
   'ncbi',
+  'z_anatomy',
+  'bodyparts3d',
 ];
 
 export function getSource(id: DataSourceId): DataSource {
