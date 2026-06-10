@@ -48,6 +48,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const [activeModelId, setActiveModelId] = useState<string | null>(defaultHuman.id);
   const [modelStatus, setModelStatus] = useState<ModelStatus>('loading');
   const [workspace, setWorkspace] = useState<AtlasWorkspace>(null);
+  const [cinematicProgress, setCinematicProgress] = useState<number | null>(null);
 
   // Apply a resolved object's natural scale and phylogenetic focus.
   const applySelection = useCallback((obj: BioObject) => {
@@ -142,7 +143,6 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   );
 
   const selectedTaxonId = focusTaxonId ? stripTaxon(focusTaxonId) : null;
-  const selectedOrganelleId = selected?.kind === 'organelle' ? selected.id : null;
   const lineage = useMemo(
     () => (selectedTaxonId ? lineageOf(selectedTaxonId).map((taxon) => taxon.name) : []),
     [selectedTaxonId],
@@ -190,10 +190,10 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
 
             {/* Center scene */}
             <main className="relative min-w-0 flex-1 depth-field" role="application" aria-label="Bio Galaxy 3D atlas. Use the search, scale ladder, or phylogeny panel to navigate.">
-              <BioGalaxyCanvas scale={scale} selectedId={selectedOrganelleId} focusTaxonId={focusTaxonId} structure={structure} organismModel={organismModel} onHover={handleHover} onSelect={handleSelect} onScaleSettled={handleScaleSettled} onModelResult={handleModelResult} />
+              <BioGalaxyCanvas scale={scale} selectedId={selected?.id ?? null} focusTaxonId={focusTaxonId} structure={structure} organismModel={organismModel} cinematicProgress={workspace === 'playback' ? cinematicProgress : null} onHover={handleHover} onSelect={handleSelect} onScaleSettled={handleScaleSettled} onModelResult={handleModelResult} />
               <SceneControls scale={scale} hovered={hovered} onStep={stepScale} />
               {workspace === 'eras' && <CosmicTimeline scale={scale} onSelectScale={setScale} onClose={() => setWorkspace(null)} />}
-              {workspace === 'playback' && <EvolutionPlayback onSelectScale={setScale} onClose={() => setWorkspace(null)} />}
+              {workspace === 'playback' && <EvolutionPlayback onSelectScale={setScale} onProgress={setCinematicProgress} onClose={() => setWorkspace(null)} />}
               {coreAnatomyScale && !workspace && <AnatomyExplorer scale={scale} selectedId={selected?.id} onSelect={navigateTo} onScaleChange={setScale} />}
             </main>
 
