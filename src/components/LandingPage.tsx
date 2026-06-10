@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { ArrowRight, Database, Layers3, Server } from 'lucide-react';
+import { ArrowDown, ArrowRight, Database, X } from 'lucide-react';
 import { Scale } from '../types';
 import { DATA_SOURCE_ORDER, getSource } from '../data/sources';
 import { BioGalaxyCanvas } from './BioGalaxyCanvas';
@@ -37,6 +37,16 @@ export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {
           </div>
           <div className="mt-8"><div className="meta-label mb-3">Live records from</div><div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">{CREDIBILITY.map((name) => <span key={name} className="text-[11px] font-medium text-slate-400">{name}</span>)}</div></div>
         </div>
+
+        <button
+          type="button"
+          onClick={onOpenAtlas}
+          aria-label="Close introduction and open the atlas"
+          className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1 rounded-full border border-white/15 bg-[#050a13]/80 p-2 text-slate-300 backdrop-blur-md transition hover:border-cyan-400/50 hover:bg-cyan-500/10 hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+        >
+          <X className="h-4 w-4" />
+          <ArrowDown className="h-3 w-3 animate-bounce" aria-hidden />
+        </button>
       </section>
 
       <section className="border-y border-white/[0.08] bg-white/[0.015]"><div className="mx-auto grid max-w-6xl gap-px px-6 py-8 md:grid-cols-3">

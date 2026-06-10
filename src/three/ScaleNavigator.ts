@@ -80,7 +80,7 @@ export class ScaleNavigator {
       this.pos = this.targetScale;
       return false;
     }
-    this.pos += diff * Math.min(1, dt * 3.5);
+    this.pos += diff * Math.min(1, dt * 6);
     return true;
   }
 
