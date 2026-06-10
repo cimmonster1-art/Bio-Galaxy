@@ -141,6 +141,20 @@ export const PLANETS: PlanetData[] = [
     color: '#3b66c4',
     moons: [{ name: 'Triton', radius: 0.4, orbit: 5, speed: 1.3 }],
   },
+  {
+    // Pluto: a dwarf planet, kept here so the ephemeris scrubber can place it
+    // on a compressed orbit just beyond Neptune. There is no dedicated Pluto
+    // map in public/textures, so it reuses the local Moon map for its small,
+    // grey, icy body rather than pulling in a new asset.
+    id: 'pluto',
+    name: 'Pluto',
+    texture: MOON_TEXTURE,
+    radius: 0.8,
+    orbit: 132,
+    speed: 0.05,
+    spin: 1.2,
+    color: '#b6ada3',
+  },
 ];
 
 export interface CosmicEra {

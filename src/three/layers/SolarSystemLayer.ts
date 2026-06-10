@@ -5,8 +5,10 @@ import { disposeObject } from '../core/dispose';
 import { loadColorTexture } from '../textures/loadTexture';
 import { createSpriteLabel } from '../labels/SpriteLabel';
 import { PLANETS, SUN, PlanetData, MOON_TEXTURE, MILKYWAY_TEXTURE } from '../../data/cosmos';
+import { heliocentricLongitudes } from '../../data/ephemeris';
 
 interface OrbitingBody {
+  id: string;
   pivot: THREE.Group;
   mesh: THREE.Mesh;
   orbitSpeed: number;
@@ -31,6 +33,9 @@ export class SolarSystemLayer implements SceneLayer {
   private readonly sunLight: THREE.PointLight;
   private readonly pickables: THREE.Object3D[] = [];
   private intensity = 0;
+  // Once a date is scrubbed in, planet angles come from the ephemeris and the
+  // gentle auto-advance stands down so it does not fight the scrubbed positions.
+  private simDate: Date | null = null;
 
   constructor() {
     this.root.name = 'SolarSystemLayer';
@@ -169,7 +174,22 @@ export class SolarSystemLayer implements SceneLayer {
       moons.push({ pivot: moonPivot, speed: moon.speed });
     }
 
-    this.bodies.push({ pivot, mesh, orbitSpeed: data.speed, spinSpeed: data.spin, moons });
+    this.bodies.push({ id: data.id, pivot, mesh, orbitSpeed: data.speed, spinSpeed: data.spin, moons });
+  }
+
+  /**
+   * Place every planet at its true heliocentric ecliptic longitude for the
+   * given date, using the astronomy-engine ephemeris. A time scrubber drives
+   * this so the system is scientifically correct for any simulation date. Once
+   * set, update() honors these angles instead of auto-advancing.
+   */
+  setDate(date: Date): void {
+    this.simDate = date;
+    const longitudes = heliocentricLongitudes(date);
+    for (const body of this.bodies) {
+      const lon = longitudes[body.id];
+      if (lon !== undefined) body.pivot.rotation.y = lon;
+    }
   }
 
   onScaleChange(_scale: Scale, intensity: number): void {
@@ -182,7 +202,9 @@ export class SolarSystemLayer implements SceneLayer {
     for (const f of this.fadeables) fadeMaterial(f, this.intensity, dt);
     if (this.intensity < 0.02) return;
     for (const body of this.bodies) {
-      body.pivot.rotation.y += dt * body.orbitSpeed * 0.25;
+      // Only auto-advance the orbit when no date has been scrubbed in; once a
+      // date is set the ephemeris owns the orbital angle and we leave it alone.
+      if (this.simDate === null) body.pivot.rotation.y += dt * body.orbitSpeed * 0.25;
       body.mesh.rotation.y += dt * body.spinSpeed * 0.4;
       for (const moon of body.moons) moon.pivot.rotation.y += dt * moon.speed * 0.5;
     }

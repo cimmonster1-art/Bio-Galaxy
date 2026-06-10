@@ -24,6 +24,9 @@ export class CosmosLayer implements SceneLayer {
   private readonly coreMat: THREE.MeshBasicMaterial;
   private readonly sky: THREE.Mesh;
   private readonly skyMat: THREE.MeshBasicMaterial;
+  private readonly stars: THREE.Points;
+  private readonly starMat: THREE.PointsMaterial;
+  private readonly starTex: THREE.Texture;
 
   private readonly loader = new THREE.TextureLoader();
 
@@ -101,6 +104,84 @@ export class CosmosLayer implements SceneLayer {
     }
     this.spiral.instanceMatrix.needsUpdate = true;
     this.root.add(this.spiral);
+
+    // Dense deep-space starfield: a single THREE.Points so the entire sky is one
+    // draw call no matter how many stars. Most stars sit on a vast back-faced
+    // shell, with a thick Milky Way band of extra stars across the equator and a
+    // sprinkling of brighter, nearer foreground stars. Colour runs from cool
+    // blue-white to warm amber by temperature.
+    const starCount = 600000;
+    const positions = new Float32Array(starCount * 3);
+    const colors = new Float32Array(starCount * 3);
+    const sizes = new Float32Array(starCount);
+    const starColor = new THREE.Color();
+    // Roughly a fifth of the stars cluster into the galactic band; the rest are
+    // spread uniformly over the shell so the field never reads as a single blob.
+    const bandShare = 0.22;
+    const foregroundShare = 0.01;
+    for (let i = 0; i < starCount; i++) {
+      const roll = Math.random();
+      let dir: THREE.Vector3;
+      let radius: number;
+      let size: number;
+      let temp: number;
+      if (roll < foregroundShare) {
+        // Bright foreground stars: nearer, larger, slightly warmer on average.
+        dir = randomDir();
+        radius = 120 + Math.random() * 200;
+        size = 2.6 + Math.random() * 3.4;
+        temp = Math.random();
+      } else if (roll < foregroundShare + bandShare) {
+        // Milky Way band: cluster latitude tightly around the equatorial plane.
+        const theta = Math.random() * Math.PI * 2;
+        const lat = (Math.random() - 0.5) * 0.34 + gaussian() * 0.06;
+        const cosLat = Math.cos(lat);
+        dir = new THREE.Vector3(
+          cosLat * Math.cos(theta),
+          Math.sin(lat),
+          cosLat * Math.sin(theta),
+        );
+        radius = 520 + Math.random() * 80;
+        size = 0.7 + Math.random() * 1.6;
+        temp = Math.random();
+      } else {
+        // Uniform shell of distant stars filling the rest of the sky.
+        dir = randomDir();
+        radius = 540 + Math.random() * 60;
+        size = 0.5 + Math.random() * 1.1;
+        temp = Math.random();
+      }
+      positions[i * 3] = dir.x * radius;
+      positions[i * 3 + 1] = dir.y * radius;
+      positions[i * 3 + 2] = dir.z * radius;
+      sizes[i] = size;
+      // Temperature ramp: cool blue-white -> neutral white -> warm amber.
+      const hue = (210 - temp * 180) / 360;
+      const lightness = 0.6 + Math.random() * 0.25;
+      starColor.setHSL(hue < 0 ? hue + 1 : hue, 0.45 + temp * 0.25, lightness);
+      colors[i * 3] = starColor.r;
+      colors[i * 3 + 1] = starColor.g;
+      colors[i * 3 + 2] = starColor.b;
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    starGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    this.starTex = createStarTexture();
+    this.starMat = new THREE.PointsMaterial({
+      map: this.starTex,
+      size: 2.2,
+      sizeAttenuation: true,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.stars = new THREE.Points(starGeo, this.starMat);
+    // Render the starfield behind everything else in the layer.
+    this.stars.renderOrder = -1;
+    this.root.add(this.stars);
   }
 
   onScaleChange(scale: Scale, intensity: number): void {
@@ -116,10 +197,13 @@ export class CosmosLayer implements SceneLayer {
     fadeMaterial(this.fieldMat, this.intensity * fieldWeight, dt);
     fadeMaterial(this.spiralMat, this.intensity * galaxyWeight, dt);
     fadeMaterial(this.skyMat, this.intensity * fieldWeight * 0.8, dt);
+    // The dense starfield carries the cosmos scale and recedes as we dive in.
+    fadeMaterial(this.starMat, this.intensity * fieldWeight, dt);
 
     this.sky.rotation.y = elapsed * 0.002;
     this.spiral.rotation.y = elapsed * 0.02;
     this.field.rotation.y = elapsed * 0.004;
+    this.stars.rotation.y = elapsed * 0.0015;
     const pulse = 1 + Math.sin(elapsed * 1.5) * 0.05;
     this.core.scale.setScalar(pulse);
   }
@@ -143,4 +227,34 @@ function randomDir(): THREE.Vector3 {
     Math.sin(phi) * Math.sin(theta),
     Math.cos(phi),
   );
+}
+
+/** Approximate standard normal sample via the central limit theorem. */
+function gaussian(): number {
+  return (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+}
+
+/**
+ * A small soft round point sprite for the starfield, generated once and shared
+ * by every star. A radial alpha falloff keeps points from reading as hard
+ * squares under additive blending.
+ */
+function createStarTexture(size = 64): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const c = size / 2;
+    const gradient = ctx.createRadialGradient(c, c, 0, c, c, c);
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+    gradient.addColorStop(0.7, 'rgba(255,255,255,0.12)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
 }
