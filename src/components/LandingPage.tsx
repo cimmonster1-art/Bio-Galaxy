@@ -15,7 +15,7 @@ export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {
   return (
     <div className="min-h-screen bg-[#02040a] text-slate-100">
       <section className="relative min-h-screen overflow-hidden">
-        <div className="absolute inset-0 opacity-80"><BioGalaxyCanvas scale={Scale.SolarSystem} selectedId={null} onHover={() => {}} onSelect={() => {}} onScaleSettled={() => {}} /></div>
+        <div className="absolute inset-0 opacity-80"><BioGalaxyCanvas scale={Scale.Planet} selectedId={null} onHover={() => {}} onSelect={() => {}} onScaleSettled={() => {}} /></div>
         <div className="pointer-events-none absolute inset-0 hero-veil" />
         <div className="pointer-events-none absolute inset-0 hero-grid" />
 
