@@ -47,8 +47,8 @@ export const AtlasCopilot: React.FC<Props> = ({ scale, selected, hovered }) => {
     ask(query);
   };
 
-  return <div className="fixed bottom-5 right-5 z-[100] flex flex-col items-end gap-2">
-    {open && <section className="panel flex h-[min(650px,78vh)] w-[min(430px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border-cyan-400/20 shadow-2xl shadow-black/60" aria-label="Bio Galaxy copilot">
+  return <div className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[100] flex flex-col items-end gap-2">
+    {open && <section className="panel flex h-[min(650px,calc(100dvh-6rem))] w-[min(430px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border-cyan-400/20 shadow-2xl shadow-black/60" aria-label="Bio Galaxy copilot">
       <header className="flex items-center gap-2 border-b border-white/10 bg-cyan-500/[.06] px-3 py-3">
         <span className="grid h-8 w-8 place-items-center rounded-lg bg-cyan-400/15 text-cyan-200"><Bot className="h-4 w-4"/></span>
         <div className="min-w-0 flex-1"><div className="text-[12px] font-semibold">Atlas copilot</div><div className="meta-label truncate">Observing {observed?.name ?? SCALE_LEVELS[scale].name}</div></div>
