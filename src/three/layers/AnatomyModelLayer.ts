@@ -66,17 +66,20 @@ export class AnatomyModelLayer implements SceneLayer {
   private buildAtlas(): void {
     this.atlas.userData.pick = { id: `organism:${this.organismId}`, scale: Scale.Organism };
     this.pickables.push(this.atlas);
-    const skin = createMembraneMaterial({ color: '#478ca3', rimColor: '#70e5f2', opacity: 0.09, rimPower: 2.4 });
+    const skin = createMembraneMaterial({ color: '#478ca3', rimColor: '#70e5f2', opacity: 0.13, rimPower: 2.4 });
+    skin.side = THREE.DoubleSide;
     const body = this.atlasSurface;
-    const addSkin = (geometry: THREE.BufferGeometry, position: [number, number, number], rotation: [number, number, number] = [0, 0, 0]) => {
-      const mesh = new THREE.Mesh(geometry, skin); mesh.position.set(...position); mesh.rotation.set(...rotation); body.add(mesh);
-    };
-    addSkin(new THREE.SphereGeometry(2.65, 32, 24), [0, 12, 0]);
-    addSkin(new THREE.CapsuleGeometry(4.2, 8.5, 12, 28), [0, 3, 0]);
-    addSkin(new THREE.CapsuleGeometry(1.05, 9, 8, 18), [-5, 3, 0], [0, 0, .28]);
-    addSkin(new THREE.CapsuleGeometry(1.05, 9, 8, 18), [5, 3, 0], [0, 0, -.28]);
-    addSkin(new THREE.CapsuleGeometry(1.45, 10, 8, 20), [-2.15, -8.2, 0], [0, 0, .04]);
-    addSkin(new THREE.CapsuleGeometry(1.45, 10, 8, 20), [2.15, -8.2, 0], [0, 0, -.04]);
+
+    // The organism's surface is built on Astro-insight's BodyExplorer3D
+    // foundation: a lathed skull and torso plus capsule limbs, hands, feet, and
+    // fingers, in a standing pose. It is scaled into the atlas so the translucent
+    // skin wraps the organ systems below. Bio Galaxy's cyan membrane material
+    // keeps the atlas aesthetic over the borrowed anatomical geometry.
+    const figure = new THREE.Group();
+    buildHumanFigure(figure, skin);
+    figure.scale.setScalar(BODY_SCALE);
+    body.add(figure);
+
     body.traverse((o) => { if (!o.userData.pick) o.userData.pick = this.atlas.userData.pick; });
     this.atlas.add(body);
 
@@ -94,9 +97,43 @@ export class AnatomyModelLayer implements SceneLayer {
   }
 
   private organ(id: string, group: THREE.Group, geometry: THREE.BufferGeometry, position: [number, number, number], color: string, scale: [number, number, number] = [1, 1, 1]): THREE.Mesh {
-    const mat = new THREE.MeshPhysicalMaterial({ color, roughness: .48, clearcoat: .35, transparent: true, opacity: .92, emissive: new THREE.Color(color).multiplyScalar(.08) });
+    // Wet, fleshy organ surface: clearcoat for a moist sheen, sheen for soft
+    // back-scatter, and a faint self-emissive so organs read in the dim atlas.
+    const mat = new THREE.MeshPhysicalMaterial({
+      color,
+      roughness: .42,
+      clearcoat: .6,
+      clearcoatRoughness: .35,
+      sheen: .6,
+      sheenColor: new THREE.Color(color),
+      sheenRoughness: .5,
+      transparent: true,
+      opacity: .92,
+      emissive: new THREE.Color(color).multiplyScalar(.12),
+      emissiveIntensity: .4,
+      envMapIntensity: 1.1,
+    });
     const mesh = new THREE.Mesh(geometry, mat); mesh.position.set(...position); mesh.scale.set(...scale); mesh.userData.pick = { id, scale: Scale.Organ };
     group.add(mesh); this.pickables.push(mesh); return mesh;
+  }
+
+  /** A glowing vessel/nerve swept as a smooth tube along a path of control points. */
+  private vessel(id: string, group: THREE.Group, points: THREE.Vector3[], color: string, radius = .12): THREE.Mesh {
+    const curve = new THREE.CatmullRomCurve3(points);
+    const geo = new THREE.TubeGeometry(curve, Math.max(24, points.length * 8), radius, 8, false);
+    const mat = new THREE.MeshStandardMaterial({
+      color,
+      emissive: new THREE.Color(color),
+      emissiveIntensity: .55,
+      roughness: .5,
+      metalness: .05,
+      transparent: true,
+      opacity: .82,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.pick = { id, scale: Scale.OrganSystem };
+    group.add(mesh);
+    return mesh;
   }
 
   private buildSkeleton(): void {
@@ -107,11 +144,38 @@ export class AnatomyModelLayer implements SceneLayer {
     for (let y=3; y<9; y+=1.1) { const curve = new THREE.EllipseCurve(0, y, 3.2-(y-5)*.12, 1.1, 0, Math.PI*2); const pts=curve.getPoints(28).map(p=>new THREE.Vector3(p.x,p.y,-.25)); g.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({color:'#e8e1cf',transparent:true,opacity:.55}))); }
   }
 
-  private buildNervous(): void { const g=this.system('system:nervous'); this.organ('organ:brain',g,new THREE.SphereGeometry(1.9,28,20),[0,12,0],'#f5b8c8',[1,.82,.86]); this.organ('system:nervous',g,new THREE.CylinderGeometry(.18,.28,12,12),[0,4.3,-.2],'#ffd65a'); }
-  private buildCardiovascular(): void { const g=this.system('system:cardiovascular'); const h=this.organ('organ:heart',g,new THREE.SphereGeometry(1.2,24,20),[-.8,4.7,1.7],'#ff4058',[.85,1.2,.75]); this.animated.push({object:h,base:1,speed:4.6}); const mat=new THREE.LineBasicMaterial({color:'#ff596d',transparent:true,opacity:.72}); const pts=[new THREE.Vector3(-.8,5,1),new THREE.Vector3(0,2,1),new THREE.Vector3(0,-5,.5),new THREE.Vector3(-2,-13,0),new THREE.Vector3(0,-5,.5),new THREE.Vector3(2,-13,0),new THREE.Vector3(0,5,1),new THREE.Vector3(-5,1,0),new THREE.Vector3(0,5,1),new THREE.Vector3(5,1,0)]; g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),mat)); }
-  private buildRespiratory(): void { const g=this.system('system:respiratory'); this.organ('organ:lungs',g,new THREE.SphereGeometry(1.8,24,20),[-2,5,.4],'#79d6df',[.85,1.55,.6]); this.organ('organ:lungs',g,new THREE.SphereGeometry(1.8,24,20),[2,5,.4],'#79d6df',[.85,1.55,.6]); this.organ('system:respiratory',g,new THREE.CylinderGeometry(.28,.42,5,12),[0,9,.4],'#78dce8'); }
-  private buildDigestive(): void { const g=this.system('system:digestive'); this.organ('organ:liver',g,new THREE.SphereGeometry(1.8,24,18),[1.5,1.7,1.5],'#9d503f',[1.6,.65,.75]); this.organ('organ:stomach',g,new THREE.SphereGeometry(1.25,22,18),[-1.25,.4,1.7],'#e59b69',[1,.8,.72]); const gut=this.organ('organ:intestines',g,new THREE.TorusKnotGeometry(1.45,.3,90,10,2,3),[0,-2.6,1.3],'#d88961',[1.5,1.7,.55]); gut.rotation.x=.25; }
-  private buildUrinary(): void { const g=this.system('system:urinary'); this.organ('organ:kidneys',g,new THREE.SphereGeometry(.75,20,16),[-1.65,-.2,.2],'#a45b73',[.7,1.35,.55]); this.organ('organ:kidneys',g,new THREE.SphereGeometry(.75,20,16),[1.65,-.2,.2],'#a45b73',[.7,1.35,.55]); }
+  private buildNervous(): void {
+    const g = this.system('system:nervous');
+    this.organ('organ:brain', g, new THREE.SphereGeometry(1.9, 40, 32), [0, 12, 0], '#f5b8c8', [1, .82, .86]);
+    // Spinal cord as a smooth cord, with peripheral nerves branching as tubes.
+    this.vessel('system:nervous', g, [
+      new THREE.Vector3(0, 10, -.2), new THREE.Vector3(0, 6, -.3),
+      new THREE.Vector3(0, 1, -.2), new THREE.Vector3(0, -3, -.1),
+    ], '#ffd65a', .2);
+    const nerve = (pts: THREE.Vector3[]) => this.vessel('system:nervous', g, pts, '#ffe08a', .07);
+    nerve([new THREE.Vector3(0, 6, -.3), new THREE.Vector3(-3.5, 5.5, 0), new THREE.Vector3(-5.5, 2, 0)]);
+    nerve([new THREE.Vector3(0, 6, -.3), new THREE.Vector3(3.5, 5.5, 0), new THREE.Vector3(5.5, 2, 0)]);
+    nerve([new THREE.Vector3(0, -3, -.1), new THREE.Vector3(-2, -8, 0), new THREE.Vector3(-2, -13, 0)]);
+    nerve([new THREE.Vector3(0, -3, -.1), new THREE.Vector3(2, -8, 0), new THREE.Vector3(2, -13, 0)]);
+  }
+  private buildCardiovascular(): void {
+    const g = this.system('system:cardiovascular');
+    const h = this.organ('organ:heart', g, new THREE.SphereGeometry(1.2, 32, 26), [-.8, 4.7, 1.7], '#ff4058', [.85, 1.2, .75]);
+    this.animated.push({ object: h, base: 1, speed: 4.6 });
+    // Aorta and major arteries as glowing red tubes; venous return in blue.
+    const artery = (pts: THREE.Vector3[]) => this.vessel('system:cardiovascular', g, pts, '#ff5066', .13);
+    const vein = (pts: THREE.Vector3[]) => this.vessel('system:cardiovascular', g, pts, '#4f78d6', .11);
+    artery([new THREE.Vector3(-.8, 5.4, 1), new THREE.Vector3(0, 6.4, .6), new THREE.Vector3(0, 2, .8), new THREE.Vector3(0, -4, .5)]);
+    artery([new THREE.Vector3(0, -4, .5), new THREE.Vector3(-2, -9, .2), new THREE.Vector3(-2, -13, 0)]);
+    artery([new THREE.Vector3(0, -4, .5), new THREE.Vector3(2, -9, .2), new THREE.Vector3(2, -13, 0)]);
+    artery([new THREE.Vector3(0, 5.5, .8), new THREE.Vector3(-3.5, 4.5, .4), new THREE.Vector3(-5, 1, 0)]);
+    artery([new THREE.Vector3(0, 5.5, .8), new THREE.Vector3(3.5, 4.5, .4), new THREE.Vector3(5, 1, 0)]);
+    vein([new THREE.Vector3(-2, -13, .2), new THREE.Vector3(-1.4, -6, .6), new THREE.Vector3(-.4, 4.4, 1.2)]);
+    vein([new THREE.Vector3(2, -13, .2), new THREE.Vector3(1.4, -6, .6), new THREE.Vector3(-.4, 4.4, 1.2)]);
+  }
+  private buildRespiratory(): void { const g=this.system('system:respiratory'); this.organ('organ:lungs',g,new THREE.SphereGeometry(1.8,32,26),[-2,5,.4],'#79d6df',[.85,1.55,.6]); this.organ('organ:lungs',g,new THREE.SphereGeometry(1.8,32,26),[2,5,.4],'#79d6df',[.85,1.55,.6]); this.vessel('system:respiratory',g,[new THREE.Vector3(0,10.5,.4),new THREE.Vector3(0,7.5,.4),new THREE.Vector3(0,6.2,.4)],'#78dce8',.34); this.vessel('system:respiratory',g,[new THREE.Vector3(0,6.4,.4),new THREE.Vector3(-1.2,5.6,.4),new THREE.Vector3(-2,5,.4)],'#78dce8',.16); this.vessel('system:respiratory',g,[new THREE.Vector3(0,6.4,.4),new THREE.Vector3(1.2,5.6,.4),new THREE.Vector3(2,5,.4)],'#78dce8',.16); }
+  private buildDigestive(): void { const g=this.system('system:digestive'); this.organ('organ:liver',g,new THREE.SphereGeometry(1.8,32,24),[1.5,1.7,1.5],'#9d503f',[1.6,.65,.75]); this.organ('organ:stomach',g,new THREE.SphereGeometry(1.25,28,22),[-1.25,.4,1.7],'#e59b69',[1,.8,.72]); this.organ('organ:pancreas',g,new THREE.CapsuleGeometry(.32,1.6,8,14),[.2,.1,1.4],'#d8a85a',[1,1,1]).rotation.z=.5; this.organ('organ:spleen',g,new THREE.SphereGeometry(.7,24,18),[-2.4,1.1,1],'#7d3a52',[1,1.3,.7]); const gut=this.organ('organ:intestines',g,new THREE.TorusKnotGeometry(1.45,.3,128,12,2,3),[0,-2.6,1.3],'#d88961',[1.5,1.7,.55]); gut.rotation.x=.25; }
+  private buildUrinary(): void { const g=this.system('system:urinary'); this.organ('organ:kidneys',g,new THREE.SphereGeometry(.75,28,20),[-1.65,-.2,.2],'#a45b73',[.7,1.35,.55]); this.organ('organ:kidneys',g,new THREE.SphereGeometry(.75,28,20),[1.65,-.2,.2],'#a45b73',[.7,1.35,.55]); this.organ('organ:bladder',g,new THREE.SphereGeometry(.8,24,18),[0,-6.5,1],'#c9a24a',[1,.85,.85]); this.vessel('system:urinary',g,[new THREE.Vector3(-1.65,-.6,.2),new THREE.Vector3(-.8,-3.5,.6),new THREE.Vector3(0,-6,1)],'#caa657',.06); this.vessel('system:urinary',g,[new THREE.Vector3(1.65,-.6,.2),new THREE.Vector3(.8,-3.5,.6),new THREE.Vector3(0,-6,1)],'#caa657',.06); }
 
   private prepareBodyMaterials(object: THREE.Object3D): void {
     object.traverse((child) => {
@@ -158,6 +222,132 @@ export class AnatomyModelLayer implements SceneLayer {
   }
   getPickables():THREE.Object3D[]{return this.intensity>.2?(this.currentScale===Scale.Organism&&this.loaded?[this.loaded,...this.pickables]:this.pickables):[];}
   dispose():void{this.clearLoaded();disposeObject(this.root);}
+}
+
+// ---- Procedural human figure (ported from Astro-insight BodyExplorer3D) -------
+//
+// Astro-insight's `buildSimplifiedAnatomy` lathes anatomically-proportioned skull
+// and torso profiles and sweeps capsule limbs between joints. We reuse its
+// builders and proportions (dropping the Vitruvian pose pivots for a fixed
+// standing stance) and scale the result into the atlas's coordinate space, where
+// the figure is ~25 units tall and aligned with the organ systems.
+
+const BODY_SCALE = 9.5;
+
+/** Lathe a 2-D profile around the Y axis into a seamless organic surface. */
+function makeLathe(
+  parent: THREE.Object3D,
+  profile: [number, number][],
+  mat: THREE.Material,
+  segs: number,
+  position?: [number, number, number],
+): THREE.Mesh {
+  const pts = profile.map(([x, y]) => new THREE.Vector2(x, y));
+  const geo = new THREE.LatheGeometry(pts, segs);
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, mat);
+  if (position) mesh.position.set(...position);
+  parent.add(mesh);
+  return mesh;
+}
+
+/** Sweep a capsule limb between two joint points. */
+function makeLimb(
+  parent: THREE.Object3D,
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  r: number,
+  mat: THREE.Material,
+  capSegs = 5,
+  radSegs = 14,
+): THREE.Mesh {
+  const dir = to.clone().sub(from);
+  const len = dir.length();
+  const geo = new THREE.CapsuleGeometry(r, Math.max(len - r * 2, 0.001), capSegs, radSegs);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(from.clone().add(dir.clone().multiplyScalar(0.5)));
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+  parent.add(mesh);
+  return mesh;
+}
+
+/** Assemble the standing human figure from lathed core and capsule limbs. */
+function buildHumanFigure(parent: THREE.Object3D, mat: THREE.Material): void {
+  const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  const lSegs = 48;
+  const cSegs = 6;
+  const rSegs = 18;
+
+  // Skull and torso as lathed silhouettes.
+  makeLathe(parent, [
+    [0.002, 0.250], [0.075, 0.240], [0.145, 0.200],
+    [0.180, 0.110], [0.190, 0.020], [0.160, -0.080],
+    [0.095, -0.160], [0.002, -0.185],
+  ], mat, lSegs, [0, 1.30, 0]);
+  makeLimb(parent, V(0, 1.050, 0), V(0, 0.920, 0.01), 0.070, mat, cSegs, rSegs);
+  makeLathe(parent, [
+    [0.010, 0.950], [0.220, 0.900], [0.270, 0.800],
+    [0.260, 0.650], [0.240, 0.480], [0.160, 0.270],
+    [0.150, 0.100], [0.200, -0.040], [0.215, -0.130],
+    [0.170, -0.210], [0.010, -0.230],
+  ], mat, lSegs, [0, 0, 0.02]);
+
+  // Shoulder blends.
+  for (const x of [-1, 1]) {
+    const sh = new THREE.Mesh(new THREE.SphereGeometry(0.070, 14, 10), mat);
+    sh.position.set(x * 0.465, 0.860, 0.01);
+    parent.add(sh);
+  }
+
+  // Arms, elbows, hands, and fingers.
+  for (const sx of [-1, 1]) {
+    makeLimb(parent, V(sx * 0.48, 0.85, 0.01), V(sx * 0.65, 0.38, 0.05), 0.055, mat, cSegs, rSegs);
+    makeLimb(parent, V(sx * 0.65, 0.38, 0.05), V(sx * 0.72, -0.08, 0.07), 0.048, mat, cSegs, rSegs);
+    const el = new THREE.Mesh(new THREE.SphereGeometry(0.050, 10, 8), mat);
+    el.position.set(sx * 0.65, 0.38, 0.05);
+    parent.add(el);
+    const hx = sx * 0.750;
+    const hy = -0.155;
+    const hz = 0.075;
+    const palm = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), mat);
+    palm.scale.set(0.065, 0.045, 0.035);
+    palm.position.set(hx, hy, hz);
+    parent.add(palm);
+    for (let fi = 0; fi < 5; fi++) {
+      const spread = (fi - 2) * 0.018;
+      const flen = 0.050 - Math.abs(fi - 2) * 0.006;
+      makeLimb(
+        parent,
+        V(hx + spread, hy - 0.045, hz + 0.004),
+        V(hx + spread * 1.1 + sx * 0.004, hy - 0.045 - flen, hz + 0.006),
+        0.009, mat, 2, 6,
+      );
+    }
+  }
+
+  // Hip blends.
+  for (const x of [-1, 1]) {
+    const hp = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 9), mat);
+    hp.position.set(x * 0.175, -0.090, 0.01);
+    parent.add(hp);
+  }
+
+  // Legs, knees, feet, and heels.
+  for (const sx of [-1, 1]) {
+    makeLimb(parent, V(sx * 0.17, -0.090, 0.01), V(sx * 0.19, -0.630, 0.03), 0.085, mat, cSegs, rSegs);
+    makeLimb(parent, V(sx * 0.19, -0.630, 0.03), V(sx * 0.18, -1.130, 0.06), 0.070, mat, cSegs, rSegs);
+    const kn = new THREE.Mesh(new THREE.SphereGeometry(0.078, 10, 8), mat);
+    kn.position.set(sx * 0.19, -0.630, 0.03);
+    parent.add(kn);
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), mat);
+    foot.scale.set(0.065, 0.038, 0.120);
+    foot.position.set(sx * 0.18, -1.210, 0.160);
+    parent.add(foot);
+    const heel = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), mat);
+    heel.scale.set(0.052, 0.033, 0.048);
+    heel.position.set(sx * 0.18, -1.205, -0.028);
+    parent.add(heel);
+  }
 }
 
 function formatFromUrl(url:string):ModelFormat{const l=url.toLowerCase();return l.endsWith('.glb')?'glb':l.endsWith('.fbx')?'fbx':'gltf';}

@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RANK_SCALE, Scale } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
+import { createStarTexture } from '../textures/proceduralTextures';
 import { TREE_OF_LIFE, TaxonNode } from '../../data/taxonomy';
 import { TAXONOMY_SCALES } from '../../data/scales';
 
@@ -16,15 +18,19 @@ interface PlacedNode {
 const FORWARD = new THREE.Vector3(0, 0.12, 1).normalize();
 
 /**
- * The Tree of Life rendered as a navigable phylogenetic galaxy. Clades are
- * luminous instanced nodes joined by faint branch filaments; a deep star cloud
- * gives the field volumetric vastness. Level of detail is driven by the active
- * scale, so domains read at the broadest zoom and species resolve only as the
- * camera dives toward them.
+ * The Tree of Life rendered as a navigable phylogenetic galaxy. Clades are smooth
+ * luminous cores wrapped in additive glow halos, joined by curved, tapered branch
+ * filaments that arc between parent and child like a real cladogram; a deep star
+ * cloud gives the field volumetric vastness. Level of detail is driven by the
+ * active scale, so domains read at the broadest zoom and species resolve only as
+ * the camera dives toward them.
  *
- * The layout is computed once from a curated tree, but every interface here
- * (placement, picking, focus) is keyed by stable taxon id, so a paginated NCBI
- * Taxonomy feed can replace the static data without touching this geometry.
+ * The earlier build looked blocky because nodes were low-poly icosahedra and
+ * branches were single-pixel straight lines. Cores now use a high-subdivision
+ * sphere, glow comes from camera-facing sprites, and branches are swept tubes, so
+ * nothing reads as faceted geometry. The layout is computed once from a curated
+ * tree but keyed by stable taxon id, so a paginated NCBI feed can replace the
+ * data without touching this geometry.
  */
 export class TreeOfLifeLayer implements SceneLayer {
   readonly root = new THREE.Group();
@@ -35,10 +41,13 @@ export class TreeOfLifeLayer implements SceneLayer {
 
   private readonly nodes: THREE.InstancedMesh;
   private readonly nodeMat: THREE.MeshBasicMaterial;
-  private readonly cloud: THREE.InstancedMesh;
-  private readonly cloudMat: THREE.MeshBasicMaterial;
-  private readonly branches: THREE.LineSegments;
-  private readonly branchMat: THREE.LineBasicMaterial;
+  private readonly halos: THREE.Sprite[] = [];
+  private readonly haloBase: number[] = [];
+  private readonly haloTex: THREE.Texture;
+  private readonly cloud: THREE.Points;
+  private readonly cloudMat: THREE.PointsMaterial;
+  private readonly branches: THREE.Mesh;
+  private readonly branchMat: THREE.MeshBasicMaterial;
   private readonly proxies: THREE.Mesh[] = [];
   private readonly proxyGeo = new THREE.SphereGeometry(1, 12, 12);
   private readonly proxyMat: THREE.MeshBasicMaterial;
@@ -55,12 +64,13 @@ export class TreeOfLifeLayer implements SceneLayer {
 
   constructor() {
     this.root.name = 'TreeOfLifeLayer';
+    this.haloTex = createStarTexture(128);
 
     this.layout();
 
-    // Node cores: a single instanced icosahedron, unlit and bright so the bloom
-    // pass turns each clade into a soft luminous point.
-    const nodeGeo = new THREE.IcosahedronGeometry(1, 1);
+    // Node cores: a single instanced, high-subdivision sphere, unlit and bright
+    // so the bloom pass turns each clade into a soft luminous orb without facets.
+    const nodeGeo = new THREE.IcosahedronGeometry(1, 4);
     this.nodeMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0 });
     this.nodes = new THREE.InstancedMesh(nodeGeo, this.nodeMat, this.placed.length);
     this.nodes.instanceColor = new THREE.InstancedBufferAttribute(
@@ -73,24 +83,37 @@ export class TreeOfLifeLayer implements SceneLayer {
       this.nodeCurrent[i] = depthVisibleAt(p.depth, this.currentScale) ? baseSize : 0;
       const color = new THREE.Color().setHSL(p.node.hue / 360, 0.7, 0.62);
       this.nodes.setColorAt(i, color);
+
+      // A camera-facing glow halo gives each clade volume and a star-like bloom.
+      const haloMat = new THREE.SpriteMaterial({
+        map: this.haloTex,
+        color: new THREE.Color().setHSL(p.node.hue / 360, 0.75, 0.62),
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const halo = new THREE.Sprite(haloMat);
+      halo.position.copy(p.pos);
+      halo.renderOrder = -1;
+      this.halos.push(halo);
+      this.haloBase.push(baseSize * 3.4);
+      this.root.add(halo);
     });
     if (this.nodes.instanceColor) this.nodes.instanceColor.needsUpdate = true;
     this.root.add(this.nodes);
 
-    // Branch filaments between parent and child nodes.
-    const segs: number[] = [];
-    const cols: number[] = [];
-    for (const p of this.placed) {
-      if (!p.parent) continue;
-      const c = new THREE.Color().setHSL(p.node.hue / 360, 0.6, 0.45);
-      segs.push(p.parent.pos.x, p.parent.pos.y, p.parent.pos.z, p.pos.x, p.pos.y, p.pos.z);
-      cols.push(c.r, c.g, c.b, c.r, c.g, c.b);
-    }
-    const branchGeo = new THREE.BufferGeometry();
-    branchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(segs), 3));
-    branchGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cols), 3));
-    this.branchMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0 });
-    this.branches = new THREE.LineSegments(branchGeo, this.branchMat);
+    // Branch filaments: curved, tapered tubes swept between parent and child,
+    // colored as a gradient along their length and merged into one draw call.
+    this.branches = new THREE.Mesh(this.buildBranchGeometry(), undefined as unknown as THREE.Material);
+    this.branchMat = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.branches.material = this.branchMat;
     this.root.add(this.branches);
 
     // Invisible but raycastable proxies give each node a stable pick target.
@@ -104,26 +127,79 @@ export class TreeOfLifeLayer implements SceneLayer {
       this.root.add(proxy);
     }
 
-    // Deep backdrop cloud for galactic depth. Non-pickable, faint, instanced.
-    const cloudCount = 1400;
-    const cloudGeo = new THREE.IcosahedronGeometry(0.4, 0);
-    this.cloudMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0 });
-    this.cloud = new THREE.InstancedMesh(cloudGeo, this.cloudMat, cloudCount);
-    this.cloud.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cloudCount * 3), 3);
+    // Deep backdrop cloud as soft additive star points for galactic depth.
+    const cloudCount = 1600;
+    const positions = new Float32Array(cloudCount * 3);
+    const colors = new Float32Array(cloudCount * 3);
     const cc = new THREE.Color();
     for (let i = 0; i < cloudCount; i++) {
       const dir = randomDirection();
-      const r = 42 + Math.random() * 120;
-      this.dummy.position.copy(dir.multiplyScalar(r));
-      this.dummy.scale.setScalar(0.4 + Math.random() * 1.2);
-      this.dummy.updateMatrix();
-      this.cloud.setMatrixAt(i, this.dummy.matrix);
-      cc.setHSL((200 + Math.random() * 140) / 360, 0.5, 0.5 + Math.random() * 0.25);
-      this.cloud.setColorAt(i, cc);
+      const r = 42 + Math.random() * 130;
+      dir.multiplyScalar(r);
+      positions[i * 3] = dir.x;
+      positions[i * 3 + 1] = dir.y;
+      positions[i * 3 + 2] = dir.z;
+      cc.setHSL((200 + Math.random() * 140) / 360, 0.5, 0.5 + Math.random() * 0.28);
+      colors[i * 3] = cc.r;
+      colors[i * 3 + 1] = cc.g;
+      colors[i * 3 + 2] = cc.b;
     }
-    this.cloud.instanceMatrix.needsUpdate = true;
-    if (this.cloud.instanceColor) this.cloud.instanceColor.needsUpdate = true;
+    const cloudGeo = new THREE.BufferGeometry();
+    cloudGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    cloudGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    this.cloudMat = new THREE.PointsMaterial({
+      map: this.haloTex,
+      size: 2.6,
+      sizeAttenuation: true,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.cloud = new THREE.Points(cloudGeo, this.cloudMat);
     this.root.add(this.cloud);
+  }
+
+  // ---- geometry ------------------------------------------------------------
+
+  /** Sweep a curved, tapered tube for every parent→child edge and merge them. */
+  private buildBranchGeometry(): THREE.BufferGeometry {
+    const geos: THREE.BufferGeometry[] = [];
+    const parentColor = new THREE.Color();
+    const childColor = new THREE.Color();
+    for (const p of this.placed) {
+      if (!p.parent) continue;
+      const a = p.parent.pos;
+      const b = p.pos;
+      const mid = a.clone().add(b).multiplyScalar(0.5);
+      // Bow the branch outward from the galactic center so edges arc like a tree.
+      const outward = mid.clone().normalize().multiplyScalar(a.distanceTo(b) * 0.16);
+      const control = mid.add(outward);
+      const curve = new THREE.QuadraticBezierCurve3(a.clone(), control, b.clone());
+      const radius = Math.max(0.05, 0.32 - p.parent.depth * 0.035);
+      const tube = new THREE.TubeGeometry(curve, 24, radius, 6, false);
+
+      // Gradient the tube color from the parent clade hue to the child hue.
+      parentColor.setHSL(p.parent.node.hue / 360, 0.6, 0.5);
+      childColor.setHSL(p.node.hue / 360, 0.65, 0.6);
+      const uv = tube.attributes.uv as THREE.BufferAttribute;
+      const count = tube.attributes.position.count;
+      const colors = new Float32Array(count * 3);
+      const c = new THREE.Color();
+      for (let i = 0; i < count; i++) {
+        const t = uv.getX(i);
+        c.copy(parentColor).lerp(childColor, t);
+        colors[i * 3] = c.r;
+        colors[i * 3 + 1] = c.g;
+        colors[i * 3 + 2] = c.b;
+      }
+      tube.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      geos.push(tube);
+    }
+    const merged = geos.length ? mergeGeometries(geos, false) : new THREE.BufferGeometry();
+    for (const g of geos) g.dispose();
+    return merged ?? new THREE.BufferGeometry();
   }
 
   // ---- layout --------------------------------------------------------------
@@ -204,8 +280,8 @@ export class TreeOfLifeLayer implements SceneLayer {
 
   update(dt: number, elapsed: number): void {
     fadeMaterial(this.nodeMat, this.intensity, dt);
-    fadeMaterial(this.branchMat, this.intensity * 0.6, dt);
-    fadeMaterial(this.cloudMat, this.intensity * 0.5, dt);
+    fadeMaterial(this.branchMat, this.intensity * 0.7, dt);
+    fadeMaterial(this.cloudMat, this.intensity * 0.55, dt);
 
     // Gentle drift, unless we are settling a focus orientation.
     if (this.focusTarget) {
@@ -227,6 +303,11 @@ export class TreeOfLifeLayer implements SceneLayer {
         this.nodeCurrent[i] = cur + (target - cur) * Math.min(1, dt * 5);
         changed = true;
       }
+      // Halos track core size and pulse gently so the field feels alive.
+      const halo = this.halos[i];
+      const pulse = 1 + Math.sin(elapsed * 1.3 + i) * 0.06;
+      halo.scale.setScalar(Math.max(0.0001, (this.nodeCurrent[i] / this.nodeScale[i]) * this.haloBase[i] * pulse));
+      fadeMaterial(halo.material, visible ? this.intensity * 0.9 : 0, dt);
     }
     if (changed) {
       for (let i = 0; i < this.placed.length; i++) {
@@ -245,12 +326,13 @@ export class TreeOfLifeLayer implements SceneLayer {
   getPickables(): THREE.Object3D[] {
     if (this.intensity < 0.2) return [];
     // Only expose nodes at or just beyond the current level of detail.
-    return this.proxies.filter((proxy, i) =>
+    return this.proxies.filter((_proxy, i) =>
       depthVisibleAt(this.placed[i].depth, this.currentScale),
     );
   }
 
   dispose(): void {
+    this.haloTex.dispose();
     disposeObject(this.root);
   }
 }

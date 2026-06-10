@@ -46,6 +46,7 @@ export class BioGalaxyScene {
   private readonly envTexture: THREE.Texture;
 
   private readonly layers: SceneLayer[];
+  private readonly cosmos: CosmosLayer;
   private readonly tree: TreeOfLifeLayer;
   private readonly anatomy: AnatomyModelLayer;
   private readonly cell: CellScene;
@@ -95,12 +96,13 @@ export class BioGalaxyScene {
     this.cameraController = new CameraScaleController(this.renderer.domElement, width / height, initialScale);
     this.raycaster = new SelectionRaycaster(this.renderer.domElement);
 
+    this.cosmos = new CosmosLayer();
     this.tree = new TreeOfLifeLayer();
     this.anatomy = new AnatomyModelLayer();
     this.cell = new CellScene();
     this.protein = new ProteinStructureLayer();
     this.layers = [
-      new CosmosLayer(),
+      this.cosmos,
       new SolarSystemLayer(),
       new EarthLayer(),
       this.tree,
@@ -154,6 +156,7 @@ export class BioGalaxyScene {
   setCinematicProgress(progress: number | null): void {
     this.cinematicProgress = progress;
     this.anatomy.setCinematicProgress(progress);
+    this.cosmos.setCinematic(progress);
     if (progress !== null) this.start();
   }
 
