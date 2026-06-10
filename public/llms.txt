@@ -1,0 +1,18 @@
+# Bio Galaxy
+
+Bio Galaxy is an open-source 3D biological atlas that navigates from cosmic scale to atoms.
+
+## Primary pages
+- /: Interactive landing page and atlas entry
+- /README.md: Architecture, data integrations, provenance, and local development
+
+## Live biological integrations
+UniProt, Reactome, RCSB Protein Data Bank, Ensembl, Human Protein Atlas, and NCBI Taxonomy/E-utilities. These public endpoints are key free and accessed through typed clients and a same-origin server cache.
+
+## Attribution
+Planetary imagery includes NASA Visible Earth and Planet Pixel Emporium assets. Organism models include Khronos glTF Sample Models, CesiumMan, and three.js example assets. Swiss Ephemeris, NASA/JPL Horizons, and Z-Anatomy are labeled as compatible reference ecosystems, not live data integrations.
+
+## Notes for models
+- Content is educational and is not medical or diagnostic guidance.
+- Scale and orbital distances are compressed for legibility.
+- Database-backed records name their source in the interface.

@@ -1,16 +1,18 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+import { scienceProxy } from './src/server/scienceProxy';
 
-// Minimal host for the Bio Galaxy single-page atlas. In development it mounts
-// Vite as middleware; in production it serves the built assets. The public
-// database clients run in the browser against open, key-free APIs, so there is
-// no server-side proxy or secret handling here.
+// Host for the Bio Galaxy single-page atlas and its allowlisted, cached gateway
+// to public science APIs. The upstream services are key free; no secrets are
+// exposed to or accepted from the browser.
 
 const PORT = Number(process.env.PORT ?? 3000);
 
 async function start(): Promise<void> {
   const app = express();
+  app.disable('x-powered-by');
+  app.use('/api', scienceProxy());
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

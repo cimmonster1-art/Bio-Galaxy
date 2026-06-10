@@ -58,8 +58,12 @@ const fragmentShader = /* glsl */ `
     vec3 col = mix(uColorA, uColorB, clouds);
 
     // Sparse star field from a high-frequency noise threshold.
-    float stars = pow(noise(dir * 220.0), 22.0) * 3.0;
-    col += vec3(stars);
+    float stars = pow(noise(dir * 220.0), 24.0) * 3.6;
+    float fineStars = pow(noise(dir * 510.0 + 4.0), 30.0) * 2.0;
+    float band = pow(max(0.0, 1.0 - abs(dir.y * 1.8 + sin(dir.x * 4.0) * 0.12)), 5.0);
+    float dust = fbm(dir * 8.0 + vec3(uTime * 0.002, 0.0, 0.0)) * band;
+    col += vec3(stars + fineStars);
+    col += vec3(0.025, 0.08, 0.11) * dust;
 
     // Vignette toward the deep void at the poles for depth.
     float depth = smoothstep(1.0, 0.2, abs(dir.y));
@@ -82,7 +86,7 @@ export function createNebulaBackground(radius = 900): {
     uniforms: {
       uTime: { value: 0 },
       uColorA: { value: new THREE.Color('#04060f') },
-      uColorB: { value: new THREE.Color('#0a2436') },
+      uColorB: { value: new THREE.Color('#0b3046') },
     },
   });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), material);
