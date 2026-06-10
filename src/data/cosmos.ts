@@ -146,16 +146,18 @@ export interface CosmicEra {
   /** Time since the Big Bang, as a readable string. */
   time: string;
   detail: string;
+  span: string;
+  milestones: readonly string[];
 }
 
 // Timeline anchored at the Big Bang, mapped onto the cosmic and early-life
 // scales. Times are approximate consensus values.
 export const COSMIC_TIMELINE: CosmicEra[] = [
-  { scale: Scale.Cosmos, label: 'Big Bang', time: '13.8 Gya', detail: 'Cosmic web and the first galaxies form.' },
-  { scale: Scale.Galaxy, label: 'Milky Way', time: '13.6 Gya', detail: 'A barred spiral galaxy assembles from earlier structure.' },
-  { scale: Scale.SolarSystem, label: 'Solar System', time: '4.6 Gya', detail: 'The Sun ignites and planets accrete from the disk.' },
-  { scale: Scale.Planet, label: 'Earth', time: '4.54 Gya', detail: 'Oceans, atmosphere, and continents take shape.' },
-  { scale: Scale.TreeOfLife, label: 'First life', time: '3.8 Gya', detail: 'The earliest cells branch into the Tree of Life.' },
+  { scale: Scale.Cosmos, label: 'Early universe', time: '13.8 Gya', span: 'First 1 billion years', detail: 'Matter cools, the first atoms form, and gravity gathers gas into the earliest stars and galaxies.', milestones: ['Big Bang and rapid expansion', 'First atoms after 380,000 years', 'First stars by about 13.6 Gya'] },
+  { scale: Scale.Galaxy, label: 'Milky Way', time: '13.6 Gya', span: 'Galactic assembly', detail: 'The Milky Way grows through mergers and sustained star formation, building its halo, disk, and spiral structure.', milestones: ['Old halo stars form', 'Disk and spiral arms assemble', 'Heavy elements enrich later stars'] },
+  { scale: Scale.SolarSystem, label: 'Solar System', time: '4.6 Gya', span: 'About 100 million years', detail: 'A molecular cloud collapses. The Sun forms at its center while dust and rock accrete into planets and moons.', milestones: ['Solar nebula collapses', 'Sun begins fusion', 'Planets accrete from the disk'] },
+  { scale: Scale.Planet, label: 'Early Earth', time: '4.54 Gya', span: 'First 700 million years', detail: 'Earth differentiates into core, mantle, and crust. Cooling permits a persistent atmosphere and liquid-water oceans.', milestones: ['Moon-forming impact', 'Crust and oceans stabilize', 'Atmosphere evolves'] },
+  { scale: Scale.TreeOfLife, label: 'Life diversifies', time: '3.8 Gya', span: 'Billions of years', detail: 'Cellular life changes Earth and branches into the lineages represented in the Tree of Life.', milestones: ['Early microbial life', 'Oxygenic photosynthesis', 'Eukaryotes and multicellular life'] },
 ];
 
 export function eraForScale(scale: Scale): CosmicEra | undefined {
