@@ -1,0 +1,11 @@
+/* BIO GALAXY */
+Bio Galaxy is an open-source interactive 3D biological atlas built over public scientific databases.
+
+/* TECHNOLOGY */
+React, TypeScript, Three.js, WebGL, Vite, Express, glTF
+
+/* DATA */
+UniProt, Reactome, RCSB PDB, Ensembl, Human Protein Atlas, NCBI
+
+/* PRINCIPLES */
+Source-aware records, key-free public endpoints, explicit attribution, modular rendering, and complete Three.js resource cleanup.
