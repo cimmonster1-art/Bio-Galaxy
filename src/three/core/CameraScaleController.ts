@@ -23,14 +23,14 @@ export class CameraScaleController {
   private lastSettled: Scale;
 
   constructor(domElement: HTMLElement, aspect: number, initial: Scale) {
-    this.camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 3000);
-    this.camera.position.set(0, 14, 210);
+    this.camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 6000);
+    this.camera.position.set(0, 40, 640);
 
     this.controls = new OrbitControls(this.camera, domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.minDistance = 6;
-    this.controls.maxDistance = 520;
+    this.controls.maxDistance = 1000;
     this.controls.enablePan = false;
 
     this.navigator = new ScaleNavigator(initial);

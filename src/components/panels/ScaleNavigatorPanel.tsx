@@ -14,8 +14,9 @@ interface Group {
   to: Scale;
 }
 
-// The ladder is long, so it is grouped into the four navigable regimes.
+// The ladder is long, so it is grouped into navigable regimes.
 const GROUPS: Group[] = [
+  { label: 'Cosmos', from: Scale.Cosmos, to: Scale.Planet },
   { label: 'Phylogeny', from: Scale.TreeOfLife, to: Scale.Species },
   { label: 'Anatomy', from: Scale.Organism, to: Scale.Tissue },
   { label: 'Cellular', from: Scale.Cell, to: Scale.Organelle },

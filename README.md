@@ -8,9 +8,13 @@ Life down to a single atom.
 
 ## Scale ladder
 
-Tree of Life → Domain → Kingdom → Phylum → Class → Order → Family → Genus →
-Species → Organism → Organ System → Organ → Tissue → Cell → Organelle → Protein
-Complex → Molecule → Atom
+Cosmos → Galaxy → Solar System → Planet → Tree of Life → Domain → Kingdom →
+Phylum → Class → Order → Family → Genus → Species → Organism → Organ System →
+Organ → Tissue → Cell → Organelle → Protein Complex → Molecule → Atom
+
+A continuous dive from the Big Bang to a single atom: a deep-space cosmic web, a
+heliocentric solar system with open-licensed NASA-derived planet maps, a Blue
+Marble Earth, and then the full biological ladder.
 
 ## Data sources
 
@@ -55,8 +59,11 @@ src/
 Scene logic is kept separate from the React UI panels, and API clients are kept
 separate from the rendering layers.
 
-Real 3D models are integrated at two scales:
+Real open assets are integrated at several scales:
 
+- Cosmic: the solar system uses open-licensed planetary surface maps (Planet
+  Pixel Emporium via threex.planets, MIT) and the NASA Visible Earth "Blue
+  Marble" set (via the three.js repository), loaded from GitHub at runtime.
 - Organism: open glTF meshes hosted on GitHub (three.js example animals and the
   Khronos CC0 Fox) load at the organism scale with animation and cited
   repository and license. The GLTF/GLB/FBX loader architecture and procedural
