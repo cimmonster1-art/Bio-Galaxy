@@ -4,7 +4,10 @@ import { BioObject, PickTag, Scale } from '../types';
 import { FIRST_SCALE, LAST_SCALE } from '../data/scales';
 import { lineageOf } from '../data/taxonomy';
 import { resolveObject } from '../data/resolve';
-import { BioGalaxyCanvas } from './BioGalaxyCanvas';
+import { rcsb } from '../data/clients';
+import { useAsync } from '../hooks/useAsync';
+import { BioGalaxyCanvas, StructurePayload } from './BioGalaxyCanvas';
+import { GlobalSearch } from './GlobalSearch';
 import { ScaleNavigatorPanel } from './panels/ScaleNavigatorPanel';
 import { ContextPanel } from './panels/ContextPanel';
 import { DataSourcesPanel } from './panels/DataSourcesPanel';
@@ -68,6 +71,19 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
     [applySelection],
   );
 
+  // Search navigation always commits the camera to the chosen object's scale.
+  const navigateTo = useCallback(
+    (id: string) => {
+      const obj = resolveObject(id);
+      if (!obj) return;
+      setSelected(obj);
+      setScale(obj.scale);
+      if (obj.id.startsWith('taxon:')) setFocusTaxonId(obj.id);
+      else if (obj.id.startsWith('organism:')) setFocusTaxonId(`taxon:${stripTaxon(obj.id)}`);
+    },
+    [],
+  );
+
   const stepScale = useCallback((dir: 1 | -1) => {
     setScale((s) => Math.max(FIRST_SCALE, Math.min(LAST_SCALE, s + dir)) as Scale);
   }, []);
@@ -82,26 +98,46 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
     return taxonId ? lineageOf(taxonId).map((n) => n.name) : [];
   }, [focusTaxonId]);
 
+  // When a structure-backed object is selected, fetch its real PDB coordinates
+  // and hand them to the scene to render as a live ball-and-stick model.
+  const pdbId = selected?.pdbId ?? null;
+  const structureState = useAsync(
+    (signal) => rcsb.fetchStructure(pdbId as string, { signal }),
+    [pdbId],
+    Boolean(pdbId),
+  );
+  const structure = useMemo<StructurePayload | null>(
+    () =>
+      pdbId && structureState.data && selected
+        ? { atoms: structureState.data.atoms, pickId: selected.id }
+        : null,
+    [pdbId, structureState.data, selected],
+  );
+
   const selectedTaxonId = focusTaxonId ? stripTaxon(focusTaxonId) : null;
   const selectedOrganelleId = selected?.kind === 'organelle' ? selected.id : null;
 
   return (
     <div className="flex h-screen w-screen flex-col bg-[#02040a] text-slate-100">
-      <header className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
-        <div className="flex items-center gap-3">
+      <header className="flex items-center gap-4 border-b border-white/10 px-4 py-2.5">
+        <div className="flex shrink-0 items-center gap-3">
           <button
             onClick={onExit}
+            aria-label="Return to home"
             className="flex items-center gap-1.5 rounded-sm border border-white/10 px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-cyan-500/40 hover:text-cyan-200"
           >
-            <ChevronLeft className="h-3.5 w-3.5" /> Home
+            <ChevronLeft className="h-3.5 w-3.5" aria-hidden /> Home
           </button>
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#27c4d9]" />
+            <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#27c4d9]" aria-hidden />
             <span className="text-[13px] font-semibold tracking-tight">Bio Galaxy</span>
           </div>
         </div>
-        <span className="meta-label hidden sm:block">
-          Explore life from phylogeny to molecular structure
+        <div className="flex flex-1 justify-center">
+          <GlobalSearch onSelect={navigateTo} />
+        </div>
+        <span className="meta-label hidden shrink-0 lg:block">
+          Phylogeny to molecular structure
         </span>
       </header>
 
@@ -115,11 +151,16 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
         </aside>
 
         {/* Center scene */}
-        <main className="relative min-w-0 flex-1 depth-field">
+        <main
+          className="relative min-w-0 flex-1 depth-field"
+          role="application"
+          aria-label="Bio Galaxy 3D atlas. Use the search, scale ladder, or phylogeny panel to navigate."
+        >
           <BioGalaxyCanvas
             scale={scale}
             selectedId={selectedOrganelleId}
             focusTaxonId={focusTaxonId}
+            structure={structure}
             onHover={handleHover}
             onSelect={handleSelect}
             onScaleSettled={handleScaleSettled}

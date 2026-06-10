@@ -44,6 +44,10 @@ export const StructureSection: React.FC<Props> = ({ pdbId }) => {
             {data.resolution && <span>{data.resolution.toFixed(2)} Å</span>}
             {data.releaseDate && <span>{data.releaseDate}</span>}
           </div>
+          <p className="pt-1 text-[11px] leading-relaxed text-slate-500">
+            Rendered as a live ball-and-stick model from open PDB coordinates at the molecular
+            scale.
+          </p>
         </div>
       )}
     </div>
