@@ -64,7 +64,7 @@ export class CameraScaleController {
       const dist = this.navigator.cameraDistance();
       const dir = this.camera.position.clone().sub(this.controls.target).normalize();
       const target = this.controls.target.clone().add(dir.multiplyScalar(dist));
-      this.camera.position.lerp(target, Math.min(1, dt * 4));
+      this.camera.position.lerp(target, Math.min(1, dt * 7));
       this.controls.update();
       return { moving: true, settled: null };
     }
