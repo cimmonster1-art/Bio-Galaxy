@@ -49,7 +49,9 @@ export type DataSourceId =
   | 'rcsb'
   | 'ensembl'
   | 'hpa'
-  | 'ncbi';
+  | 'ncbi'
+  | 'z_anatomy'
+  | 'bodyparts3d';
 
 export interface DataSource {
   id: DataSourceId;

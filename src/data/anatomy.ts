@@ -28,5 +28,5 @@ export const ANATOMY_ENTRIES: AnatomyEntry[] = [
 ];
 
 export const ANATOMY_OBJECTS: Record<string, BioObject> = Object.fromEntries(
-  ANATOMY_ENTRIES.map((entry) => [entry.id, { ...entry, source: 'hpa', crossRefs: ['ncbi'] }]),
+  ANATOMY_ENTRIES.map((entry) => [entry.id, { ...entry, source: 'bodyparts3d', crossRefs: ['z_anatomy', 'hpa', 'ncbi'] }]),
 );
