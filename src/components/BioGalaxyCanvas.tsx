@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Scale, PickTag } from '../types';
 import { BioGalaxyScene } from '../three/BioGalaxyScene';
 
@@ -50,6 +50,7 @@ export const BioGalaxyCanvas: React.FC<Props> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<BioGalaxyScene | null>(null);
+  const [sceneError, setSceneError] = useState<Error | null>(null);
 
   // Keep the latest callbacks without re-creating the scene.
   const cbRef = useRef({ onHover, onSelect, onScaleSettled, onModelResult });
@@ -61,6 +62,7 @@ export const BioGalaxyCanvas: React.FC<Props> = ({
       onHover: (t) => cbRef.current.onHover(t),
       onSelect: (t) => cbRef.current.onSelect(t),
       onScaleSettled: (s) => cbRef.current.onScaleSettled(s),
+      onError: setSceneError,
     });
     sceneRef.current = scene;
     return () => {
@@ -102,11 +104,15 @@ export const BioGalaxyCanvas: React.FC<Props> = ({
       })
       .then((ok) => {
         if (active) cbRef.current.onModelResult?.(ok);
+      })
+      .catch((error: unknown) => {
+        if (active) setSceneError(error instanceof Error ? error : new Error('The organism model could not be loaded.'));
       });
     return () => {
       active = false;
     };
   }, [organismModel]);
 
+  if (sceneError) throw sceneError;
   return <div ref={containerRef} className="absolute inset-0" />;
 };
