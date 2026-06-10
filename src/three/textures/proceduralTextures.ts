@@ -62,6 +62,37 @@ export function createOrganicTexture(size = 256, tint = '#1f6f8b'): THREE.Textur
   return texture;
 }
 
+/**
+ * Tileable grayscale noise for use as a bump map, giving organic surfaces fine
+ * relief without a normal-map asset. Layered octaves read as a cell-like,
+ * mottled membrane texture.
+ */
+export function createBumpTexture(size = 256, frequency = 0.06): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const image = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const n =
+          valueNoise(x * frequency, y * frequency) * 0.55 +
+          valueNoise(x * frequency * 3, y * frequency * 3) * 0.3 +
+          valueNoise(x * frequency * 7, y * frequency * 7) * 0.15;
+        const v = Math.floor(40 + n * 200);
+        const i = (y * size + x) * 4;
+        image.data[i] = image.data[i + 1] = image.data[i + 2] = v;
+        image.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.needsUpdate = true;
+  return texture;
+}
+
 // Deterministic 2D value noise so textures are stable across reloads.
 function valueNoise(x: number, y: number): number {
   const xi = Math.floor(x);

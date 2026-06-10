@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Scale } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
+import { createBumpTexture } from '../textures/proceduralTextures';
 import {
   Pickable,
   buildCytoskeleton,
@@ -29,6 +30,8 @@ export class CellScene implements SceneLayer {
   private readonly pickables: Pickable[] = [];
   private readonly drifters: { group: THREE.Group; phase: number; base: THREE.Vector3 }[] = [];
   private readonly vesicles: Pickable;
+  private readonly bump: THREE.Texture;
+  private readonly innerLight: THREE.PointLight;
   private intensity = 0;
   private selectedId: string | null = null;
 
@@ -36,24 +39,31 @@ export class CellScene implements SceneLayer {
     this.root.name = 'CellScene';
     this.root.visible = false;
 
-    this.membrane = buildMembrane(this.radius);
+    this.bump = createBumpTexture(256, 0.07);
+
+    this.membrane = buildMembrane(this.radius, this.bump);
     this.root.add(this.membrane);
 
-    const nucleus = buildNucleus(5.5);
+    const nucleus = buildNucleus(5.5, this.bump);
     this.place(nucleus, new THREE.Vector3(0, 0, 0));
 
-    const er = buildER(5.5);
+    const er = buildER(5.5, this.bump);
     this.place(er, new THREE.Vector3(0, 0, 0));
 
     // Scatter the discrete organelles around the cytoplasm.
-    this.placeMany(buildMitochondrion, 4, 10);
-    this.place(buildGolgi(), new THREE.Vector3(-9, -4, 3));
+    this.placeMany(() => buildMitochondrion(this.bump), 4, 10);
+    this.place(buildGolgi(this.bump), new THREE.Vector3(-9, -4, 3));
     this.place(buildCytoskeleton(this.radius), new THREE.Vector3(0, 0, 0));
 
-    this.vesicles = buildVesicles(60, this.radius);
+    this.vesicles = buildVesicles(40, this.radius);
     this.place(this.vesicles, new THREE.Vector3(0, 0, 0));
 
-    this.place(buildRibosomes(90, this.radius), new THREE.Vector3(0, 0, 0));
+    this.place(buildRibosomes(60, this.radius), new THREE.Vector3(0, 0, 0));
+
+    // A soft interior light gives the cytoplasm translucent depth.
+    this.innerLight = new THREE.PointLight(0x4fd6e6, 0, 50, 1.8);
+    this.innerLight.position.set(2, 3, 2);
+    this.root.add(this.innerLight);
   }
 
   private place(p: Pickable, position: THREE.Vector3): void {
@@ -87,7 +97,8 @@ export class CellScene implements SceneLayer {
   }
 
   update(dt: number, elapsed: number): void {
-    fadeMaterial(this.membrane.material as THREE.MeshPhysicalMaterial, this.intensity * 0.12, dt);
+    fadeMaterial(this.membrane.material as THREE.MeshPhysicalMaterial, this.intensity * 0.16, dt);
+    this.innerLight.intensity = this.intensity * 1.4;
 
     for (const d of this.drifters) {
       d.group.position.y = d.base.y + Math.sin(elapsed * 0.4 + d.phase) * 0.4;
@@ -108,6 +119,7 @@ export class CellScene implements SceneLayer {
   }
 
   dispose(): void {
+    this.bump.dispose();
     disposeObject(this.root);
   }
 }

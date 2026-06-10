@@ -6,7 +6,9 @@ import { lineageOf } from '../data/taxonomy';
 import { resolveObject } from '../data/resolve';
 import { rcsb } from '../data/clients';
 import { useAsync } from '../hooks/useAsync';
-import { ModelEntry } from '../data/modelCatalog';
+import { MODEL_CATALOG, ModelEntry } from '../data/modelCatalog';
+
+const DEFAULT_MODEL = MODEL_CATALOG.find((m) => m.id === 'human') ?? MODEL_CATALOG[0];
 import { BioGalaxyCanvas, OrganismModelRequest, StructurePayload } from './BioGalaxyCanvas';
 import { GlobalSearch } from './GlobalSearch';
 import { CosmicTimeline } from './CosmicTimeline';
@@ -35,9 +37,14 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const [selected, setSelected] = useState<BioObject | null>(null);
   const [hovered, setHovered] = useState<BioObject | null>(null);
   const [focusTaxonId, setFocusTaxonId] = useState<string | null>(null);
-  const [organismModel, setOrganismModel] = useState<OrganismModelRequest | null>(null);
-  const [activeModelId, setActiveModelId] = useState<string | null>(null);
-  const [modelStatus, setModelStatus] = useState<ModelStatus>('idle');
+  // The human model loads by default so the organism scale shows a real mesh.
+  const [organismModel, setOrganismModel] = useState<OrganismModelRequest | null>({
+    url: DEFAULT_MODEL.url,
+    label: DEFAULT_MODEL.label,
+    sourceUrl: DEFAULT_MODEL.repoUrl,
+  });
+  const [activeModelId, setActiveModelId] = useState<string | null>(DEFAULT_MODEL.id);
+  const [modelStatus, setModelStatus] = useState<ModelStatus>('loading');
 
   // Apply a resolved object's natural scale and phylogenetic focus.
   const applySelection = useCallback((obj: BioObject) => {

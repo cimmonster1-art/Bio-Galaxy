@@ -34,6 +34,20 @@ const THREE_BASE = 'https://raw.githubusercontent.com/mrdoob/three.js/master/exa
 
 export const MODEL_CATALOG: ModelEntry[] = [
   {
+    id: 'human',
+    label: 'Human (rigged)',
+    organism: 'Homo sapiens',
+    taxonHint: 'homo_sapiens',
+    scale: Scale.Organism,
+    format: 'glb',
+    url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMan/glTF-Binary/CesiumMan.glb',
+    repo: 'KhronosGroup/glTF-Sample-Models',
+    repoUrl: 'https://github.com/KhronosGroup/glTF-Sample-Models/tree/master/2.0/CesiumMan',
+    license: 'CC-BY 4.0',
+    attribution: 'Cesium',
+    animated: true,
+  },
+  {
     id: 'flamingo',
     label: 'Flamingo',
     organism: 'Wading bird (Aves)',

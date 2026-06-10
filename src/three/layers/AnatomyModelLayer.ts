@@ -208,11 +208,16 @@ export class AnatomyModelLayer implements SceneLayer {
   private buildHeart(): THREE.Group {
     const group = new THREE.Group();
     group.name = 'heart';
-    const mat = new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshPhysicalMaterial({
       color: '#c0394e',
       emissive: '#3a0a12',
-      emissiveIntensity: 0.6,
-      roughness: 0.5,
+      emissiveIntensity: 0.5,
+      roughness: 0.32,
+      clearcoat: 1,
+      clearcoatRoughness: 0.35,
+      sheen: 0.6,
+      sheenColor: new THREE.Color('#ff8595'),
+      envMapIntensity: 1,
     });
     const a = new THREE.Mesh(new THREE.SphereGeometry(1.5, 24, 24), mat);
     a.position.x = -0.7;
