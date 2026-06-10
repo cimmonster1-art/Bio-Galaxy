@@ -25,6 +25,7 @@ import { SceneControls } from './panels/SceneControls';
 import { AnatomyExplorer } from './AnatomyExplorer';
 import { AtlasCopilot } from './AtlasCopilot';
 import { ActivityStrip } from './panels/ActivityStrip';
+import { MobileAtlasDock, MobileAtlasPanel } from './MobileAtlasDock';
 
 interface Props {
   onExit: () => void;
@@ -49,6 +50,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const [modelStatus, setModelStatus] = useState<ModelStatus>('loading');
   const [workspace, setWorkspace] = useState<AtlasWorkspace>(null);
   const [cinematicProgress, setCinematicProgress] = useState<number | null>(null);
+  const [mobilePanel, setMobilePanel] = useState<MobileAtlasPanel>(null);
 
   // Apply a resolved object's natural scale and phylogenetic focus.
   const applySelection = useCallback((obj: BioObject) => {
@@ -151,22 +153,22 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const coreAnatomyScale = scale >= Scale.Organism && scale <= Scale.Organ;
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-[#02040a] text-slate-100">
-      <header className="flex items-center gap-4 border-b border-white/10 px-4 py-2.5">
+    <div className="atlas-shell flex h-screen w-screen flex-col bg-[#02040a] text-slate-100">
+      <header className="atlas-header flex items-center gap-4 border-b border-white/10 px-4 py-2.5">
         <div className="flex shrink-0 items-center gap-3">
           <button
             onClick={onExit}
             aria-label="Return to home"
             className="flex items-center gap-1.5 rounded-sm border border-white/10 px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-cyan-500/40 hover:text-cyan-200"
           >
-            <ChevronLeft className="h-3.5 w-3.5" aria-hidden /> Home
+            <ChevronLeft className="h-3.5 w-3.5" aria-hidden /> <span className="hidden sm:inline">Home</span>
           </button>
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#27c4d9]" aria-hidden />
             <span className="text-[13px] font-semibold tracking-tight">Bio Galaxy</span>
           </div>
         </div>
-        <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
+        <div className="atlas-header-tools flex min-w-0 flex-1 items-center justify-center gap-2">
           <GlobalSearch onSelect={navigateTo} />
           <AtlasTopNav active={workspace} onChange={setWorkspace} />
         </div>
@@ -198,15 +200,31 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
             </main>
 
             {/* Right column */}
-            <aside className="hidden w-[min(33.333vw,26rem)] shrink-0 flex-col border-l border-white/10 bg-[#04070f] md:flex">
+            <aside className="hidden w-[min(33.333vw,26rem)] shrink-0 flex-col border-l border-white/10 bg-[#04070f] lg:flex">
               <WikipediaSidebar selected={selected} scale={scale} />
               <div className="min-h-0 flex-1"><DetailPanel selected={selected} /></div>
             </aside>
           </div>
-          <ActivityStrip scale={scale} selected={selected} lineage={lineage} />
+          <div className="hidden lg:block"><ActivityStrip scale={scale} selected={selected} lineage={lineage} /></div>
         </>
       )}
 
+      {!workspace && <MobileAtlasDock
+        active={mobilePanel}
+        onChange={setMobilePanel}
+        selectionName={selected?.name}
+        navigate={<>
+          <ScaleNavigatorPanel scale={scale} onScaleChange={setScale} />
+          <TaxonomyNavigator selectedTaxonId={selectedTaxonId} onSelectTaxon={selectTaxon} />
+          {anatomyScale && <AnatomyModelsPanel activeId={activeModelId} status={modelStatus} onLoad={loadModelEntry} />}
+        </>}
+        inspect={<>
+          <WikipediaSidebar selected={selected} scale={scale} />
+          <div className="min-h-[22rem] overflow-hidden rounded-lg border border-white/10 bg-[#04070f]"><DetailPanel selected={selected} /></div>
+          <ContextPanel scale={scale} selected={selected} />
+          <DataSourcesPanel active={activeSources} />
+        </>}
+      />}
       <AtlasCopilot scale={scale} selected={selected} hovered={hovered} />
     </div>
   );

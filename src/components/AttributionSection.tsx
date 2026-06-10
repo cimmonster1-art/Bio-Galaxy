@@ -16,7 +16,7 @@ export const AttributionSection = React.forwardRef<HTMLElement>(function Attribu
   const groups = expanded ? ATTRIBUTION_GROUPS : ATTRIBUTION_GROUPS.slice(0, 2);
 
   return (
-    <section ref={ref} id="open-science" className="mx-auto max-w-6xl px-6 py-20">
+    <section ref={ref} id="open-science" className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="meta-label mb-2">Open science credits · {ATTRIBUTION_COUNT} organizations and projects</div>
@@ -34,7 +34,7 @@ export const AttributionSection = React.forwardRef<HTMLElement>(function Attribu
         {groups.map((group, groupIndex) => {
           const Icon = GROUP_ICON[groupIndex] ?? Sparkles;
           return (
-            <article key={group.id} className="panel-solid rounded-lg p-5">
+            <article key={group.id} className="panel-solid rounded-lg p-4 sm:p-5">
               <div className="flex items-start gap-3 border-b border-white/8 pb-4">
                 <div className="rounded-md border border-cyan-400/15 bg-cyan-400/[0.06] p-2 text-cyan-300"><Icon className="h-4 w-4" /></div>
                 <div><h3 className="text-[14px] font-semibold">{group.label}</h3><p className="mt-1 text-[12px] leading-relaxed text-slate-500">{group.description}</p></div>
