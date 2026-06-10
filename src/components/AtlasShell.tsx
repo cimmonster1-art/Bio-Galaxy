@@ -172,54 +172,41 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        {/* Left column */}
-        <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto scroll-thin border-r border-white/10 p-3 lg:flex">
-          <ScaleNavigatorPanel scale={scale} onScaleChange={setScale} />
-          <TaxonomyNavigator selectedTaxonId={selectedTaxonId} onSelectTaxon={selectTaxon} />
-          {anatomyScale && (
-            <AnatomyModelsPanel
-              activeId={activeModelId}
-              status={modelStatus}
-              onLoad={loadModelEntry}
-            />
-          )}
-          <ContextPanel scale={scale} selected={selected} />
-          <DataSourcesPanel active={activeSources} />
-        </aside>
+      {workspace === 'life' ? (
+        <LifeCladeExplorer selectedTaxonId={selectedTaxonId} onSelect={selectTaxon} onClose={() => setWorkspace(null)} />
+      ) : (
+        <>
+          <div className="flex min-h-0 flex-1">
+            {/* Left column */}
+            <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto scroll-thin border-r border-white/10 p-3 lg:flex">
+              <ScaleNavigatorPanel scale={scale} onScaleChange={setScale} />
+              <TaxonomyNavigator selectedTaxonId={selectedTaxonId} onSelectTaxon={selectTaxon} />
+              {anatomyScale && (
+                <AnatomyModelsPanel activeId={activeModelId} status={modelStatus} onLoad={loadModelEntry} />
+              )}
+              <ContextPanel scale={scale} selected={selected} />
+              <DataSourcesPanel active={activeSources} />
+            </aside>
 
-        {/* Center scene */}
-        <main
-          className="relative min-w-0 flex-1 depth-field"
-          role="application"
-          aria-label="Bio Galaxy 3D atlas. Use the search, scale ladder, or phylogeny panel to navigate."
-        >
-          <BioGalaxyCanvas
-            scale={scale}
-            selectedId={selectedOrganelleId}
-            focusTaxonId={focusTaxonId}
-            structure={structure}
-            organismModel={organismModel}
-            onHover={handleHover}
-            onSelect={handleSelect}
-            onScaleSettled={handleScaleSettled}
-            onModelResult={handleModelResult}
-          />
-          <SceneControls scale={scale} hovered={hovered} onStep={stepScale} />
-          {workspace === 'eras' && <CosmicTimeline scale={scale} onSelectScale={setScale} onClose={() => setWorkspace(null)} />}
-          {workspace === 'playback' && <EvolutionPlayback onSelectScale={setScale} onClose={() => setWorkspace(null)} />}
-          {workspace === 'life' && <LifeCladeExplorer selectedTaxonId={selectedTaxonId} onSelect={selectTaxon} onClose={() => setWorkspace(null)} />}
-          {coreAnatomyScale && !workspace && <AnatomyExplorer scale={scale} selectedId={selected?.id} onSelect={navigateTo} onScaleChange={setScale} />}
-        </main>
+            {/* Center scene */}
+            <main className="relative min-w-0 flex-1 depth-field" role="application" aria-label="Bio Galaxy 3D atlas. Use the search, scale ladder, or phylogeny panel to navigate.">
+              <BioGalaxyCanvas scale={scale} selectedId={selectedOrganelleId} focusTaxonId={focusTaxonId} structure={structure} organismModel={organismModel} onHover={handleHover} onSelect={handleSelect} onScaleSettled={handleScaleSettled} onModelResult={handleModelResult} />
+              <SceneControls scale={scale} hovered={hovered} onStep={stepScale} />
+              {workspace === 'eras' && <CosmicTimeline scale={scale} onSelectScale={setScale} onClose={() => setWorkspace(null)} />}
+              {workspace === 'playback' && <EvolutionPlayback onSelectScale={setScale} onClose={() => setWorkspace(null)} />}
+              {coreAnatomyScale && !workspace && <AnatomyExplorer scale={scale} selectedId={selected?.id} onSelect={navigateTo} onScaleChange={setScale} />}
+            </main>
 
-        {/* Right column */}
-        <aside className="hidden w-[min(33.333vw,26rem)] shrink-0 flex-col border-l border-white/10 bg-[#04070f] md:flex">
-          <WikipediaSidebar selected={selected} scale={scale} />
-          <div className="min-h-0 flex-1"><DetailPanel selected={selected} /></div>
-        </aside>
-      </div>
+            {/* Right column */}
+            <aside className="hidden w-[min(33.333vw,26rem)] shrink-0 flex-col border-l border-white/10 bg-[#04070f] md:flex">
+              <WikipediaSidebar selected={selected} scale={scale} />
+              <div className="min-h-0 flex-1"><DetailPanel selected={selected} /></div>
+            </aside>
+          </div>
+          <ActivityStrip scale={scale} selected={selected} lineage={lineage} />
+        </>
+      )}
 
-      <ActivityStrip scale={scale} selected={selected} lineage={lineage} />
       <AtlasCopilot scale={scale} selected={selected} hovered={hovered} />
     </div>
   );
