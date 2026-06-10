@@ -32,9 +32,9 @@ export class PostFX {
 
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(width, height),
-      0.55, // strength
-      0.5, // radius
-      0.82, // threshold: only bright emissive elements bloom
+      0.3, // strength
+      0.35, // radius
+      0.9, // threshold: only bright emissive elements bloom
     );
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());

@@ -78,6 +78,17 @@ export class AnatomyModelLayer implements SceneLayer {
       object.userData.pick = { id: `organism:${this.organismId}`, scale: Scale.Organism };
       object.traverse((o) => {
         if (!o.userData.pick) o.userData.pick = object.userData.pick;
+        if (!(o instanceof THREE.Mesh)) return;
+        const materials = Array.isArray(o.material) ? o.material : [o.material];
+        for (const material of materials) {
+          material.toneMapped = true;
+          if (material instanceof THREE.MeshStandardMaterial) {
+            material.envMapIntensity = 1.25;
+            material.roughness = Math.max(0.28, material.roughness);
+            material.metalness = Math.min(0.18, material.metalness);
+            material.emissiveIntensity = Math.min(0.08, material.emissiveIntensity);
+          }
+        }
       });
       this.loaded = object;
       this.root.add(object);
@@ -121,10 +132,10 @@ export class AnatomyModelLayer implements SceneLayer {
 
   private buildPlaceholder(): void {
     const bodyMat = createMembraneMaterial({
-      color: '#16607a',
-      rimColor: '#39d4e6',
-      opacity: 0.05,
-      rimPower: 2.6,
+      color: '#173e52',
+      rimColor: '#6ca7b5',
+      opacity: 0.025,
+      rimPower: 3.8,
     });
     this.membranes.push(bodyMat);
 
@@ -157,6 +168,9 @@ export class AnatomyModelLayer implements SceneLayer {
     this.placeholder.add(body);
     this.pickables.push(body);
 
+    // A matte internal skeleton keeps the fallback readable through the skin.
+    this.placeholder.add(this.buildSkeleton());
+
     // Cardiovascular system: a luminous vessel network plus a beating heart.
     const vessels = this.buildVessels();
     this.placeholder.add(vessels);
@@ -175,6 +189,39 @@ export class AnatomyModelLayer implements SceneLayer {
     systemAnchor.userData.pick = { id: 'system:cardiovascular', scale: Scale.OrganSystem };
     this.placeholder.add(systemAnchor);
     this.pickables.push(systemAnchor);
+  }
+
+  private buildSkeleton(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = 'skeleton';
+    const material = new THREE.MeshPhysicalMaterial({
+      color: '#d8d4c4',
+      roughness: 0.46,
+      metalness: 0.02,
+      clearcoat: 0.25,
+      clearcoatRoughness: 0.6,
+      envMapIntensity: 0.8,
+    });
+    const bone = (radius: number, length: number, x: number, y: number, rotation = 0): THREE.Mesh => {
+      const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length, 6, 12), material);
+      mesh.position.set(x, y, 0.25);
+      mesh.rotation.z = rotation;
+      return mesh;
+    };
+    group.add(bone(0.35, 13, 0, 1));
+    group.add(bone(0.28, 8, -4.5, 3, 0.35), bone(0.28, 8, 4.5, 3, -0.35));
+    group.add(bone(0.38, 10, -1.55, -9, 0.04), bone(0.38, 10, 1.55, -9, -0.04));
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(2.05, 20, 20), material);
+    skull.position.set(0, 11.5, 0.25);
+    skull.scale.set(0.8, 1, 0.75);
+    group.add(skull);
+    for (let i = 0; i < 7; i++) {
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(2.7 - i * 0.12, 0.13, 8, 24, Math.PI), material);
+      rib.position.set(0, 6 - i * 0.85, 0.2);
+      rib.rotation.x = Math.PI / 2;
+      group.add(rib);
+    }
+    return group;
   }
 
   private buildVessels(): THREE.Group {
@@ -211,7 +258,7 @@ export class AnatomyModelLayer implements SceneLayer {
     const mat = new THREE.MeshPhysicalMaterial({
       color: '#c0394e',
       emissive: '#3a0a12',
-      emissiveIntensity: 0.5,
+      emissiveIntensity: 0.12,
       roughness: 0.32,
       clearcoat: 1,
       clearcoatRoughness: 0.35,
@@ -247,7 +294,7 @@ export class AnatomyModelLayer implements SceneLayer {
 
     for (const m of this.membranes) {
       m.uniforms.uTime.value = elapsed;
-      m.uniforms.uOpacity.value = 0.05 * this.intensity + 0.01;
+      m.uniforms.uOpacity.value = 0.025 * this.intensity + 0.006;
     }
 
     // Fade the cardiovascular vessels in as the camera commits to systems.
