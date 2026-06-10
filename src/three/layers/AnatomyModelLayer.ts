@@ -66,17 +66,20 @@ export class AnatomyModelLayer implements SceneLayer {
   private buildAtlas(): void {
     this.atlas.userData.pick = { id: `organism:${this.organismId}`, scale: Scale.Organism };
     this.pickables.push(this.atlas);
-    const skin = createMembraneMaterial({ color: '#478ca3', rimColor: '#70e5f2', opacity: 0.09, rimPower: 2.4 });
+    const skin = createMembraneMaterial({ color: '#478ca3', rimColor: '#70e5f2', opacity: 0.13, rimPower: 2.4 });
+    skin.side = THREE.DoubleSide;
     const body = this.atlasSurface;
-    const addSkin = (geometry: THREE.BufferGeometry, position: [number, number, number], rotation: [number, number, number] = [0, 0, 0]) => {
-      const mesh = new THREE.Mesh(geometry, skin); mesh.position.set(...position); mesh.rotation.set(...rotation); body.add(mesh);
-    };
-    addSkin(new THREE.SphereGeometry(2.65, 32, 24), [0, 12, 0]);
-    addSkin(new THREE.CapsuleGeometry(4.2, 8.5, 12, 28), [0, 3, 0]);
-    addSkin(new THREE.CapsuleGeometry(1.05, 9, 8, 18), [-5, 3, 0], [0, 0, .28]);
-    addSkin(new THREE.CapsuleGeometry(1.05, 9, 8, 18), [5, 3, 0], [0, 0, -.28]);
-    addSkin(new THREE.CapsuleGeometry(1.45, 10, 8, 20), [-2.15, -8.2, 0], [0, 0, .04]);
-    addSkin(new THREE.CapsuleGeometry(1.45, 10, 8, 20), [2.15, -8.2, 0], [0, 0, -.04]);
+
+    // The organism's surface is built on Astro-insight's BodyExplorer3D
+    // foundation: a lathed skull and torso plus capsule limbs, hands, feet, and
+    // fingers, in a standing pose. It is scaled into the atlas so the translucent
+    // skin wraps the organ systems below. Bio Galaxy's cyan membrane material
+    // keeps the atlas aesthetic over the borrowed anatomical geometry.
+    const figure = new THREE.Group();
+    buildHumanFigure(figure, skin);
+    figure.scale.setScalar(BODY_SCALE);
+    body.add(figure);
+
     body.traverse((o) => { if (!o.userData.pick) o.userData.pick = this.atlas.userData.pick; });
     this.atlas.add(body);
 
@@ -219,6 +222,132 @@ export class AnatomyModelLayer implements SceneLayer {
   }
   getPickables():THREE.Object3D[]{return this.intensity>.2?(this.currentScale===Scale.Organism&&this.loaded?[this.loaded,...this.pickables]:this.pickables):[];}
   dispose():void{this.clearLoaded();disposeObject(this.root);}
+}
+
+// ---- Procedural human figure (ported from Astro-insight BodyExplorer3D) -------
+//
+// Astro-insight's `buildSimplifiedAnatomy` lathes anatomically-proportioned skull
+// and torso profiles and sweeps capsule limbs between joints. We reuse its
+// builders and proportions (dropping the Vitruvian pose pivots for a fixed
+// standing stance) and scale the result into the atlas's coordinate space, where
+// the figure is ~25 units tall and aligned with the organ systems.
+
+const BODY_SCALE = 9.5;
+
+/** Lathe a 2-D profile around the Y axis into a seamless organic surface. */
+function makeLathe(
+  parent: THREE.Object3D,
+  profile: [number, number][],
+  mat: THREE.Material,
+  segs: number,
+  position?: [number, number, number],
+): THREE.Mesh {
+  const pts = profile.map(([x, y]) => new THREE.Vector2(x, y));
+  const geo = new THREE.LatheGeometry(pts, segs);
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, mat);
+  if (position) mesh.position.set(...position);
+  parent.add(mesh);
+  return mesh;
+}
+
+/** Sweep a capsule limb between two joint points. */
+function makeLimb(
+  parent: THREE.Object3D,
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  r: number,
+  mat: THREE.Material,
+  capSegs = 5,
+  radSegs = 14,
+): THREE.Mesh {
+  const dir = to.clone().sub(from);
+  const len = dir.length();
+  const geo = new THREE.CapsuleGeometry(r, Math.max(len - r * 2, 0.001), capSegs, radSegs);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(from.clone().add(dir.clone().multiplyScalar(0.5)));
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+  parent.add(mesh);
+  return mesh;
+}
+
+/** Assemble the standing human figure from lathed core and capsule limbs. */
+function buildHumanFigure(parent: THREE.Object3D, mat: THREE.Material): void {
+  const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  const lSegs = 48;
+  const cSegs = 6;
+  const rSegs = 18;
+
+  // Skull and torso as lathed silhouettes.
+  makeLathe(parent, [
+    [0.002, 0.250], [0.075, 0.240], [0.145, 0.200],
+    [0.180, 0.110], [0.190, 0.020], [0.160, -0.080],
+    [0.095, -0.160], [0.002, -0.185],
+  ], mat, lSegs, [0, 1.30, 0]);
+  makeLimb(parent, V(0, 1.050, 0), V(0, 0.920, 0.01), 0.070, mat, cSegs, rSegs);
+  makeLathe(parent, [
+    [0.010, 0.950], [0.220, 0.900], [0.270, 0.800],
+    [0.260, 0.650], [0.240, 0.480], [0.160, 0.270],
+    [0.150, 0.100], [0.200, -0.040], [0.215, -0.130],
+    [0.170, -0.210], [0.010, -0.230],
+  ], mat, lSegs, [0, 0, 0.02]);
+
+  // Shoulder blends.
+  for (const x of [-1, 1]) {
+    const sh = new THREE.Mesh(new THREE.SphereGeometry(0.070, 14, 10), mat);
+    sh.position.set(x * 0.465, 0.860, 0.01);
+    parent.add(sh);
+  }
+
+  // Arms, elbows, hands, and fingers.
+  for (const sx of [-1, 1]) {
+    makeLimb(parent, V(sx * 0.48, 0.85, 0.01), V(sx * 0.65, 0.38, 0.05), 0.055, mat, cSegs, rSegs);
+    makeLimb(parent, V(sx * 0.65, 0.38, 0.05), V(sx * 0.72, -0.08, 0.07), 0.048, mat, cSegs, rSegs);
+    const el = new THREE.Mesh(new THREE.SphereGeometry(0.050, 10, 8), mat);
+    el.position.set(sx * 0.65, 0.38, 0.05);
+    parent.add(el);
+    const hx = sx * 0.750;
+    const hy = -0.155;
+    const hz = 0.075;
+    const palm = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), mat);
+    palm.scale.set(0.065, 0.045, 0.035);
+    palm.position.set(hx, hy, hz);
+    parent.add(palm);
+    for (let fi = 0; fi < 5; fi++) {
+      const spread = (fi - 2) * 0.018;
+      const flen = 0.050 - Math.abs(fi - 2) * 0.006;
+      makeLimb(
+        parent,
+        V(hx + spread, hy - 0.045, hz + 0.004),
+        V(hx + spread * 1.1 + sx * 0.004, hy - 0.045 - flen, hz + 0.006),
+        0.009, mat, 2, 6,
+      );
+    }
+  }
+
+  // Hip blends.
+  for (const x of [-1, 1]) {
+    const hp = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 9), mat);
+    hp.position.set(x * 0.175, -0.090, 0.01);
+    parent.add(hp);
+  }
+
+  // Legs, knees, feet, and heels.
+  for (const sx of [-1, 1]) {
+    makeLimb(parent, V(sx * 0.17, -0.090, 0.01), V(sx * 0.19, -0.630, 0.03), 0.085, mat, cSegs, rSegs);
+    makeLimb(parent, V(sx * 0.19, -0.630, 0.03), V(sx * 0.18, -1.130, 0.06), 0.070, mat, cSegs, rSegs);
+    const kn = new THREE.Mesh(new THREE.SphereGeometry(0.078, 10, 8), mat);
+    kn.position.set(sx * 0.19, -0.630, 0.03);
+    parent.add(kn);
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), mat);
+    foot.scale.set(0.065, 0.038, 0.120);
+    foot.position.set(sx * 0.18, -1.210, 0.160);
+    parent.add(foot);
+    const heel = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), mat);
+    heel.scale.set(0.052, 0.033, 0.048);
+    heel.position.set(sx * 0.18, -1.205, -0.028);
+    parent.add(heel);
+  }
 }
 
 function formatFromUrl(url:string):ModelFormat{const l=url.toLowerCase();return l.endsWith('.glb')?'glb':l.endsWith('.fbx')?'fbx':'gltf';}
