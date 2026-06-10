@@ -1,6 +1,6 @@
 {
-  "name": "Biological Galaxy",
-  "description": "An interactive biological atlas and molecular observatory. Zoom seamlessly from human organs down to single atoms, fully integrated with real-world UniProt and Reactome database pipelines.",
+  "name": "Bio Galaxy",
+  "description": "A 3D biological atlas for exploring proteins, pathways, cells, genes, organisms, and molecular structures through public scientific datasets.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

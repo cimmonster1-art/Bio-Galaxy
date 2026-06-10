@@ -1,42 +1,90 @@
-export enum ZoomScale {
-  HUMAN = 0,            // ~10^0 m
-  ORGAN_SYSTEM = 1,     // ~10^-1 m
-  ORGAN = 2,            // ~10^-2 m
-  TISSUE = 3,           // ~10^-3 m
-  CELL = 4,             // ~10^-5 m
-  ORGANELLE = 5,        // ~10^-6 m
-  PROTEIN_COMPLEX = 6,  // ~10^-9 m
-  MOLECULE = 7,         // ~10^-10 m
-  ATOM = 8              // ~10^-10 m
+// Core domain types for the Bio Galaxy spatial atlas.
+
+/**
+ * Continuous biological scale ladder, from the universe of life down to a
+ * single atom. The index doubles as the position along the zoom axis.
+ */
+export enum Scale {
+  Universe = 0,
+  Taxonomy = 1,
+  Organism = 2,
+  OrganSystem = 3,
+  Organ = 4,
+  Tissue = 5,
+  Cell = 6,
+  Organelle = 7,
+  ProteinComplex = 8,
+  Molecule = 9,
+  Atom = 10,
 }
 
-export interface ScaleDetail {
-  scale: ZoomScale;
+export interface ScaleLevel {
+  scale: Scale;
+  /** Short label shown in the navigator, e.g. "Cell". */
   name: string;
+  /** Approximate physical magnitude, e.g. "~10 µm". */
   magnitude: string;
-  description: string;
-  cosmicAnalogy: string;
-  metricLabel: string;
+  /** One restrained sentence of context. */
+  blurb: string;
+  /** Metric unit family at this scale. */
+  unit: string;
 }
 
-export type BiologicalElementCategory = 
-  | "system" 
-  | "organ" 
-  | "tissue_type" 
-  | "organelle" 
-  | "protein_complex" 
-  | "molecule"
-  | "atom";
+/** Canonical public data sources the atlas integrates with. */
+export type DataSourceId =
+  | 'uniprot'
+  | 'reactome'
+  | 'rcsb'
+  | 'ensembl'
+  | 'hpa'
+  | 'ncbi';
 
-export interface BioEntity {
+export interface DataSource {
+  id: DataSourceId;
+  name: string;
+  short: string;
+  domain: string;
+  description: string;
+  homepage: string;
+}
+
+/**
+ * A selectable biological object surfaced from the scene graph. Scene layers
+ * attach a lightweight pick tag to mesh `userData`; the full record is
+ * resolved from the registry for the detail panel.
+ */
+export interface BioObject {
   id: string;
   name: string;
-  category: BiologicalElementCategory;
-  description: string;
-  cosmicEquivalent?: string;
-  metricSize: string;
+  scale: Scale;
+  kind:
+    | 'taxon'
+    | 'organism'
+    | 'system'
+    | 'organ'
+    | 'tissue'
+    | 'cell'
+    | 'organelle'
+    | 'complex'
+    | 'molecule'
+    | 'atom';
+  summary: string;
+  size: string;
   facts: string[];
-  source: "UniProt" | "Reactome" | "RCSB PDB" | "Human Protein Atlas" | "NCBI" | "Ensembl";
-  children?: string[];
-  parentId?: string;
+  /** Primary provenance for the displayed record. */
+  source: DataSourceId;
+  /** Additional cross-referenced sources. */
+  crossRefs?: DataSourceId[];
+  /** UniProt accession when this object maps to a protein. */
+  accession?: string;
+  /** RCSB PDB id when a representative structure exists. */
+  pdbId?: string;
+  /** Reactome pathway stable id when relevant. */
+  reactomeId?: string;
+}
+
+/** Minimal payload stamped onto Three.js mesh userData for raycasting. */
+export interface PickTag {
+  id: string;
+  scale: Scale;
 }

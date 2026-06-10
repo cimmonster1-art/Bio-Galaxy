@@ -1,45 +1,65 @@
 # Bio Galaxy
 
-**Explore biology as a navigable universe.**
+A 3D biological atlas for exploring proteins, pathways, cells, genes, organisms,
+and molecular structures through public scientific datasets. Bio Galaxy is a
+visual interface over open biological databases, built around a real Three.js
+spatial navigation system that zooms continuously from the universe of life down
+to a single atom.
 
-Bio Galaxy is an interactive biological atlas that turns proteins, pathways, cells, organelles, genes, and molecular structures into a navigable 3D visual interface, backed by public scientific databases.
+## Scale ladder
 
----
+Universe of Life → Taxonomic Tree → Organism → Organ System → Organ → Tissue →
+Cell → Organelle → Protein Complex → Molecule → Atom
 
-## Overview
+## Data sources
 
-Most biological databases are powerful but difficult to navigate visually. Bio Galaxy creates a spatial interface for moving between scale, structure, function, and evidence, connecting protein, pathway, genomic, expression, literature, and molecular structure data through public scientific APIs.
+Every database-backed object names its provenance. Records are read through
+typed client wrappers in `src/data/clients`:
 
-## Data Sources
+- UniProt: protein sequence and function
+- Reactome: pathways and reactions
+- RCSB PDB: 3D macromolecular structure
+- Ensembl: genes and genomic context
+- Human Protein Atlas: tissue and cell expression
+- NCBI: literature and taxonomy
 
-| Source | Provides |
-|--------|----------|
-| **UniProt** | Protein names, functions, sequences, subcellular locations, cross references |
-| **Reactome** | Curated pathways, reactions, molecular events, participating entities |
-| **RCSB Protein Data Bank** | Experimentally derived 3D molecular structures and metadata |
-| **Ensembl** | Gene locations, transcripts, variants, and genomic references |
-| **Human Protein Atlas** | Tissue expression, cell expression, and protein localization context |
-| **NCBI E-Utilities** | Literature, taxonomy, genes, and publication references |
+All endpoints are public and key free, so no secrets are required.
 
-## Exploration Layers
+## Architecture
 
-Navigate continuously from organism to molecule:
+```
+src/
+  three/                 Three.js scene system
+    BioGalaxyScene.ts    renderer, camera, controls, lifecycle, raycasting
+    ScaleNavigator.ts    scale transitions and camera targets
+    layers/              OrganismField, TissueField, CellScene,
+                         OrganelleDetailView, ProteinStructureLayer
+    core/                SceneLayer contract and disposal helpers
+  data/
+    clients/             UniProt, Reactome, RCSB, Ensembl, HPA, NCBI wrappers
+    registry.ts          curated biological objects
+    organisms.ts         sampled taxonomy for the organism field
+    scales.ts            the scale ladder
+  components/            React shell, panels, and UI primitives
+  hooks/                 data-loading helpers
+```
 
-`Human → Organ system → Organ → Tissue → Cell → Organelle → Protein complex → Molecule → Atom`
+Scene logic is kept separate from the React UI panels, and API clients are kept
+separate from the rendering layers.
 
-## Features
+## Run locally
 
-- **Protein intelligence** — Search proteins; inspect function, sequence, localization, and cross references through UniProt.
-- **Pathway visualization** — Trace molecular events and pathway participants using Reactome data.
-- **Structure viewer** — Load real molecular structures from RCSB PDB into an interactive 3D scene.
+Prerequisites: Node.js 18+.
 
-## Tech Stack
+```bash
+npm install
+npm run dev      # http://localhost:3000
+```
 
-- React + TypeScript
-- Tailwind CSS
-- Three.js / WebGL for 3D visualization
-- Vite
+Other scripts:
 
-## Disclaimer
-
-For education, visualization, and scientific exploration. Not for medical diagnosis or treatment.
+```bash
+npm run build    # production build
+npm run start    # serve the production build
+npm run lint     # type check
+```
