@@ -24,7 +24,7 @@ export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {
         {/* Live scene, dimmed behind the copy. */}
         <div className="absolute inset-0 opacity-70">
           <BioGalaxyCanvas
-            scale={Scale.Universe}
+            scale={Scale.TreeOfLife}
             selectedId={null}
             onHover={() => {}}
             onSelect={() => {}}
@@ -45,14 +45,14 @@ export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {
 
         <div className="relative z-10 mx-auto flex h-[calc(100vh-160px)] max-w-3xl flex-col items-center justify-center px-6 text-center">
           <span className="meta-label mb-5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
-            3D biological atlas
+            Built on public biological datasets
           </span>
           <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
-            Explore biology as a navigable universe.
+            Explore life from phylogeny to molecular structure.
           </h1>
           <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-slate-400">
-            Bio Galaxy is a 3D biological atlas for exploring proteins, pathways, cells, genes,
-            organisms, and molecular structures through public scientific datasets.
+            Protein, pathway, taxonomy, anatomy, genomic, expression, and literature context in one
+            spatial atlas. Dive continuously from the Tree of Life down to a single atom.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">

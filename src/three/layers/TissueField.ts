@@ -11,7 +11,7 @@ import { disposeObject } from '../core/dispose';
  */
 export class TissueField implements SceneLayer {
   readonly root = new THREE.Group();
-  readonly activeScales = [Scale.OrganSystem, Scale.Organ, Scale.Tissue];
+  readonly activeScales = [Scale.Tissue];
 
   private readonly cells: THREE.InstancedMesh;
   private readonly cellMat: THREE.MeshStandardMaterial;

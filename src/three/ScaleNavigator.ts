@@ -10,18 +10,27 @@ import { clampScale, getScaleLevel } from '../data/scales';
  */
 
 // Camera distance from the focus point at each scale. Larger when zoomed out.
+// The curve eases the descent so each step reads as a continuous dive rather
+// than a jump between pages.
 const SCALE_DISTANCE: Record<Scale, number> = {
-  [Scale.Universe]: 150,
-  [Scale.Taxonomy]: 95,
-  [Scale.Organism]: 55,
-  [Scale.OrganSystem]: 42,
-  [Scale.Organ]: 32,
+  [Scale.TreeOfLife]: 210,
+  [Scale.Domain]: 168,
+  [Scale.Kingdom]: 138,
+  [Scale.Phylum]: 114,
+  [Scale.Class]: 95,
+  [Scale.Order]: 80,
+  [Scale.Family]: 68,
+  [Scale.Genus]: 58,
+  [Scale.Species]: 50,
+  [Scale.Organism]: 46,
+  [Scale.OrganSystem]: 38,
+  [Scale.Organ]: 30,
   [Scale.Tissue]: 24,
-  [Scale.Cell]: 40,
-  [Scale.Organelle]: 16,
-  [Scale.ProteinComplex]: 22,
-  [Scale.Molecule]: 14,
-  [Scale.Atom]: 18,
+  [Scale.Cell]: 44,
+  [Scale.Organelle]: 18,
+  [Scale.ProteinComplex]: 24,
+  [Scale.Molecule]: 15,
+  [Scale.Atom]: 20,
 };
 
 export class ScaleNavigator {
@@ -36,6 +45,11 @@ export class ScaleNavigator {
 
   get target(): Scale {
     return this.targetScale;
+  }
+
+  /** Continuous eased position along the ladder, for layer cross-fading. */
+  get position(): number {
+    return this.pos;
   }
 
   /** Nearest discrete scale to the current eased position. */
