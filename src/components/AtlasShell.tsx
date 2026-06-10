@@ -6,9 +6,8 @@ import { lineageOf } from '../data/taxonomy';
 import { resolveObject } from '../data/resolve';
 import { rcsb } from '../data/clients';
 import { useAsync } from '../hooks/useAsync';
-import { MODEL_CATALOG, ModelEntry } from '../data/modelCatalog';
+import { ModelEntry } from '../data/modelCatalog';
 
-const DEFAULT_MODEL = MODEL_CATALOG.find((m) => m.id === 'human') ?? MODEL_CATALOG[0];
 import { BioGalaxyCanvas, OrganismModelRequest, StructurePayload } from './BioGalaxyCanvas';
 import { GlobalSearch } from './GlobalSearch';
 import { CosmicTimeline } from './CosmicTimeline';
@@ -20,6 +19,8 @@ import { AnatomyModelsPanel, ModelStatus } from './panels/AnatomyModelsPanel';
 import { DetailPanel } from './panels/DetailPanel';
 import { SceneControls } from './panels/SceneControls';
 import { ActivityStrip } from './panels/ActivityStrip';
+import { AnatomyExplorer } from './AnatomyExplorer';
+import { AtlasCopilot } from './AtlasCopilot';
 
 interface Props {
   onExit: () => void;
@@ -37,14 +38,10 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const [selected, setSelected] = useState<BioObject | null>(null);
   const [hovered, setHovered] = useState<BioObject | null>(null);
   const [focusTaxonId, setFocusTaxonId] = useState<string | null>(null);
-  // The human model loads by default so the organism scale shows a real mesh.
-  const [organismModel, setOrganismModel] = useState<OrganismModelRequest | null>({
-    url: DEFAULT_MODEL.url,
-    label: DEFAULT_MODEL.label,
-    sourceUrl: DEFAULT_MODEL.repoUrl,
-  });
-  const [activeModelId, setActiveModelId] = useState<string | null>(DEFAULT_MODEL.id);
-  const [modelStatus, setModelStatus] = useState<ModelStatus>('loading');
+  // The layered Z-Anatomy reference visualization is the always-available default.
+  const [organismModel, setOrganismModel] = useState<OrganismModelRequest | null>(null);
+  const [activeModelId, setActiveModelId] = useState<string | null>(null);
+  const [modelStatus, setModelStatus] = useState<ModelStatus>('idle');
 
   // Apply a resolved object's natural scale and phylogenetic focus.
   const applySelection = useCallback((obj: BioObject) => {
@@ -55,7 +52,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
     } else if (obj.id.startsWith('organism:')) {
       setFocusTaxonId(`taxon:${stripTaxon(obj.id)}`);
       setScale(Scale.Organism);
-    } else if (obj.id.startsWith('planet:')) {
+    } else {
       setScale(obj.scale);
     }
   }, []);
@@ -147,6 +144,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const selectedOrganelleId = selected?.kind === 'organelle' ? selected.id : null;
   const anatomyScale = scale >= Scale.Organism && scale <= Scale.Tissue;
   const cosmicScale = scale <= Scale.Planet;
+  const coreAnatomyScale = scale >= Scale.Organism && scale <= Scale.Organ;
 
   return (
     <div className="flex h-screen w-screen flex-col bg-[#02040a] text-slate-100">
@@ -207,6 +205,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
           />
           <SceneControls scale={scale} hovered={hovered} onStep={stepScale} />
           {cosmicScale && <CosmicTimeline scale={scale} onSelectScale={setScale} />}
+          {coreAnatomyScale && <AnatomyExplorer scale={scale} selectedId={selected?.id} onSelect={navigateTo} onScaleChange={setScale} />}
         </main>
 
         {/* Right column */}
@@ -216,6 +215,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
       </div>
 
       <ActivityStrip scale={scale} selected={selected} lineage={lineage} />
+      <AtlasCopilot scale={scale} selected={selected} onNavigate={navigateTo} />
     </div>
   );
 };
