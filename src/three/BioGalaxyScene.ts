@@ -8,6 +8,9 @@ import { SelectionRaycaster } from './core/SelectionRaycaster';
 import { PerformanceManager } from './core/PerformanceManager';
 import { PostFX } from './core/PostFX';
 import { createNebulaBackground } from './shaders/nebula';
+import { CosmosLayer } from './layers/CosmosLayer';
+import { SolarSystemLayer } from './layers/SolarSystemLayer';
+import { EarthLayer } from './layers/EarthLayer';
 import { TreeOfLifeLayer } from './layers/TreeOfLifeLayer';
 import { AnatomyModelLayer, ModelProvenance } from './layers/AnatomyModelLayer';
 import { TissueField } from './layers/TissueField';
@@ -81,7 +84,7 @@ export class BioGalaxyScene {
     this.scene.environment = this.envTexture;
     pmrem.dispose();
 
-    const bg = createNebulaBackground();
+    const bg = createNebulaBackground(2000);
     this.nebula = bg.mesh;
     this.nebulaMat = bg.material;
     this.scene.add(this.nebula);
@@ -95,6 +98,9 @@ export class BioGalaxyScene {
     this.cell = new CellScene();
     this.protein = new ProteinStructureLayer();
     this.layers = [
+      new CosmosLayer(),
+      new SolarSystemLayer(),
+      new EarthLayer(),
       this.tree,
       this.anatomy,
       new TissueField(),

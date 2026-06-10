@@ -9,6 +9,7 @@ import { useAsync } from '../hooks/useAsync';
 import { ModelEntry } from '../data/modelCatalog';
 import { BioGalaxyCanvas, OrganismModelRequest, StructurePayload } from './BioGalaxyCanvas';
 import { GlobalSearch } from './GlobalSearch';
+import { CosmicTimeline } from './CosmicTimeline';
 import { ScaleNavigatorPanel } from './panels/ScaleNavigatorPanel';
 import { ContextPanel } from './panels/ContextPanel';
 import { DataSourcesPanel } from './panels/DataSourcesPanel';
@@ -30,7 +31,7 @@ const stripTaxon = (id: string): string => id.replace(/^taxon:|^organism:/, '');
  * resolves pick tags into full biological records.
  */
 export const AtlasShell: React.FC<Props> = ({ onExit }) => {
-  const [scale, setScale] = useState<Scale>(Scale.TreeOfLife);
+  const [scale, setScale] = useState<Scale>(Scale.Cosmos);
   const [selected, setSelected] = useState<BioObject | null>(null);
   const [hovered, setHovered] = useState<BioObject | null>(null);
   const [focusTaxonId, setFocusTaxonId] = useState<string | null>(null);
@@ -47,6 +48,8 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
     } else if (obj.id.startsWith('organism:')) {
       setFocusTaxonId(`taxon:${stripTaxon(obj.id)}`);
       setScale(Scale.Organism);
+    } else if (obj.id.startsWith('planet:')) {
+      setScale(obj.scale);
     }
   }, []);
 
@@ -105,7 +108,10 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   }, []);
 
   const activeSources = useMemo(
-    () => (selected ? [selected.source, ...(selected.crossRefs ?? [])] : []),
+    () =>
+      selected
+        ? [...(selected.source ? [selected.source] : []), ...(selected.crossRefs ?? [])]
+        : [],
     [selected],
   );
 
@@ -133,6 +139,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const selectedTaxonId = focusTaxonId ? stripTaxon(focusTaxonId) : null;
   const selectedOrganelleId = selected?.kind === 'organelle' ? selected.id : null;
   const anatomyScale = scale >= Scale.Organism && scale <= Scale.Tissue;
+  const cosmicScale = scale <= Scale.Planet;
 
   return (
     <div className="flex h-screen w-screen flex-col bg-[#02040a] text-slate-100">
@@ -192,6 +199,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
             onModelResult={handleModelResult}
           />
           <SceneControls scale={scale} hovered={hovered} onStep={stepScale} />
+          {cosmicScale && <CosmicTimeline scale={scale} onSelectScale={setScale} />}
         </main>
 
         {/* Right column */}

@@ -273,8 +273,10 @@ function nodeSizeForDepth(depth: number): number {
 
 /** A node resolves into view at its own scale and stays visible deeper in. */
 function depthVisibleAt(depth: number, scale: Scale): boolean {
-  // depth 1 == Scale.Domain (1). Reveal a rank one step before reaching it.
-  return scale >= depth - 1;
+  // Tree depth 1 (domain) maps to Scale.Domain; reveal one rank earlier so the
+  // next level fades in as the camera dives toward it.
+  const rankScale = Scale.Domain + (depth - 1);
+  return scale >= rankScale - 1;
 }
 
 function basisFrom(dir: THREE.Vector3, u: THREE.Vector3, v: THREE.Vector3): void {

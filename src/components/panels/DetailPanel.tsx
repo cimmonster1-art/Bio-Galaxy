@@ -20,7 +20,10 @@ interface Props {
 export const DetailPanel: React.FC<Props> = ({ selected }) => {
   if (!selected) return <EmptyState />;
 
-  const sources: DataSourceId[] = [selected.source, ...(selected.crossRefs ?? [])];
+  const sources: DataSourceId[] = [
+    ...(selected.source ? [selected.source] : []),
+    ...(selected.crossRefs ?? []),
+  ];
 
   return (
     <div className="flex h-full flex-col">
@@ -35,11 +38,17 @@ export const DetailPanel: React.FC<Props> = ({ selected }) => {
 
         <div>
           <div className="meta-label mb-1.5">Provenance</div>
-          <div className="flex flex-wrap gap-1.5">
-            {sources.map((s, i) => (
-              <SourceBadge key={s} source={s} active={i === 0} />
-            ))}
-          </div>
+          {sources.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {sources.map((s, i) => (
+                <SourceBadge key={s} source={s} active={i === 0} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-[11px] leading-relaxed text-slate-500">
+              {selected.provenanceNote ?? 'Reference object.'}
+            </p>
+          )}
         </div>
 
         {selected.facts.length > 0 && (

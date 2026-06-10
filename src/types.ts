@@ -6,24 +6,28 @@
  * can ease between adjacent values and layers can index it directly.
  */
 export enum Scale {
-  TreeOfLife = 0,
-  Domain = 1,
-  Kingdom = 2,
-  Phylum = 3,
-  Class = 4,
-  Order = 5,
-  Family = 6,
-  Genus = 7,
-  Species = 8,
-  Organism = 9,
-  OrganSystem = 10,
-  Organ = 11,
-  Tissue = 12,
-  Cell = 13,
-  Organelle = 14,
-  ProteinComplex = 15,
-  Molecule = 16,
-  Atom = 17,
+  Cosmos = 0,
+  Galaxy = 1,
+  SolarSystem = 2,
+  Planet = 3,
+  TreeOfLife = 4,
+  Domain = 5,
+  Kingdom = 6,
+  Phylum = 7,
+  Class = 8,
+  Order = 9,
+  Family = 10,
+  Genus = 11,
+  Species = 12,
+  Organism = 13,
+  OrganSystem = 14,
+  Organ = 15,
+  Tissue = 16,
+  Cell = 17,
+  Organelle = 18,
+  ProteinComplex = 19,
+  Molecule = 20,
+  Atom = 21,
 }
 
 export interface ScaleLevel {
@@ -66,6 +70,8 @@ export interface BioObject {
   name: string;
   scale: Scale;
   kind:
+    | 'star'
+    | 'planet'
     | 'clade'
     | 'taxon'
     | 'organism'
@@ -84,10 +90,12 @@ export interface BioObject {
   summary: string;
   size: string;
   facts: string[];
-  /** Primary provenance for the displayed record. */
-  source: DataSourceId;
+  /** Primary database provenance, when the object is database-backed. */
+  source?: DataSourceId;
   /** Additional cross-referenced sources. */
   crossRefs?: DataSourceId[];
+  /** Free-text provenance for objects not backed by a biological database. */
+  provenanceNote?: string;
   /** UniProt accession when this object maps to a protein. */
   accession?: string;
   /** RCSB PDB id when a representative structure exists. */

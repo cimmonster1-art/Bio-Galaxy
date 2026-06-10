@@ -7,6 +7,34 @@ import { Scale, ScaleLevel } from '../types';
  */
 export const SCALE_LEVELS: ScaleLevel[] = [
   {
+    scale: Scale.Cosmos,
+    name: 'Cosmos',
+    magnitude: '13.8 billion light years',
+    blurb: 'The observable universe: the cosmic web of galaxies since the Big Bang.',
+    unit: 'gigaparsecs',
+  },
+  {
+    scale: Scale.Galaxy,
+    name: 'Galaxy',
+    magnitude: '~100,000 light years',
+    blurb: 'A spiral galaxy of hundreds of billions of stars, like the Milky Way.',
+    unit: 'light years',
+  },
+  {
+    scale: Scale.SolarSystem,
+    name: 'Solar System',
+    magnitude: '~10 billion km',
+    blurb: 'A heliocentric system of planets orbiting a single star.',
+    unit: 'AU',
+  },
+  {
+    scale: Scale.Planet,
+    name: 'Planet',
+    magnitude: '~12,700 km',
+    blurb: 'Earth: the one world known to carry life, seen as a blue marble.',
+    unit: 'kilometers',
+  },
+  {
     scale: Scale.TreeOfLife,
     name: 'Tree of Life',
     magnitude: 'all known life',
@@ -134,8 +162,16 @@ export const SCALE_LEVELS: ScaleLevel[] = [
   },
 ];
 
-export const FIRST_SCALE = Scale.TreeOfLife;
+export const FIRST_SCALE = Scale.Cosmos;
 export const LAST_SCALE = Scale.Atom;
+
+/** Scales that belong to the cosmic era, above the Tree of Life. */
+export const COSMIC_SCALES: Scale[] = [
+  Scale.Cosmos,
+  Scale.Galaxy,
+  Scale.SolarSystem,
+  Scale.Planet,
+];
 
 /** Scales that belong to phylogenetic / taxonomic navigation. */
 export const TAXONOMY_SCALES: Scale[] = [
