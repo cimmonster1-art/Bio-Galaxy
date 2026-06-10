@@ -6,6 +6,7 @@ import { resolveObject } from '../data/resolve';
 import { rcsb } from '../data/clients';
 import { useAsync } from '../hooks/useAsync';
 import { MODEL_CATALOG, ModelEntry } from '../data/modelCatalog';
+import { lineageOf } from '../data/taxonomy';
 
 import { BioGalaxyCanvas, OrganismModelRequest, StructurePayload } from './BioGalaxyCanvas';
 import { GlobalSearch } from './GlobalSearch';
@@ -23,6 +24,7 @@ import { DetailPanel } from './panels/DetailPanel';
 import { SceneControls } from './panels/SceneControls';
 import { AnatomyExplorer } from './AnatomyExplorer';
 import { AtlasCopilot } from './AtlasCopilot';
+import { ActivityStrip } from './panels/ActivityStrip';
 
 interface Props {
   onExit: () => void;
@@ -45,6 +47,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const [organismModel, setOrganismModel] = useState<OrganismModelRequest | null>({ url: defaultHuman.url, label: defaultHuman.label, sourceUrl: defaultHuman.repoUrl });
   const [activeModelId, setActiveModelId] = useState<string | null>(defaultHuman.id);
   const [modelStatus, setModelStatus] = useState<ModelStatus>('loading');
+  const [workspace, setWorkspace] = useState<AtlasWorkspace>(null);
 
   // Apply a resolved object's natural scale and phylogenetic focus.
   const applySelection = useCallback((obj: BioObject) => {
@@ -140,6 +143,10 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
 
   const selectedTaxonId = focusTaxonId ? stripTaxon(focusTaxonId) : null;
   const selectedOrganelleId = selected?.kind === 'organelle' ? selected.id : null;
+  const lineage = useMemo(
+    () => (selectedTaxonId ? lineageOf(selectedTaxonId).map((taxon) => taxon.name) : []),
+    [selectedTaxonId],
+  );
   const anatomyScale = scale >= Scale.Organism && scale <= Scale.Tissue;
   const coreAnatomyScale = scale >= Scale.Organism && scale <= Scale.Organ;
 
