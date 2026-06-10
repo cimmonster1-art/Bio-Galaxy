@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { ArrowRight, Database } from 'lucide-react';
+import { ArrowDown, ArrowRight, Database, X } from 'lucide-react';
 import { Scale } from '../types';
 import { DATA_SOURCE_ORDER, getSource } from '../data/sources';
 import { BioGalaxyCanvas } from './BioGalaxyCanvas';
@@ -85,6 +85,16 @@ export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {
             </div>
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={onOpenAtlas}
+          aria-label="Close introduction and open the atlas"
+          className="absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1 rounded-full border border-white/15 bg-[#050a13]/80 p-2 text-slate-300 backdrop-blur-md transition hover:border-cyan-400/50 hover:bg-cyan-500/10 hover:text-cyan-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+        >
+          <X className="h-4 w-4" />
+          <ArrowDown className="h-3 w-3 animate-bounce" aria-hidden />
+        </button>
       </section>
 
       {/* Data sources */}
