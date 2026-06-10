@@ -1,307 +1,116 @@
 import * as THREE from 'three';
 import { Scale } from '../../types';
+import { ANATOMY_ENTRIES } from '../../data/anatomy';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
 import { createMembraneMaterial } from '../shaders/membrane';
 
-export interface ModelProvenance {
-  /** Human-readable source, shown in the UI. */
-  label: string;
-  /** Link to the model's origin, when external. */
-  url?: string;
-  /** True while a real external model is loaded rather than the placeholder. */
-  external: boolean;
-}
-
-const DEFAULT_PROVENANCE: ModelProvenance = {
-  label: 'Procedural anatomy placeholder',
-  external: false,
-};
-
+export interface ModelProvenance { label: string; url?: string; external: boolean; }
+const DEFAULT_PROVENANCE: ModelProvenance = { label: 'Z-Anatomy and BodyParts3D reference visualization', url: 'https://github.com/Z-Anatomy/Models-of-human-anatomy', external: false };
 type ModelFormat = 'gltf' | 'glb' | 'fbx';
 
-/**
- * Organism-scale anatomy. Architected to load real open 3D models (for example
- * the Z-Anatomy GLB/GLTF/FBX assets) at runtime, with a lightweight procedural
- * body as the always-available fallback so the atlas works offline. No organism
- * is hardcoded into geometry: `loadModel` swaps the displayed body, and the
- * pickable organ-system and organ targets stay stable.
- *
- * Provenance is tracked and surfaced so the UI can always cite where a model
- * came from.
- */
+/** Layered human atlas with separately selectable systems and organs. */
 export class AnatomyModelLayer implements SceneLayer {
   readonly root = new THREE.Group();
   readonly activeScales = [Scale.Organism, Scale.OrganSystem, Scale.Organ];
-
-  private readonly placeholder = new THREE.Group();
+  private readonly atlas = new THREE.Group();
+  private readonly systemGroups = new Map<string, THREE.Group>();
+  private readonly pickables: THREE.Object3D[] = [];
+  private readonly animated: { object: THREE.Object3D; base: number; speed: number }[] = [];
   private loaded: THREE.Object3D | null = null;
   private mixer: THREE.AnimationMixer | null = null;
-  private readonly membranes: THREE.ShaderMaterial[] = [];
-  private heart: THREE.Group | null = null;
-  private readonly pickables: THREE.Object3D[] = [];
   private intensity = 0;
-  private currentScale: Scale = Scale.Organism;
+  private currentScale = Scale.Organism;
   private organismId = 'homo_sapiens';
-  private provenance: ModelProvenance = DEFAULT_PROVENANCE;
+  private provenance = DEFAULT_PROVENANCE;
 
   constructor() {
     this.root.name = 'AnatomyModelLayer';
     this.root.visible = false;
-    this.buildPlaceholder();
-    this.root.add(this.placeholder);
+    this.buildAtlas();
+    this.root.add(this.atlas);
   }
 
-  get modelProvenance(): ModelProvenance {
-    return this.provenance;
-  }
+  get modelProvenance(): ModelProvenance { return this.provenance; }
 
   setOrganism(taxonId: string): void {
     this.organismId = taxonId;
-    for (const p of this.pickables) {
-      const pick = p.userData.pick as { id: string; scale: Scale } | undefined;
-      if (pick?.id.startsWith('organism:')) pick.id = `organism:${taxonId}`;
-    }
+    const tag = this.atlas.userData.pick as { id: string; scale: Scale };
+    if (tag) tag.id = `organism:${taxonId}`;
   }
 
-  /**
-   * Load an external anatomical model. GLTF/GLB are supported directly; FBX is
-   * attempted via dynamic import so it never becomes a hard build dependency.
-   * Falls back to the procedural body and reports failure to the caller.
-   */
   async loadModel(url: string, provenance: ModelProvenance): Promise<boolean> {
-    const format = formatFromUrl(url);
     try {
-      const { object, animations } = await loadObject(url, format);
+      const { object, animations } = await loadObject(url, formatFromUrl(url));
       this.clearLoaded();
       this.normalizeModel(object);
       object.userData.pick = { id: `organism:${this.organismId}`, scale: Scale.Organism };
-      object.traverse((o) => {
-        if (!o.userData.pick) o.userData.pick = object.userData.pick;
-      });
+      object.traverse((child) => { if (!child.userData.pick) child.userData.pick = object.userData.pick; });
       this.loaded = object;
       this.root.add(object);
-      if (animations.length > 0) {
-        this.mixer = new THREE.AnimationMixer(object);
-        this.mixer.clipAction(animations[0]).play();
-      }
-      this.placeholder.visible = false;
+      if (animations.length) { this.mixer = new THREE.AnimationMixer(object); this.mixer.clipAction(animations[0]).play(); }
       this.provenance = { ...provenance, external: true };
       return true;
-    } catch {
-      this.placeholder.visible = true;
-      this.provenance = DEFAULT_PROVENANCE;
-      return false;
-    }
+    } catch { this.provenance = DEFAULT_PROVENANCE; return false; }
   }
 
-  private clearLoaded(): void {
-    if (this.mixer) {
-      this.mixer.stopAllAction();
-      this.mixer = null;
-    }
-    if (this.loaded) {
-      disposeObject(this.loaded);
-      this.loaded = null;
-    }
-  }
-
-  /** Fit an arbitrary model into the scene's organism volume. */
-  private normalizeModel(object: THREE.Object3D): void {
-    const box = new THREE.Box3().setFromObject(object);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z) || 1;
-    const scale = 30 / maxDim;
-    object.scale.setScalar(scale);
-    object.position.sub(center.multiplyScalar(scale));
-  }
-
-  // ---- procedural fallback -------------------------------------------------
-
-  private buildPlaceholder(): void {
-    const bodyMat = createMembraneMaterial({
-      color: '#16607a',
-      rimColor: '#39d4e6',
-      opacity: 0.05,
-      rimPower: 2.6,
-    });
-    this.membranes.push(bodyMat);
-
+  private buildAtlas(): void {
+    this.atlas.userData.pick = { id: `organism:${this.organismId}`, scale: Scale.Organism };
+    this.pickables.push(this.atlas);
+    const skin = createMembraneMaterial({ color: '#478ca3', rimColor: '#70e5f2', opacity: 0.09, rimPower: 2.4 });
     const body = new THREE.Group();
-    body.name = 'body';
-
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(4.4, 9, 12, 24), bodyMat);
-    torso.position.y = 2;
-    body.add(torso);
-
-    const head = new THREE.Mesh(new THREE.SphereGeometry(2.8, 24, 24), bodyMat);
-    head.position.y = 11.5;
-    body.add(head);
-
-    const limb = (x: number, y: number, len: number, r: number, tilt: number): THREE.Mesh => {
-      const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 8, 16), bodyMat);
-      m.position.set(x, y, 0);
-      m.rotation.z = tilt;
-      return m;
+    const addSkin = (geometry: THREE.BufferGeometry, position: [number, number, number], rotation: [number, number, number] = [0, 0, 0]) => {
+      const mesh = new THREE.Mesh(geometry, skin); mesh.position.set(...position); mesh.rotation.set(...rotation); body.add(mesh);
     };
-    body.add(limb(-5.2, 3, 8, 1.1, 0.35));
-    body.add(limb(5.2, 3, 8, 1.1, -0.35));
-    body.add(limb(-2.2, -9, 9, 1.4, 0.06));
-    body.add(limb(2.2, -9, 9, 1.4, -0.06));
+    addSkin(new THREE.SphereGeometry(2.65, 32, 24), [0, 12, 0]);
+    addSkin(new THREE.CapsuleGeometry(4.2, 8.5, 12, 28), [0, 3, 0]);
+    addSkin(new THREE.CapsuleGeometry(1.05, 9, 8, 18), [-5, 3, 0], [0, 0, .28]);
+    addSkin(new THREE.CapsuleGeometry(1.05, 9, 8, 18), [5, 3, 0], [0, 0, -.28]);
+    addSkin(new THREE.CapsuleGeometry(1.45, 10, 8, 20), [-2.15, -8.2, 0], [0, 0, .04]);
+    addSkin(new THREE.CapsuleGeometry(1.45, 10, 8, 20), [2.15, -8.2, 0], [0, 0, -.04]);
+    body.traverse((o) => { if (!o.userData.pick) o.userData.pick = this.atlas.userData.pick; });
+    this.atlas.add(body);
 
-    body.userData.pick = { id: `organism:${this.organismId}`, scale: Scale.Organism };
-    body.traverse((o) => {
-      if (!o.userData.pick) o.userData.pick = body.userData.pick;
-    });
-    this.placeholder.add(body);
-    this.pickables.push(body);
-
-    // Cardiovascular system: a luminous vessel network plus a beating heart.
-    const vessels = this.buildVessels();
-    this.placeholder.add(vessels);
-
-    const heart = this.buildHeart();
-    heart.position.set(-1.2, 4.5, 2.6);
-    this.heart = heart;
-    this.placeholder.add(heart);
-    this.pickables.push(heart);
-
-    const systemAnchor = new THREE.Mesh(
-      new THREE.SphereGeometry(1.2, 16, 16),
-      new THREE.MeshBasicMaterial({ color: '#ff5b6b', transparent: true, opacity: 0 }),
-    );
-    systemAnchor.position.set(-1.2, 4.5, 2.6);
-    systemAnchor.userData.pick = { id: 'system:cardiovascular', scale: Scale.OrganSystem };
-    this.placeholder.add(systemAnchor);
-    this.pickables.push(systemAnchor);
+    this.buildSkeleton();
+    this.buildNervous();
+    this.buildCardiovascular();
+    this.buildRespiratory();
+    this.buildDigestive();
+    this.buildUrinary();
   }
 
-  private buildVessels(): THREE.Group {
-    const group = new THREE.Group();
-    group.name = 'vessels';
-    const mat = new THREE.LineBasicMaterial({
-      color: '#c0405a',
-      transparent: true,
-      opacity: 0,
-    });
-    const positions: number[] = [];
-    // A handful of branching arterial paths down the torso.
-    for (let b = 0; b < 8; b++) {
-      let p = new THREE.Vector3(-1.2 + (Math.random() - 0.5), 5, 2.2);
-      for (let s = 0; s < 14; s++) {
-        const next = p.clone().add(
-          new THREE.Vector3((Math.random() - 0.5) * 1.6, -1.0 - Math.random() * 0.4, (Math.random() - 0.5) * 1.2),
-        );
-        positions.push(p.x, p.y, p.z, next.x, next.y, next.z);
-        p = next;
-      }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
-    const lines = new THREE.LineSegments(geo, mat);
-    lines.userData.vesselMat = mat;
-    group.add(lines);
-    return group;
+  private system(id: string): THREE.Group {
+    const group = new THREE.Group(); group.name = id; group.userData.pick = { id, scale: Scale.OrganSystem };
+    this.systemGroups.set(id, group); this.atlas.add(group); this.pickables.push(group); return group;
   }
 
-  private buildHeart(): THREE.Group {
-    const group = new THREE.Group();
-    group.name = 'heart';
-    const mat = new THREE.MeshPhysicalMaterial({
-      color: '#c0394e',
-      emissive: '#3a0a12',
-      emissiveIntensity: 0.5,
-      roughness: 0.32,
-      clearcoat: 1,
-      clearcoatRoughness: 0.35,
-      sheen: 0.6,
-      sheenColor: new THREE.Color('#ff8595'),
-      envMapIntensity: 1,
-    });
-    const a = new THREE.Mesh(new THREE.SphereGeometry(1.5, 24, 24), mat);
-    a.position.x = -0.7;
-    const b = new THREE.Mesh(new THREE.SphereGeometry(1.5, 24, 24), mat);
-    b.position.x = 0.7;
-    const base = new THREE.Mesh(new THREE.ConeGeometry(1.7, 2.6, 24), mat);
-    base.position.y = -1.6;
-    base.rotation.x = Math.PI;
-    group.add(a, b, base);
-    group.userData.pick = { id: 'organ:heart', scale: Scale.Organ };
-    group.traverse((o) => {
-      if (!o.userData.pick) o.userData.pick = group.userData.pick;
-    });
-    return group;
+  private organ(id: string, group: THREE.Group, geometry: THREE.BufferGeometry, position: [number, number, number], color: string, scale: [number, number, number] = [1, 1, 1]): THREE.Mesh {
+    const mat = new THREE.MeshPhysicalMaterial({ color, roughness: .48, clearcoat: .35, transparent: true, opacity: .92, emissive: new THREE.Color(color).multiplyScalar(.08) });
+    const mesh = new THREE.Mesh(geometry, mat); mesh.position.set(...position); mesh.scale.set(...scale); mesh.userData.pick = { id, scale: Scale.Organ };
+    group.add(mesh); this.pickables.push(mesh); return mesh;
   }
 
-  // ---- lifecycle -----------------------------------------------------------
-
-  onScaleChange(scale: Scale, intensity: number): void {
-    this.currentScale = scale;
-    this.intensity = intensity;
-    this.root.visible = intensity > 0.01;
+  private buildSkeleton(): void {
+    const g = this.system('system:skeletal'); const mat = new THREE.MeshStandardMaterial({ color: '#e8e1cf', roughness: .7, transparent: true, opacity: .62 });
+    const bone = (a: THREE.Vector3, b: THREE.Vector3, r = .18) => { const d = b.clone().sub(a); const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d.length(), 10), mat); m.position.copy(a).add(b).multiplyScalar(.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); g.add(m); };
+    bone(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 10, 0), .24);
+    [[-1,10,0],[1,10,0],[-3.8,7,0],[3.8,7,0],[-5.7,0,0],[5.7,0,0],[-2,-3,0],[2,-3,0],[-2,-13,0],[2,-13,0]].forEach((p,i,a) => { if (i%2===0) bone(new THREE.Vector3(...p as [number,number,number]), new THREE.Vector3(...a[i+1] as [number,number,number]), .2); });
+    for (let y=3; y<9; y+=1.1) { const curve = new THREE.EllipseCurve(0, y, 3.2-(y-5)*.12, 1.1, 0, Math.PI*2); const pts=curve.getPoints(28).map(p=>new THREE.Vector3(p.x,p.y,-.25)); g.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({color:'#e8e1cf',transparent:true,opacity:.55}))); }
   }
 
-  update(dt: number, elapsed: number): void {
-    if (this.mixer) this.mixer.update(dt);
+  private buildNervous(): void { const g=this.system('system:nervous'); this.organ('organ:brain',g,new THREE.SphereGeometry(1.9,28,20),[0,12,0],'#f5b8c8',[1,.82,.86]); this.organ('system:nervous',g,new THREE.CylinderGeometry(.18,.28,12,12),[0,4.3,-.2],'#ffd65a'); }
+  private buildCardiovascular(): void { const g=this.system('system:cardiovascular'); const h=this.organ('organ:heart',g,new THREE.SphereGeometry(1.2,24,20),[-.8,4.7,1.7],'#ff4058',[.85,1.2,.75]); this.animated.push({object:h,base:1,speed:4.6}); const mat=new THREE.LineBasicMaterial({color:'#ff596d',transparent:true,opacity:.72}); const pts=[new THREE.Vector3(-.8,5,1),new THREE.Vector3(0,2,1),new THREE.Vector3(0,-5,.5),new THREE.Vector3(-2,-13,0),new THREE.Vector3(0,-5,.5),new THREE.Vector3(2,-13,0),new THREE.Vector3(0,5,1),new THREE.Vector3(-5,1,0),new THREE.Vector3(0,5,1),new THREE.Vector3(5,1,0)]; g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),mat)); }
+  private buildRespiratory(): void { const g=this.system('system:respiratory'); this.organ('organ:lungs',g,new THREE.SphereGeometry(1.8,24,20),[-2,5,.4],'#79d6df',[.85,1.55,.6]); this.organ('organ:lungs',g,new THREE.SphereGeometry(1.8,24,20),[2,5,.4],'#79d6df',[.85,1.55,.6]); this.organ('system:respiratory',g,new THREE.CylinderGeometry(.28,.42,5,12),[0,9,.4],'#78dce8'); }
+  private buildDigestive(): void { const g=this.system('system:digestive'); this.organ('organ:liver',g,new THREE.SphereGeometry(1.8,24,18),[1.5,1.7,1.5],'#9d503f',[1.6,.65,.75]); this.organ('organ:stomach',g,new THREE.SphereGeometry(1.25,22,18),[-1.25,.4,1.7],'#e59b69',[1,.8,.72]); const gut=this.organ('organ:intestines',g,new THREE.TorusKnotGeometry(1.45,.3,90,10,2,3),[0,-2.6,1.3],'#d88961',[1.5,1.7,.55]); gut.rotation.x=.25; }
+  private buildUrinary(): void { const g=this.system('system:urinary'); this.organ('organ:kidneys',g,new THREE.SphereGeometry(.75,20,16),[-1.65,-.2,.2],'#a45b73',[.7,1.35,.55]); this.organ('organ:kidneys',g,new THREE.SphereGeometry(.75,20,16),[1.65,-.2,.2],'#a45b73',[.7,1.35,.55]); }
 
-    for (const m of this.membranes) {
-      m.uniforms.uTime.value = elapsed;
-      m.uniforms.uOpacity.value = 0.05 * this.intensity + 0.01;
-    }
-
-    // Fade the cardiovascular vessels in as the camera commits to systems.
-    this.placeholder.traverse((o) => {
-      const mat = o.userData.vesselMat as THREE.LineBasicMaterial | undefined;
-      if (mat) {
-        const target = this.currentScale >= Scale.OrganSystem ? this.intensity * 0.8 : this.intensity * 0.25;
-        fadeMaterial(mat, target, dt);
-      }
-    });
-
-    if (this.heart) {
-      const beat = 1 + Math.sin(elapsed * 4.5) * 0.06 + Math.sin(elapsed * 9) * 0.02;
-      const emphasis = this.currentScale >= Scale.Organ ? 1.5 : 1;
-      this.heart.scale.setScalar(beat * emphasis);
-    }
-
-    this.root.rotation.y = Math.sin(elapsed * 0.1) * 0.15;
-  }
-
-  getPickables(): THREE.Object3D[] {
-    if (this.intensity <= 0.2) return [];
-    // A loaded external model is the organism; otherwise expose the procedural
-    // body and its cardiovascular targets.
-    return this.loaded ? [this.loaded] : this.pickables;
-  }
-
-  dispose(): void {
-    this.clearLoaded();
-    disposeObject(this.root);
-  }
+  private normalizeModel(object: THREE.Object3D): void { const box=new THREE.Box3().setFromObject(object); const size=box.getSize(new THREE.Vector3()); const center=box.getCenter(new THREE.Vector3()); const s=30/(Math.max(size.x,size.y,size.z)||1); object.scale.setScalar(s); object.position.sub(center.multiplyScalar(s)); }
+  private clearLoaded(): void { if(this.mixer){this.mixer.stopAllAction();this.mixer=null;} if(this.loaded){disposeObject(this.loaded);this.loaded=null;} }
+  onScaleChange(scale: Scale,intensity:number):void{this.currentScale=scale;this.intensity=intensity;this.root.visible=intensity>.01;}
+  update(dt:number,elapsed:number):void{ if(this.mixer)this.mixer.update(dt); const systemOpacity=this.currentScale===Scale.Organism?.42:.9; for(const group of this.systemGroups.values())group.traverse(o=>{const m=(o as THREE.Mesh).material as THREE.Material|undefined;if(m&&'opacity'in m)fadeMaterial(m,systemOpacity*this.intensity,dt);}); for(const a of this.animated){const s=a.base+Math.sin(elapsed*a.speed)*.07;a.object.scale.multiplyScalar(s/a.object.scale.x);} this.atlas.rotation.y=Math.sin(elapsed*.12)*.1; if(this.loaded)this.loaded.visible=this.currentScale===Scale.Organism; }
+  getPickables():THREE.Object3D[]{return this.intensity>.2?(this.currentScale===Scale.Organism&&this.loaded?[this.loaded,...this.pickables]:this.pickables):[];}
+  dispose():void{this.clearLoaded();disposeObject(this.root);}
 }
 
-// ---- loaders ----------------------------------------------------------------
-
-function formatFromUrl(url: string): ModelFormat {
-  const lower = url.toLowerCase();
-  if (lower.endsWith('.glb')) return 'glb';
-  if (lower.endsWith('.fbx')) return 'fbx';
-  return 'gltf';
-}
-
-interface LoadedModel {
-  object: THREE.Object3D;
-  animations: THREE.AnimationClip[];
-}
-
-async function loadObject(url: string, format: ModelFormat): Promise<LoadedModel> {
-  if (format === 'fbx') {
-    const { FBXLoader } = await import('three/examples/jsm/loaders/FBXLoader.js');
-    const object = await new FBXLoader().loadAsync(url);
-    return { object, animations: object.animations ?? [] };
-  }
-  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-  const gltf = await new GLTFLoader().loadAsync(url);
-  return { object: gltf.scene, animations: gltf.animations ?? [] };
-}
+function formatFromUrl(url:string):ModelFormat{const l=url.toLowerCase();return l.endsWith('.glb')?'glb':l.endsWith('.fbx')?'fbx':'gltf';}
+async function loadObject(url:string,format:ModelFormat):Promise<{object:THREE.Object3D;animations:THREE.AnimationClip[]}>{if(format==='fbx'){const{FBXLoader}=await import('three/examples/jsm/loaders/FBXLoader.js');const object=await new FBXLoader().loadAsync(url);return{object,animations:object.animations??[]};}const{GLTFLoader}=await import('three/examples/jsm/loaders/GLTFLoader.js');const gltf=await new GLTFLoader().loadAsync(url);return{object:gltf.scene,animations:gltf.animations??[]};}
