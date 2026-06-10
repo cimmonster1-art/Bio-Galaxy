@@ -1,10 +1,10 @@
 import { Scale } from '../types';
 
 /**
- * Catalog of open-source 3D organism models hosted on GitHub. Each entry points
- * at a directly-committed glTF binary served from raw.githubusercontent.com,
- * which sends permissive CORS headers so the model loads at runtime. Provenance
- * and license are recorded so the UI can always cite the source.
+ * Catalog of open-source 3D organism models hosted on GitHub. Entries point at
+ * a directly committed glTF binary, optionally through a GitHub CDN with
+ * permissive CORS headers. Provenance and license are recorded so the UI can
+ * always cite the source.
  *
  * These are organism-scale animal meshes. Loading is best-effort: if a host is
  * unreachable (or a file is moved to Git LFS), the anatomy layer falls back to
@@ -40,7 +40,7 @@ export const MODEL_CATALOG: ModelEntry[] = [
     taxonHint: 'homo_sapiens',
     scale: Scale.Organism,
     format: 'glb',
-    url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMan/glTF-Binary/CesiumMan.glb',
+    url: 'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/CesiumMan/glTF-Binary/CesiumMan.glb',
     repo: 'KhronosGroup/glTF-Sample-Models',
     repoUrl: 'https://github.com/KhronosGroup/glTF-Sample-Models/tree/master/2.0/CesiumMan',
     license: 'CC-BY 4.0',

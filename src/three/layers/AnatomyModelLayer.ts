@@ -20,8 +20,11 @@ export class AnatomyModelLayer implements SceneLayer {
   private readonly animated: { object: THREE.Object3D; base: number; speed: number }[] = [];
   private loaded: THREE.Object3D | null = null;
   private mixer: THREE.AnimationMixer | null = null;
+  private actions: THREE.AnimationAction[] = [];
   private intensity = 0;
   private currentScale = Scale.Organism;
+  private selectedId: string | null = null;
+  private cinematicProgress: number | null = null;
   private organismId = 'homo_sapiens';
   private provenance = DEFAULT_PROVENANCE;
 
@@ -51,8 +54,10 @@ export class AnatomyModelLayer implements SceneLayer {
       this.loaded = object;
       this.atlasSurface.visible = false;
       this.atlas.add(object);
-      // Keep the reference body in its bind pose so fitted organs remain aligned.
-      if (animations.length) this.mixer = new THREE.AnimationMixer(object);
+      if (animations.length) {
+        this.mixer = new THREE.AnimationMixer(object);
+        this.actions = animations.map((clip) => this.mixer!.clipAction(clip).play());
+      }
       this.provenance = { ...provenance, external: true };
       return true;
     } catch { this.provenance = DEFAULT_PROVENANCE; return false; }
@@ -118,15 +123,39 @@ export class AnatomyModelLayer implements SceneLayer {
         material.transparent = true;
         material.opacity = 0.58;
         material.depthWrite = false;
+        if ('emissive' in material) {
+          const glowing = material as THREE.MeshStandardMaterial;
+          glowing.emissive = new THREE.Color('#24d9ff');
+          glowing.emissiveIntensity = 0.22;
+        }
         return material;
       });
     });
   }
 
   private normalizeModel(object: THREE.Object3D): void { const box=new THREE.Box3().setFromObject(object); const size=box.getSize(new THREE.Vector3()); const center=box.getCenter(new THREE.Vector3()); const s=30/(Math.max(size.x,size.y,size.z)||1); object.scale.setScalar(s); object.position.sub(center.multiplyScalar(s)); }
-  private clearLoaded(): void { if(this.mixer){this.mixer.stopAllAction();this.mixer=null;} if(this.loaded){this.loaded.removeFromParent();disposeObject(this.loaded);this.loaded=null;} this.atlasSurface.visible=true; }
+  private clearLoaded(): void { if(this.mixer){this.mixer.stopAllAction();this.mixer=null;} this.actions=[]; if(this.loaded){this.loaded.removeFromParent();disposeObject(this.loaded);this.loaded=null;} this.atlasSurface.visible=true; }
+  setSelected(id: string | null): void { this.selectedId = id?.startsWith('organ:') || id?.startsWith('system:') ? id : null; }
+  setCinematicProgress(progress: number | null): void { this.cinematicProgress = progress; }
   onScaleChange(scale: Scale,intensity:number):void{this.currentScale=scale;this.intensity=intensity;this.root.visible=intensity>.01;}
-  update(dt:number,elapsed:number):void{ if(this.mixer)this.mixer.update(dt); const systemOpacity=this.currentScale===Scale.Organism?.42:.9; for(const group of this.systemGroups.values())group.traverse(o=>{const m=(o as THREE.Mesh).material as THREE.Material|undefined;if(m&&'opacity'in m)fadeMaterial(m,systemOpacity*this.intensity,dt);}); for(const a of this.animated){const s=a.base+Math.sin(elapsed*a.speed)*.07;a.object.scale.multiplyScalar(s/a.object.scale.x);} this.atlas.rotation.y=Math.sin(elapsed*.12)*.1; if(this.loaded){this.loaded.visible=true;this.loaded.traverse(o=>{const m=(o as THREE.Mesh).material;if(!m)return;for(const mat of (Array.isArray(m)?m:[m])){mat.opacity=this.currentScale===Scale.Organism?.68:.16;}});} }
+  update(dt:number,elapsed:number):void{ const cinematic=this.cinematicProgress!==null; for(const action of this.actions)action.paused=!cinematic; if(this.mixer)this.mixer.update(dt); this.updateAnatomyVisibility(); const systemOpacity=this.currentScale===Scale.Organism?0:.9; for(const group of this.systemGroups.values())group.traverse(o=>{const m=(o as THREE.Mesh).material as THREE.Material|undefined;if(m&&'opacity'in m)fadeMaterial(m,systemOpacity*this.intensity,dt);}); for(const a of this.animated){const s=a.base+Math.sin(elapsed*a.speed)*.07;a.object.scale.multiplyScalar(s/a.object.scale.x);} this.atlas.rotation.y=cinematic?elapsed*.35:Math.sin(elapsed*.12)*.1; if(this.loaded){this.loaded.visible=true;this.loaded.traverse(o=>{const m=(o as THREE.Mesh).material;if(!m)return;for(const mat of (Array.isArray(m)?m:[m])){mat.opacity=this.currentScale===Scale.Organism?.78:.1; if('emissiveIntensity'in mat)(mat as THREE.MeshStandardMaterial).emissiveIntensity=cinematic?.55:.22;}});} }
+  private updateAnatomyVisibility(): void {
+    const organismView = this.currentScale === Scale.Organism;
+    for (const [id, group] of this.systemGroups) {
+      let containsSelection = false;
+      group.traverse((object) => { if (object.userData.pick?.id === this.selectedId) containsSelection = true; });
+      group.visible = !organismView && (!this.selectedId || id === this.selectedId || containsSelection);
+      if (this.currentScale !== Scale.Organ) {
+        for (const child of group.children) child.traverse((object) => { object.visible = true; });
+        continue;
+      }
+      group.traverse((object) => {
+        if (object === group) return;
+        const pick = object.userData.pick as { id?: string; scale?: Scale } | undefined;
+        object.visible = pick?.scale === Scale.Organ && (!this.selectedId || pick.id === this.selectedId);
+      });
+    }
+  }
   getPickables():THREE.Object3D[]{return this.intensity>.2?(this.currentScale===Scale.Organism&&this.loaded?[this.loaded,...this.pickables]:this.pickables):[];}
   dispose():void{this.clearLoaded();disposeObject(this.root);}
 }

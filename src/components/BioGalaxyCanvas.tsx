@@ -22,6 +22,8 @@ interface Props {
   structure?: StructurePayload | null;
   /** Open organism model to load at the anatomy scale. */
   organismModel?: OrganismModelRequest | null;
+  /** Drives the live scene while the history cutscene is open. */
+  cinematicProgress?: number | null;
   onHover: (tag: PickTag | null) => void;
   onSelect: (tag: PickTag | null) => void;
   onScaleSettled: (scale: Scale) => void;
@@ -40,6 +42,7 @@ export const BioGalaxyCanvas: React.FC<Props> = ({
   focusTaxonId = null,
   structure = null,
   organismModel = null,
+  cinematicProgress = null,
   onHover,
   onSelect,
   onScaleSettled,
@@ -75,6 +78,10 @@ export const BioGalaxyCanvas: React.FC<Props> = ({
   useEffect(() => {
     sceneRef.current?.setSelected(selectedId);
   }, [selectedId]);
+
+  useEffect(() => {
+    sceneRef.current?.setCinematicProgress(cinematicProgress);
+  }, [cinematicProgress]);
 
   useEffect(() => {
     sceneRef.current?.setFocusTaxon(focusTaxonId);
