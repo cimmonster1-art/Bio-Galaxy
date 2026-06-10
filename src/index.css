@@ -100,3 +100,8 @@ body {
 .scroll-thin::-webkit-scrollbar-thumb:hover {
   background: rgba(39, 196, 217, 0.4);
 }
+
+.anatomy-scrubber { accent-color: #27c4d9; cursor: ew-resize; }
+.copilot-launcher { animation: copilot-breathe 3s ease-in-out infinite; }
+@keyframes copilot-breathe { 50% { box-shadow: 0 0 0 5px rgba(39,196,217,.08), 0 14px 35px rgba(0,0,0,.55); } }
+@media (prefers-reduced-motion: reduce) { .copilot-launcher { animation: none; } }

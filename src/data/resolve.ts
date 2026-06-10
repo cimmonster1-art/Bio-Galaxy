@@ -1,5 +1,6 @@
 import { BioObject, RANK_SCALE, Scale, TaxonRank } from '../types';
 import { BIO_OBJECTS } from './registry';
+import { ANATOMY_OBJECTS } from './anatomy';
 import { TaxonNode, allTaxa, lineageOf } from './taxonomy';
 
 // Resolves a pick id coming from any scene layer into a full BioObject.
@@ -76,39 +77,6 @@ function speciesToOrganism(node: TaxonNode): BioObject {
   };
 }
 
-// Organ-system and organ records surfaced by the anatomy layer.
-const anatomyObjects: Record<string, BioObject> = {
-  'system:cardiovascular': {
-    id: 'system:cardiovascular',
-    name: 'Cardiovascular System',
-    scale: Scale.OrganSystem,
-    kind: 'system',
-    summary: 'The heart and vessels that circulate blood, oxygen, and nutrients.',
-    size: 'organ system',
-    facts: [
-      'Couples the heart to arteries, veins, and capillary beds.',
-      'Delivers oxygen and removes metabolic waste.',
-      'Expression context available through the Human Protein Atlas.',
-    ],
-    source: 'hpa',
-    crossRefs: ['reactome', 'ncbi'],
-  },
-  'organ:heart': {
-    id: 'organ:heart',
-    name: 'Heart',
-    scale: Scale.Organ,
-    kind: 'organ',
-    summary: 'A muscular organ that pumps blood through the cardiovascular system.',
-    size: '~12 cm',
-    facts: [
-      'Four chambers coordinate filling and ejection.',
-      'Cardiac muscle is densely packed with mitochondria.',
-      'Tissue and cell expression mapped by the Human Protein Atlas.',
-    ],
-    source: 'hpa',
-    crossRefs: ['reactome', 'uniprot'],
-  },
-};
 
 // Cosmic bodies surfaced by the cosmos and solar-system layers. These are not
 // backed by a biological database, so they carry a plain provenance note for
@@ -152,6 +120,7 @@ const cosmicObjects: Record<string, BioObject> = {
   'planet:neptune': planet('neptune', 'Neptune', 'The outermost planet, a deep blue ice giant.', ['Strongest winds in the solar system.', 'Triton orbits in reverse.'], Scale.SolarSystem),
 };
 
+
 export function resolveObject(id: string): BioObject | undefined {
-  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? anatomyObjects[id] ?? cosmicObjects[id];
+  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? cosmicObjects[id];
 }
