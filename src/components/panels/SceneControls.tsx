@@ -15,9 +15,9 @@ export const SceneControls: React.FC<Props> = ({ scale, hovered, onStep }) => {
   return (
     <>
       {/* Top-left scale readout */}
-      <div className="pointer-events-none absolute left-4 top-4 z-20">
+      <div className="pointer-events-none absolute left-3 top-3 sm:left-4 sm:top-4 z-20">
         <div className="meta-label">Current scale</div>
-        <div className="text-lg font-semibold text-slate-100">{level.name}</div>
+        <div className="text-[15px] font-semibold sm:text-lg text-slate-100">{level.name}</div>
         <div className="font-mono text-[11px] text-cyan-300/80">{level.magnitude}</div>
       </div>
 
@@ -32,7 +32,7 @@ export const SceneControls: React.FC<Props> = ({ scale, hovered, onStep }) => {
       )}
 
       {/* Zoom controls */}
-      <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-md panel px-1.5 py-1.5">
+      <div className="absolute bottom-[4.75rem] left-1/2 lg:bottom-4 z-20 flex -translate-x-1/2 items-center gap-1 rounded-md panel px-1.5 py-1.5">
         <button
           onClick={() => onStep(-1)}
           disabled={scale === FIRST_SCALE}

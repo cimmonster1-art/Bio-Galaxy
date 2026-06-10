@@ -61,20 +61,20 @@ export const LifeCladeExplorer: React.FC<Props> = ({ selectedTaxonId, onSelect, 
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-[#040911]" aria-label="Tree of Life workspace">
-      <header className="flex items-center gap-4 border-b border-white/10 px-5 py-3">
+      <header className="flex flex-wrap items-center gap-3 border-b border-white/10 px-3 py-3 sm:flex-nowrap sm:gap-4 sm:px-5">
         <div className="flex items-center gap-3">
           <span className="grid h-9 w-9 place-items-center rounded-lg border border-cyan-400/20 bg-cyan-400/[.08] text-cyan-200"><Network className="h-4 w-4" /></span>
           <div><div className="meta-label">Interactive taxonomy</div><h1 className="text-[16px] font-semibold">Tree of Life</h1></div>
         </div>
-        <div className="relative ml-auto w-full max-w-md">
+        <div className="relative order-3 w-full sm:order-none sm:ml-auto sm:max-w-md">
           <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-500" />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search taxa, common names, or ranks" className="w-full rounded-lg border border-white/10 bg-black/30 py-2 pl-9 pr-3 text-[11px] outline-none focus:border-cyan-400/40" />
         </div>
         <button onClick={onClose} className="rounded-md p-2 text-slate-400 hover:bg-white/10 hover:text-white" aria-label="Close Tree of Life"><X className="h-4 w-4" /></button>
       </header>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[18rem_minmax(25rem,1fr)_20rem]">
-        <aside className="overflow-y-auto border-r border-white/10 bg-black/10 p-4 scroll-thin">
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[18rem_minmax(25rem,1fr)_20rem] lg:grid-rows-1">
+        <aside className="max-h-44 overflow-y-auto border-b border-white/10 bg-black/10 p-3 scroll-thin lg:max-h-none lg:border-b-0 lg:border-r lg:p-4">
           <div className="meta-label mb-3">{query ? `${matches.length} search results` : 'All atlas branches'}</div>
           <ul className="space-y-px">
             {query
@@ -83,7 +83,7 @@ export const LifeCladeExplorer: React.FC<Props> = ({ selectedTaxonId, onSelect, 
           </ul>
         </aside>
 
-        <main className="relative min-h-0 overflow-y-auto p-6 scroll-thin life-tree-grid">
+        <main className="relative min-h-0 overflow-y-auto p-4 sm:p-6 scroll-thin life-tree-grid">
           <div className="mx-auto flex min-h-full max-w-4xl flex-col justify-center">
             <div className="meta-label mb-5">Selected lineage</div>
             <div className="flex flex-wrap items-center gap-2">
@@ -99,7 +99,7 @@ export const LifeCladeExplorer: React.FC<Props> = ({ selectedTaxonId, onSelect, 
               ))}
             </div>
 
-            <div className="mt-12 border-t border-white/10 pt-6">
+            <div className="mt-8 border-t sm:mt-12 border-white/10 pt-6">
               <div className="meta-label mb-3">{selected ? `Branches within ${selected.name}` : 'Start with a domain'}</div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {visibleChildren.map((node) => (
