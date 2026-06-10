@@ -6,7 +6,7 @@ import { lineageOf } from '../data/taxonomy';
 import { resolveObject } from '../data/resolve';
 import { rcsb } from '../data/clients';
 import { useAsync } from '../hooks/useAsync';
-import { ModelEntry } from '../data/modelCatalog';
+import { MODEL_CATALOG, ModelEntry } from '../data/modelCatalog';
 
 import { BioGalaxyCanvas, OrganismModelRequest, StructurePayload } from './BioGalaxyCanvas';
 import { GlobalSearch } from './GlobalSearch';
@@ -38,10 +38,11 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const [selected, setSelected] = useState<BioObject | null>(null);
   const [hovered, setHovered] = useState<BioObject | null>(null);
   const [focusTaxonId, setFocusTaxonId] = useState<string | null>(null);
-  // The layered Z-Anatomy reference visualization is the always-available default.
-  const [organismModel, setOrganismModel] = useState<OrganismModelRequest | null>(null);
-  const [activeModelId, setActiveModelId] = useState<string | null>(null);
-  const [modelStatus, setModelStatus] = useState<ModelStatus>('idle');
+  // Load a real GLB body by default, then fit selectable anatomical systems inside it.
+  const defaultHuman = MODEL_CATALOG.find((entry) => entry.id === 'human') ?? MODEL_CATALOG[0];
+  const [organismModel, setOrganismModel] = useState<OrganismModelRequest | null>({ url: defaultHuman.url, label: defaultHuman.label, sourceUrl: defaultHuman.repoUrl });
+  const [activeModelId, setActiveModelId] = useState<string | null>(defaultHuman.id);
+  const [modelStatus, setModelStatus] = useState<ModelStatus>('loading');
 
   // Apply a resolved object's natural scale and phylogenetic focus.
   const applySelection = useCallback((obj: BioObject) => {
