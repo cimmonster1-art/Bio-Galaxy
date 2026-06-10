@@ -212,7 +212,8 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
         </aside>
       </div>
 
-      <AtlasCopilot scale={scale} selected={selected} onNavigate={navigateTo} />
+      <ActivityStrip scale={scale} selected={selected} lineage={lineage} />
+      <AtlasCopilot scale={scale} selected={selected} hovered={hovered} />
     </div>
   );
 };
