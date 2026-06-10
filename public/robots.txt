@@ -1,4 +1,7 @@
+# Bio Galaxy welcomes search engines and research-focused crawlers.
 User-agent: *
 Allow: /
+Disallow: /api/
 
+# The production server returns an absolute sitemap URL for the current host.
 Sitemap: /sitemap.xml
