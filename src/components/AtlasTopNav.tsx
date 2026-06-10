@@ -8,7 +8,7 @@ interface Props { active: AtlasWorkspace; onChange: (workspace: AtlasWorkspace) 
 const ITEMS = [
   { id: 'eras' as const, label: 'Eras', icon: Clock3 },
   { id: 'playback' as const, label: 'Timeline playback', icon: Film },
-  { id: 'life' as const, label: 'Clade of life', icon: Network },
+  { id: 'life' as const, label: 'Tree of Life', icon: Network },
 ];
 
 export const AtlasTopNav: React.FC<Props> = ({ active, onChange }) => (

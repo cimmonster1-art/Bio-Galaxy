@@ -127,3 +127,10 @@ body {
 @keyframes orbit-pulse { 50% { transform:translate(-50%,-50%) scale(1.08); opacity:.4; } }
 @keyframes cutscene-in { from { opacity:0; transform:translateY(16px) scale(.98); } to { opacity:1; transform:none; } }
 @media (prefers-reduced-motion: reduce) { .playback-stars,.playback-orbit,.cutscene-title { animation:none; } }
+
+/* Quiet graph-paper field for the full Tree of Life workspace. */
+.life-tree-grid {
+  background-color: #050b15;
+  background-image: linear-gradient(rgba(103,232,249,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(103,232,249,.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
