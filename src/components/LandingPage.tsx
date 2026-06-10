@@ -3,87 +3,39 @@ import { ArrowDown, ArrowRight, Database, X } from 'lucide-react';
 import { Scale } from '../types';
 import { DATA_SOURCE_ORDER, getSource } from '../data/sources';
 import { BioGalaxyCanvas } from './BioGalaxyCanvas';
+import { AttributionSection } from './AttributionSection';
 
-interface Props {
-  onOpenAtlas: () => void;
-}
-
+interface Props { onOpenAtlas: () => void; }
 const CREDIBILITY = DATA_SOURCE_ORDER.map((id) => getSource(id).name);
+const SCALE_STOPS = ['Cosmos', 'Solar system', 'Tree of Life', 'Anatomy', 'Cell', 'Protein', 'Atom'];
 
-/**
- * Landing page. Shares the atlas design language and shows the real scene as a
- * restrained hero rather than concept art. Copy is plain and product oriented.
- */
+/** Landing page with a live scene, concise product detail, and full provenance. */
 export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {
-  const sourcesRef = useRef<HTMLDivElement>(null);
-
+  const sourcesRef = useRef<HTMLElement>(null);
   return (
     <div className="min-h-screen bg-[#02040a] text-slate-100">
-      {/* Hero */}
-      <section className="relative h-screen overflow-hidden">
-        {/* Live scene, dimmed behind the copy. */}
-        <div className="absolute inset-0 opacity-70">
-          <BioGalaxyCanvas
-            scale={Scale.SolarSystem}
-            selectedId={null}
-            onHover={() => {}}
-            onSelect={() => {}}
-            onScaleSettled={() => {}}
-          />
-        </div>
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#02040a]/40 via-[#02040a]/30 to-[#02040a]" />
+      <section className="relative min-h-screen overflow-hidden">
+        <div className="absolute inset-0 opacity-80"><BioGalaxyCanvas scale={Scale.SolarSystem} selectedId={null} onHover={() => {}} onSelect={() => {}} onScaleSettled={() => {}} /></div>
+        <div className="pointer-events-none absolute inset-0 hero-veil" />
+        <div className="pointer-events-none absolute inset-0 hero-grid" />
 
         <header className="relative z-10 flex items-center justify-between px-6 py-5">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#27c4d9]" />
-            <span className="text-[14px] font-semibold tracking-tight">Bio Galaxy</span>
-          </div>
-          <span className="meta-label hidden sm:block">
-            A visual interface over public biological databases
-          </span>
+          <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#27c4d9]" /><span className="text-[14px] font-semibold tracking-tight">Bio Galaxy</span></div>
+          <span className="meta-label hidden sm:block">A visual interface over public scientific databases</span>
         </header>
 
-        <div className="relative z-10 mx-auto flex h-[calc(100vh-160px)] max-w-3xl flex-col items-center justify-center px-6 text-center">
-          <span className="meta-label mb-5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
-            Built on public scientific datasets
-          </span>
-          <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
-            From the cosmos to a single atom.
-          </h1>
-          <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-slate-400">
-            Bio Galaxy is a continuous 3D atlas. Dive from the cosmic web through galaxies, the
-            solar system, and Earth into the Tree of Life, anatomy, cells, proteins, and atoms,
-            with taxonomy, pathway, structural, and expression context from open databases.
-          </p>
-
+        <div className="relative z-10 mx-auto flex min-h-[calc(100vh-78px)] max-w-4xl flex-col items-center justify-center px-6 pb-20 text-center">
+          <span className="meta-label mb-5 rounded-full border border-white/10 bg-[#02040a]/50 px-3 py-1 backdrop-blur-md">Open science · live 3D · source cited</span>
+          <h1 className="max-w-3xl text-4xl font-semibold leading-[1.08] tracking-tight sm:text-6xl">One continuous atlas,<br/><span className="text-cyan-200">from cosmos to atom.</span></h1>
+          <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-slate-300/80">Explore the cosmic web, Earth, the Tree of Life, anatomy, cells, pathways, proteins, and molecular structures in a source-aware spatial interface.</p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={onOpenAtlas}
-              className="group inline-flex items-center gap-2 rounded-md bg-cyan-500/90 px-5 py-2.5 text-[13px] font-semibold text-[#02040a] transition hover:bg-cyan-400"
-            >
-              Open Atlas
-              <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-            </button>
-            <button
-              onClick={() =>
-                sourcesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              }
-              className="inline-flex items-center gap-2 rounded-md border border-white/12 px-5 py-2.5 text-[13px] font-medium text-slate-200 transition hover:border-cyan-500/40 hover:text-cyan-200"
-            >
-              <Database className="h-4 w-4" /> View Data Sources
-            </button>
+            <button onClick={onOpenAtlas} className="group inline-flex items-center gap-2 rounded-md bg-cyan-400 px-5 py-2.5 text-[13px] font-semibold text-[#02040a] transition hover:bg-cyan-300">Open Atlas <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></button>
+            <button onClick={() => sourcesRef.current?.scrollIntoView({ behavior: 'smooth' })} className="inline-flex items-center gap-2 rounded-md border border-white/15 bg-[#02040a]/40 px-5 py-2.5 text-[13px] font-medium text-slate-200 backdrop-blur-md transition hover:border-cyan-500/40 hover:text-cyan-200"><Database className="h-4 w-4" /> View Sources</button>
           </div>
-
-          <div className="mt-12">
-            <div className="meta-label mb-3">Built on public data from</div>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-              {CREDIBILITY.map((name) => (
-                <span key={name} className="text-[12px] font-medium text-slate-400">
-                  {name}
-                </span>
-              ))}
-            </div>
+          <div className="mt-12 flex w-full max-w-3xl items-center justify-between gap-1 rounded-lg border border-white/10 bg-[#02040a]/55 px-3 py-3 backdrop-blur-md">
+            {SCALE_STOPS.map((stop, index) => <React.Fragment key={stop}><div className="flex flex-col items-center gap-2"><span className={`h-1.5 w-1.5 rounded-full ${index === 2 ? 'bg-cyan-300 shadow-[0_0_8px_#67e8f9]' : 'bg-slate-500'}`} /><span className="hidden text-[9px] uppercase tracking-[0.14em] text-slate-500 sm:block">{stop}</span></div>{index < SCALE_STOPS.length - 1 && <span className="h-px flex-1 bg-gradient-to-r from-white/5 via-cyan-400/20 to-white/5" />}</React.Fragment>)}
           </div>
+          <div className="mt-8"><div className="meta-label mb-3">Live records from</div><div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">{CREDIBILITY.map((name) => <span key={name} className="text-[11px] font-medium text-slate-400">{name}</span>)}</div></div>
         </div>
 
         <button
@@ -97,54 +49,17 @@ export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {
         </button>
       </section>
 
-      {/* Data sources */}
-      <section ref={sourcesRef} className="mx-auto max-w-5xl px-6 py-20">
-        <div className="meta-label mb-2">Integration</div>
-        <h2 className="text-2xl font-semibold tracking-tight">Data sources</h2>
-        <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-slate-400">
-          Every database-backed object in the atlas names its source. Records are read from
-          public scientific databases through typed client wrappers.
-        </p>
-        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {DATA_SOURCE_ORDER.map((id) => {
-            const s = getSource(id);
-            return (
-              <a
-                key={id}
-                href={s.homepage}
-                target="_blank"
-                rel="noreferrer"
-                className="panel-solid group rounded-md p-4 transition hover:border-cyan-500/30"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[14px] font-semibold text-slate-100">{s.name}</span>
-                  <ArrowRight className="h-3.5 w-3.5 text-slate-600 transition group-hover:text-cyan-300" />
-                </div>
-                <div className="meta-label mt-1">{s.domain}</div>
-                <p className="mt-2 text-[12.5px] leading-relaxed text-slate-400">
-                  {s.description}
-                </p>
-              </a>
-            );
-          })}
-        </div>
+      <section className="border-y border-white/[0.08] bg-white/[0.015]"><div className="mx-auto grid max-w-6xl gap-px px-6 py-8 md:grid-cols-3">
+        <Feature icon={Layers3} label="22 connected scales" text="A single camera path links astronomical, organismal, cellular, and molecular views." />
+        <Feature icon={Database} label="Source-aware objects" text="Selections surface live taxonomy, pathway, expression, genomic, and structural context." />
+        <Feature icon={Server} label="Fast same-origin data gateway" text="Public, key-free APIs are normalized in typed clients and accelerated by server-side caching." />
+      </div></section>
 
-        <div className="mt-12 flex flex-col items-start gap-4 border-t border-white/10 pt-8 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[14px] text-slate-300">
-            A visual interface over public biological databases.
-          </p>
-          <button
-            onClick={onOpenAtlas}
-            className="inline-flex items-center gap-2 rounded-md bg-cyan-500/90 px-5 py-2.5 text-[13px] font-semibold text-[#02040a] transition hover:bg-cyan-400"
-          >
-            Open Atlas <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
-      </section>
-
-      <footer className="border-t border-white/10 px-6 py-6 text-center">
-        <span className="meta-label">Bio Galaxy · Educational visualization of public datasets</span>
-      </footer>
+      <AttributionSection ref={sourcesRef} />
+      <section className="mx-auto max-w-6xl px-6 pb-20"><div className="flex flex-col items-start gap-4 rounded-lg border border-cyan-400/15 bg-cyan-400/[0.04] p-6 sm:flex-row sm:items-center sm:justify-between"><div><div className="meta-label mb-1">Begin at any scale</div><p className="text-[15px] text-slate-200">Search a species, protein, pathway, organelle, or structure and move through its context.</p></div><button onClick={onOpenAtlas} className="inline-flex shrink-0 items-center gap-2 rounded-md bg-cyan-400 px-5 py-2.5 text-[13px] font-semibold text-[#02040a] hover:bg-cyan-300">Open Atlas <ArrowRight className="h-4 w-4" /></button></div></section>
+      <footer className="border-t border-white/10 px-6 py-6 text-center"><span className="meta-label">Bio Galaxy · Educational visualization of public datasets · Not medical guidance</span></footer>
     </div>
   );
 };
+
+const Feature: React.FC<{ icon: React.ComponentType<{ className?: string }>; label: string; text: string }> = ({ icon: Icon, label, text }) => <article className="px-5 py-4"><Icon className="h-4 w-4 text-cyan-300" /><h2 className="mt-3 text-[14px] font-semibold">{label}</h2><p className="mt-1.5 text-[12px] leading-relaxed text-slate-500">{text}</p></article>;

@@ -5,7 +5,9 @@
 //   - normalize transport and HTTP errors into a single typed error
 //   - provide a small in-memory cache boundary keyed by URL
 //
-// No secrets or API keys are handled here. All wrapped endpoints are public.
+// No secrets or API keys are handled here. In the browser, allowlisted public
+// endpoints travel through the same-origin server cache for lower latency and
+// consistent CORS behavior.
 
 export class ApiError extends Error {
   constructor(
@@ -41,6 +43,11 @@ interface CacheEntry {
 // LRU-bounded cache (or a service worker) can be swapped in later.
 const cache = new Map<string, CacheEntry>();
 const DEFAULT_TIMEOUT = 8000;
+
+function requestUrl(url: string): string {
+  if (typeof window === 'undefined' || !url.startsWith('https://')) return url;
+  return `/api/science?url=${encodeURIComponent(url)}`;
+}
 
 function readCache<T>(key: string): T | undefined {
   const hit = cache.get(key);
@@ -103,7 +110,7 @@ async function fetchOnce<T>(url: string, opts: RequestOptions): Promise<T> {
   if (signal) signal.addEventListener('abort', onAbort, { once: true });
 
   try {
-    const res = await fetch(url, {
+    const res = await fetch(requestUrl(url), {
       headers: { Accept: 'application/json', ...headers },
       signal: controller.signal,
     });
@@ -140,7 +147,7 @@ export async function getText(url: string, opts: RequestOptions = {}): Promise<s
     const onAbort = (): void => controller.abort();
     if (signal) signal.addEventListener('abort', onAbort, { once: true });
     try {
-      const res = await fetch(url, { headers: { ...headers }, signal: controller.signal });
+      const res = await fetch(requestUrl(url), { headers: { ...headers }, signal: controller.signal });
       if (!res.ok) throw new ApiError(`Request failed (${res.status})`, res.status, url);
       const text = await res.text();
       if (cacheMs > 0) cache.set(url, { expires: Date.now() + cacheMs, value: text });
