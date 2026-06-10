@@ -33,7 +33,7 @@ export class SelectionRaycaster {
     this.raycaster.setFromCamera(this.pointer, camera);
     const hits = this.raycaster.intersectObjects(objects, true);
     for (const hit of hits) {
-      const tag = findPickTag(hit.object);
+      const tag = findPickTag(hit.object, hit.instanceId);
       if (tag) return tag;
     }
     return null;
@@ -41,9 +41,11 @@ export class SelectionRaycaster {
 }
 
 /** Walk up the parent chain to find the nearest pick tag. */
-export function findPickTag(object: THREE.Object3D): PickTag | null {
+export function findPickTag(object: THREE.Object3D, instanceId?: number): PickTag | null {
   let current: THREE.Object3D | null = object;
   while (current) {
+    const instanceTags = current.userData?.pickInstances as PickTag[] | undefined;
+    if (instanceId !== undefined && instanceTags?.[instanceId]) return instanceTags[instanceId];
     const tag = current.userData?.pick as PickTag | undefined;
     if (tag) return tag;
     current = current.parent;

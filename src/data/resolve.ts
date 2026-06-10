@@ -122,5 +122,35 @@ const cosmicObjects: Record<string, BioObject> = {
 
 
 export function resolveObject(id: string): BioObject | undefined {
+  const tissueMatch = /^tissue:cell:(\d+)$/.exec(id);
+  if (tissueMatch) return tissueCellObject(Number(tissueMatch[1]));
   return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? cosmicObjects[id];
+}
+
+/** Complete locally indexed corpus used by search and the read-only copilot. */
+export function allResolvedObjects(): BioObject[] {
+  return [
+    ...Object.values(BIO_OBJECTS),
+    ...Object.values(taxonObjects),
+    ...Object.values(ANATOMY_OBJECTS),
+    ...Object.values(cosmicObjects),
+  ];
+}
+
+function tissueCellObject(index: number): BioObject {
+  return {
+    id: `tissue:cell:${index}`,
+    name: `Tissue cell ${index + 1}`,
+    scale: Scale.Tissue,
+    kind: 'cell',
+    summary: 'One individually raycastable cell within the rendered tissue field.',
+    size: 'approximately 10 to 30 µm in this generalized tissue model',
+    facts: [
+      'A plasma membrane separates the cell from its local extracellular environment.',
+      'The darker inner body represents the nucleus and its genomic compartment.',
+      'Neighboring cells collectively create tissue-scale structure and function.',
+    ],
+    source: 'hpa',
+    crossRefs: ['ensembl', 'uniprot', 'reactome', 'ncbi'],
+  };
 }

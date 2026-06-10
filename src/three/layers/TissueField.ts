@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Scale } from '../../types';
+import { PickTag, Scale } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
 import { createBumpTexture } from '../textures/proceduralTextures';
@@ -73,6 +73,12 @@ export class TissueField implements SceneLayer {
     this.cells = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 32, 24), this.cellMat, count);
     this.nuclei = new THREE.InstancedMesh(new THREE.SphereGeometry(0.42, 20, 16), this.nucleusMat, count);
     this.cells.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+    const pickInstances: PickTag[] = Array.from({ length: count }, (_, index) => ({
+      id: `tissue:cell:${index}`,
+      scale: Scale.Tissue,
+    }));
+    this.cells.userData.pickInstances = pickInstances;
+    this.nuclei.userData.pickInstances = pickInstances;
 
     const tint = new THREE.Color();
     let i = 0;
@@ -149,7 +155,7 @@ export class TissueField implements SceneLayer {
   }
 
   getPickables(): THREE.Object3D[] {
-    return [];
+    return this.root.visible ? [this.cells, this.nuclei] : [];
   }
 
   dispose(): void {
