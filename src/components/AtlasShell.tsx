@@ -6,12 +6,14 @@ import { lineageOf } from '../data/taxonomy';
 import { resolveObject } from '../data/resolve';
 import { rcsb } from '../data/clients';
 import { useAsync } from '../hooks/useAsync';
-import { BioGalaxyCanvas, StructurePayload } from './BioGalaxyCanvas';
+import { ModelEntry } from '../data/modelCatalog';
+import { BioGalaxyCanvas, OrganismModelRequest, StructurePayload } from './BioGalaxyCanvas';
 import { GlobalSearch } from './GlobalSearch';
 import { ScaleNavigatorPanel } from './panels/ScaleNavigatorPanel';
 import { ContextPanel } from './panels/ContextPanel';
 import { DataSourcesPanel } from './panels/DataSourcesPanel';
 import { TaxonomyNavigator } from './panels/TaxonomyNavigator';
+import { AnatomyModelsPanel, ModelStatus } from './panels/AnatomyModelsPanel';
 import { DetailPanel } from './panels/DetailPanel';
 import { SceneControls } from './panels/SceneControls';
 import { ActivityStrip } from './panels/ActivityStrip';
@@ -32,6 +34,9 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const [selected, setSelected] = useState<BioObject | null>(null);
   const [hovered, setHovered] = useState<BioObject | null>(null);
   const [focusTaxonId, setFocusTaxonId] = useState<string | null>(null);
+  const [organismModel, setOrganismModel] = useState<OrganismModelRequest | null>(null);
+  const [activeModelId, setActiveModelId] = useState<string | null>(null);
+  const [modelStatus, setModelStatus] = useState<ModelStatus>('idle');
 
   // Apply a resolved object's natural scale and phylogenetic focus.
   const applySelection = useCallback((obj: BioObject) => {
@@ -88,6 +93,17 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
     setScale((s) => Math.max(FIRST_SCALE, Math.min(LAST_SCALE, s + dir)) as Scale);
   }, []);
 
+  const loadModelEntry = useCallback((entry: ModelEntry) => {
+    setActiveModelId(entry.id);
+    setModelStatus('loading');
+    setOrganismModel({ url: entry.url, label: entry.label, sourceUrl: entry.repoUrl });
+    setScale(Scale.Organism);
+  }, []);
+
+  const handleModelResult = useCallback((ok: boolean) => {
+    setModelStatus(ok ? 'loaded' : 'error');
+  }, []);
+
   const activeSources = useMemo(
     () => (selected ? [selected.source, ...(selected.crossRefs ?? [])] : []),
     [selected],
@@ -116,6 +132,7 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
 
   const selectedTaxonId = focusTaxonId ? stripTaxon(focusTaxonId) : null;
   const selectedOrganelleId = selected?.kind === 'organelle' ? selected.id : null;
+  const anatomyScale = scale >= Scale.Organism && scale <= Scale.Tissue;
 
   return (
     <div className="flex h-screen w-screen flex-col bg-[#02040a] text-slate-100">
@@ -146,6 +163,13 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
         <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto scroll-thin border-r border-white/10 p-3 lg:flex">
           <ScaleNavigatorPanel scale={scale} onScaleChange={setScale} />
           <TaxonomyNavigator selectedTaxonId={selectedTaxonId} onSelectTaxon={selectTaxon} />
+          {anatomyScale && (
+            <AnatomyModelsPanel
+              activeId={activeModelId}
+              status={modelStatus}
+              onLoad={loadModelEntry}
+            />
+          )}
           <ContextPanel scale={scale} selected={selected} />
           <DataSourcesPanel active={activeSources} />
         </aside>
@@ -161,9 +185,11 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
             selectedId={selectedOrganelleId}
             focusTaxonId={focusTaxonId}
             structure={structure}
+            organismModel={organismModel}
             onHover={handleHover}
             onSelect={handleSelect}
             onScaleSettled={handleScaleSettled}
+            onModelResult={handleModelResult}
           />
           <SceneControls scale={scale} hovered={hovered} onStep={stepScale} />
         </main>

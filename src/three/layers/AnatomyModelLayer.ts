@@ -36,6 +36,7 @@ export class AnatomyModelLayer implements SceneLayer {
 
   private readonly placeholder = new THREE.Group();
   private loaded: THREE.Object3D | null = null;
+  private mixer: THREE.AnimationMixer | null = null;
   private readonly membranes: THREE.ShaderMaterial[] = [];
   private heart: THREE.Group | null = null;
   private readonly pickables: THREE.Object3D[] = [];
@@ -71,12 +72,19 @@ export class AnatomyModelLayer implements SceneLayer {
   async loadModel(url: string, provenance: ModelProvenance): Promise<boolean> {
     const format = formatFromUrl(url);
     try {
-      const object = await loadObject(url, format);
+      const { object, animations } = await loadObject(url, format);
       this.clearLoaded();
       this.normalizeModel(object);
       object.userData.pick = { id: `organism:${this.organismId}`, scale: Scale.Organism };
+      object.traverse((o) => {
+        if (!o.userData.pick) o.userData.pick = object.userData.pick;
+      });
       this.loaded = object;
       this.root.add(object);
+      if (animations.length > 0) {
+        this.mixer = new THREE.AnimationMixer(object);
+        this.mixer.clipAction(animations[0]).play();
+      }
       this.placeholder.visible = false;
       this.provenance = { ...provenance, external: true };
       return true;
@@ -88,6 +96,10 @@ export class AnatomyModelLayer implements SceneLayer {
   }
 
   private clearLoaded(): void {
+    if (this.mixer) {
+      this.mixer.stopAllAction();
+      this.mixer = null;
+    }
     if (this.loaded) {
       disposeObject(this.loaded);
       this.loaded = null;
@@ -226,6 +238,8 @@ export class AnatomyModelLayer implements SceneLayer {
   }
 
   update(dt: number, elapsed: number): void {
+    if (this.mixer) this.mixer.update(dt);
+
     for (const m of this.membranes) {
       m.uniforms.uTime.value = elapsed;
       m.uniforms.uOpacity.value = 0.05 * this.intensity + 0.01;
@@ -250,7 +264,10 @@ export class AnatomyModelLayer implements SceneLayer {
   }
 
   getPickables(): THREE.Object3D[] {
-    return this.intensity > 0.2 ? this.pickables : [];
+    if (this.intensity <= 0.2) return [];
+    // A loaded external model is the organism; otherwise expose the procedural
+    // body and its cardiovascular targets.
+    return this.loaded ? [this.loaded] : this.pickables;
   }
 
   dispose(): void {
@@ -268,14 +285,18 @@ function formatFromUrl(url: string): ModelFormat {
   return 'gltf';
 }
 
-async function loadObject(url: string, format: ModelFormat): Promise<THREE.Object3D> {
+interface LoadedModel {
+  object: THREE.Object3D;
+  animations: THREE.AnimationClip[];
+}
+
+async function loadObject(url: string, format: ModelFormat): Promise<LoadedModel> {
   if (format === 'fbx') {
     const { FBXLoader } = await import('three/examples/jsm/loaders/FBXLoader.js');
-    const loader = new FBXLoader();
-    return await loader.loadAsync(url);
+    const object = await new FBXLoader().loadAsync(url);
+    return { object, animations: object.animations ?? [] };
   }
   const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-  const loader = new GLTFLoader();
-  const gltf = await loader.loadAsync(url);
-  return gltf.scene;
+  const gltf = await new GLTFLoader().loadAsync(url);
+  return { object: gltf.scene, animations: gltf.animations ?? [] };
 }
