@@ -4,7 +4,8 @@ import { Scale } from '../types';
  * Heliocentric solar system data and the cosmic timeline. Sizes and orbital
  * radii are compressed for legibility, not drawn to true scale, so the inner
  * and outer planets stay visible in one frame. Texture maps are open-licensed
- * and loaded from GitHub at runtime; provenance is recorded for citation.
+ * and bundled locally under public/textures, served by Vite at /textures;
+ * provenance is recorded for citation.
  */
 
 export interface MoonData {
@@ -30,27 +31,29 @@ export interface PlanetData {
   moons?: MoonData[];
 }
 
-// Open-licensed planetary maps (Planet Pixel Emporium via threex.planets, MIT).
-const TEX = 'https://raw.githubusercontent.com/jeromeetienne/threex.planets/master/images';
-// High-resolution NASA Visible Earth "Blue Marble" set, via the three.js repo.
-const EARTH = 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets';
+// Open-licensed planetary maps, bundled locally and served at /textures.
+const TEX = '/textures';
 
 export const SUN = {
-  texture: `${TEX}/sunmap.jpg`,
+  texture: `${TEX}/sun.jpg`,
   radius: 8,
 };
 
 export const EARTH_TEXTURES = {
-  day: `${EARTH}/earth_atmos_2048.jpg`,
-  clouds: `${EARTH}/earth_clouds_1024.png`,
-  night: `${EARTH}/earth_lights_2048.png`,
+  day: `${TEX}/earth_day.jpg`,
+  clouds: `${TEX}/earth_clouds.jpg`,
+  night: `${TEX}/earth_night.jpg`,
 };
+
+// The Moon and the Milky Way panorama, also bundled locally.
+export const MOON_TEXTURE = '/textures/moon.jpg';
+export const MILKYWAY_TEXTURE = '/textures/milkyway.jpg';
 
 export const PLANETS: PlanetData[] = [
   {
     id: 'mercury',
     name: 'Mercury',
-    texture: `${TEX}/mercurymap.jpg`,
+    texture: `${TEX}/mercury.jpg`,
     radius: 0.9,
     orbit: 16,
     speed: 0.62,
@@ -60,7 +63,7 @@ export const PLANETS: PlanetData[] = [
   {
     id: 'venus',
     name: 'Venus',
-    texture: `${TEX}/venusmap.jpg`,
+    texture: `${TEX}/venus_surface.jpg`,
     radius: 1.5,
     orbit: 23,
     speed: 0.45,
@@ -70,7 +73,7 @@ export const PLANETS: PlanetData[] = [
   {
     id: 'earth',
     name: 'Earth',
-    texture: `${EARTH}/earth_atmos_2048.jpg`,
+    texture: `${TEX}/earth_day.jpg`,
     radius: 1.6,
     orbit: 31,
     speed: 0.38,
@@ -81,7 +84,7 @@ export const PLANETS: PlanetData[] = [
   {
     id: 'mars',
     name: 'Mars',
-    texture: `${TEX}/marsmap1k.jpg`,
+    texture: `${TEX}/mars.jpg`,
     radius: 1.1,
     orbit: 40,
     speed: 0.31,
@@ -92,7 +95,7 @@ export const PLANETS: PlanetData[] = [
   {
     id: 'jupiter',
     name: 'Jupiter',
-    texture: `${TEX}/jupitermap.jpg`,
+    texture: `${TEX}/jupiter.jpg`,
     radius: 4.8,
     orbit: 62,
     speed: 0.17,
@@ -108,19 +111,19 @@ export const PLANETS: PlanetData[] = [
   {
     id: 'saturn',
     name: 'Saturn',
-    texture: `${TEX}/saturnmap.jpg`,
+    texture: `${TEX}/saturn.jpg`,
     radius: 4.1,
     orbit: 84,
     speed: 0.12,
     spin: 2.0,
     color: '#d8c79a',
-    ring: { texture: `${TEX}/saturnringcolor.jpg`, inner: 5, outer: 9 },
+    ring: { texture: `${TEX}/saturn_ring.png`, inner: 5, outer: 9 },
     moons: [{ name: 'Titan', radius: 0.5, orbit: 11, speed: 1.1 }],
   },
   {
     id: 'uranus',
     name: 'Uranus',
-    texture: `${TEX}/uranusmap.jpg`,
+    texture: `${TEX}/uranus.jpg`,
     radius: 2.7,
     orbit: 102,
     speed: 0.09,
@@ -130,13 +133,27 @@ export const PLANETS: PlanetData[] = [
   {
     id: 'neptune',
     name: 'Neptune',
-    texture: `${TEX}/neptunemap.jpg`,
+    texture: `${TEX}/neptune.jpg`,
     radius: 2.6,
     orbit: 118,
     speed: 0.07,
     spin: 1.5,
     color: '#3b66c4',
     moons: [{ name: 'Triton', radius: 0.4, orbit: 5, speed: 1.3 }],
+  },
+  {
+    // Pluto: a dwarf planet, kept here so the ephemeris scrubber can place it
+    // on a compressed orbit just beyond Neptune. There is no dedicated Pluto
+    // map in public/textures, so it reuses the local Moon map for its small,
+    // grey, icy body rather than pulling in a new asset.
+    id: 'pluto',
+    name: 'Pluto',
+    texture: MOON_TEXTURE,
+    radius: 0.8,
+    orbit: 132,
+    speed: 0.05,
+    spin: 1.2,
+    color: '#b6ada3',
   },
 ];
 
@@ -168,6 +185,6 @@ export function eraForScale(scale: Scale): CosmicEra | undefined {
 }
 
 export const TEXTURE_PROVENANCE = [
-  { label: 'Earth (Blue Marble)', source: 'NASA Visible Earth via three.js', url: 'https://github.com/mrdoob/three.js' },
-  { label: 'Planet maps', source: 'Planet Pixel Emporium via threex.planets (MIT)', url: 'https://github.com/jeromeetienne/threex.planets' },
+  { label: 'Planetary and solar maps', source: 'Solar System Scope (CC BY 4.0, NASA imagery), bundled locally', url: 'https://www.solarsystemscope.com/textures' },
+  { label: 'Milky Way panorama', source: 'Solar System Scope (CC BY 4.0, NASA imagery), bundled locally', url: 'https://www.solarsystemscope.com/textures' },
 ];

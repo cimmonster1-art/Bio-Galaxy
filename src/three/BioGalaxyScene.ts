@@ -45,6 +45,7 @@ export class BioGalaxyScene {
   private readonly envTexture: THREE.Texture;
 
   private readonly layers: SceneLayer[];
+  private readonly solarSystem: SolarSystemLayer;
   private readonly tree: TreeOfLifeLayer;
   private readonly anatomy: AnatomyModelLayer;
   private readonly cell: CellScene;
@@ -97,9 +98,10 @@ export class BioGalaxyScene {
     this.anatomy = new AnatomyModelLayer();
     this.cell = new CellScene();
     this.protein = new ProteinStructureLayer();
+    this.solarSystem = new SolarSystemLayer();
     this.layers = [
       new CosmosLayer(),
-      new SolarSystemLayer(),
+      this.solarSystem,
       new EarthLayer(),
       this.tree,
       this.anatomy,
@@ -138,6 +140,16 @@ export class BioGalaxyScene {
 
   stepScale(direction: 1 | -1): void {
     this.cameraController.step(direction);
+    this.start();
+  }
+
+  /**
+   * Drive the heliocentric solar system to a simulation date so the planets sit
+   * at their true ecliptic longitudes for that date. A time scrubber UI calls
+   * this; the SolarSystemLayer resolves positions through the ephemeris.
+   */
+  setSimulationDate(date: Date): void {
+    this.solarSystem.setDate(date);
     this.start();
   }
 

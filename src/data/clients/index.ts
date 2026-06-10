@@ -9,3 +9,4 @@ export * as rcsb from './rcsbClient';
 export * as ensembl from './ensemblClient';
 export * as hpa from './hpaClient';
 export * as ncbi from './ncbiClient';
+export * as wikipedia from './wikipediaClient';

@@ -4,9 +4,11 @@ import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
 import { loadColorTexture } from '../textures/loadTexture';
 import { createSpriteLabel } from '../labels/SpriteLabel';
-import { PLANETS, SUN, PlanetData } from '../../data/cosmos';
+import { PLANETS, SUN, PlanetData, MOON_TEXTURE, MILKYWAY_TEXTURE } from '../../data/cosmos';
+import { heliocentricLongitudes } from '../../data/ephemeris';
 
 interface OrbitingBody {
+  id: string;
   pivot: THREE.Group;
   mesh: THREE.Mesh;
   orbitSpeed: number;
@@ -31,10 +33,28 @@ export class SolarSystemLayer implements SceneLayer {
   private readonly sunLight: THREE.PointLight;
   private readonly pickables: THREE.Object3D[] = [];
   private intensity = 0;
+  // Once a date is scrubbed in, planet angles come from the ephemeris and the
+  // gentle auto-advance stands down so it does not fight the scrubbed positions.
+  private simDate: Date | null = null;
 
   constructor() {
     this.root.name = 'SolarSystemLayer';
     this.root.visible = false;
+
+    // Background sky dome: the real Milky Way panorama on the inside of a large
+    // back-faced sphere, so the system sits in an actual starfield. Fades with
+    // the layer intensity.
+    const skyMat = new THREE.MeshBasicMaterial({
+      map: loadColorTexture(MILKYWAY_TEXTURE, this.loader),
+      color: 0x9099aa,
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(400, 64, 64), skyMat);
+    this.root.add(sky);
+    this.fadeables.push(skyMat);
 
     // Sun: unlit and bright so the bloom pass gives it a corona.
     const sunMat = new THREE.MeshBasicMaterial({
@@ -43,11 +63,25 @@ export class SolarSystemLayer implements SceneLayer {
       opacity: 0,
       color: 0xffffff,
     });
-    const sun = new THREE.Mesh(new THREE.SphereGeometry(SUN.radius, 48, 48), sunMat);
+    const sun = new THREE.Mesh(new THREE.SphereGeometry(SUN.radius, 64, 64), sunMat);
     sun.userData.pick = { id: 'planet:sun', scale: Scale.SolarSystem };
     this.root.add(sun);
     this.fadeables.push(sunMat);
     this.pickables.push(sun);
+
+    // Additive corona shell: a larger glow around the Sun so bloom renders it
+    // as a blazing, incandescent star.
+    const coronaMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#ffd28a'),
+      transparent: true,
+      opacity: 0,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const corona = new THREE.Mesh(new THREE.SphereGeometry(SUN.radius * 1.6, 64, 64), coronaMat);
+    sun.add(corona);
+    this.fadeables.push(coronaMat);
 
     const sunLabel = createSpriteLabel('Sun', '#ffd9a0');
     sunLabel.position.set(0, SUN.radius + 3, 0);
@@ -80,15 +114,18 @@ export class SolarSystemLayer implements SceneLayer {
     this.root.add(orbit);
     this.fadeables.push(orbitMat);
 
+    // Reuse the surface map as a subtle bump map for low-relief surface detail.
     const mat = new THREE.MeshStandardMaterial({
       map: loadColorTexture(data.texture, this.loader),
+      bumpMap: loadColorTexture(data.texture, this.loader),
+      bumpScale: 0.04,
       color: new THREE.Color(data.color),
       roughness: 0.85,
       metalness: 0.0,
       transparent: true,
       opacity: 0,
     });
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(data.radius, 40, 40), mat);
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(data.radius, 64, 64), mat);
     mesh.position.x = data.orbit;
     mesh.userData.pick = { id: `planet:${data.id}`, scale: data.id === 'earth' ? Scale.Planet : Scale.SolarSystem };
     pivot.add(mesh);
@@ -122,19 +159,37 @@ export class SolarSystemLayer implements SceneLayer {
       const moonPivot = new THREE.Group();
       mesh.add(moonPivot);
       const moonMat = new THREE.MeshStandardMaterial({
-        color: 0xb9b6b0,
+        map: loadColorTexture(MOON_TEXTURE, this.loader),
+        bumpMap: loadColorTexture(MOON_TEXTURE, this.loader),
+        bumpScale: 0.04,
+        color: 0xffffff,
         roughness: 0.9,
         transparent: true,
         opacity: 0,
       });
-      const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(moon.radius, 20, 20), moonMat);
+      const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(moon.radius, 32, 32), moonMat);
       moonMesh.position.x = moon.orbit;
       moonPivot.add(moonMesh);
       this.fadeables.push(moonMat);
       moons.push({ pivot: moonPivot, speed: moon.speed });
     }
 
-    this.bodies.push({ pivot, mesh, orbitSpeed: data.speed, spinSpeed: data.spin, moons });
+    this.bodies.push({ id: data.id, pivot, mesh, orbitSpeed: data.speed, spinSpeed: data.spin, moons });
+  }
+
+  /**
+   * Place every planet at its true heliocentric ecliptic longitude for the
+   * given date, using the astronomy-engine ephemeris. A time scrubber drives
+   * this so the system is scientifically correct for any simulation date. Once
+   * set, update() honors these angles instead of auto-advancing.
+   */
+  setDate(date: Date): void {
+    this.simDate = date;
+    const longitudes = heliocentricLongitudes(date);
+    for (const body of this.bodies) {
+      const lon = longitudes[body.id];
+      if (lon !== undefined) body.pivot.rotation.y = lon;
+    }
   }
 
   onScaleChange(_scale: Scale, intensity: number): void {
@@ -147,7 +202,9 @@ export class SolarSystemLayer implements SceneLayer {
     for (const f of this.fadeables) fadeMaterial(f, this.intensity, dt);
     if (this.intensity < 0.02) return;
     for (const body of this.bodies) {
-      body.pivot.rotation.y += dt * body.orbitSpeed * 0.25;
+      // Only auto-advance the orbit when no date has been scrubbed in; once a
+      // date is set the ephemeris owns the orbital angle and we leave it alone.
+      if (this.simDate === null) body.pivot.rotation.y += dt * body.orbitSpeed * 0.25;
       body.mesh.rotation.y += dt * body.spinSpeed * 0.4;
       for (const moon of body.moons) moon.pivot.rotation.y += dt * moon.speed * 0.5;
     }

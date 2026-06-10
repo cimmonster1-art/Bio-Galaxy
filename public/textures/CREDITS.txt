@@ -1,0 +1,10 @@
+Planet, Sun, Moon and Milky Way textures are courtesy of
+Solar System Scope (https://www.solarsystemscope.com/textures/)
+and are distributed under the Creative Commons Attribution 4.0
+International license (CC BY 4.0).
+
+The source imagery is built on NASA elevation and imagery data,
+including the Blue Marble (Earth), Messenger (Mercury), Viking
+(Mars), Cassini (Saturn), and Hubble Space Telescope.
+
+License: https://creativecommons.org/licenses/by/4.0/

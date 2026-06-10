@@ -10,12 +10,15 @@ import * as THREE from 'three';
 const vertexShader = /* glsl */ `
   varying vec3 vWorldPos;
   varying vec3 vWorldNormal;
+  varying vec3 vViewPos;
 
   void main() {
     vec4 worldPos = modelMatrix * vec4(position, 1.0);
     vWorldPos = worldPos.xyz;
     vWorldNormal = normalize(mat3(modelMatrix) * normal);
-    gl_Position = projectionMatrix * viewMatrix * worldPos;
+    vec4 viewPos = viewMatrix * worldPos;
+    vViewPos = viewPos.xyz;
+    gl_Position = projectionMatrix * viewPos;
   }
 `;
 
@@ -30,6 +33,7 @@ const fragmentShader = /* glsl */ `
 
   varying vec3 vWorldPos;
   varying vec3 vWorldNormal;
+  varying vec3 vViewPos;
 
   // Lightweight value noise so the surface drifts without a texture fetch.
   float hash(vec3 p) {
@@ -49,16 +53,48 @@ const fragmentShader = /* glsl */ `
       f.z);
   }
 
+  // Two octaves of drifting noise read as a flowing lipid bilayer.
+  float flowField(vec3 p) {
+    float a = noise(p * 0.25 + vec3(0.0, uTime * 0.12, uTime * 0.04));
+    float b = noise(p * 0.7 - vec3(uTime * 0.05, 0.0, uTime * 0.08));
+    return a * 0.65 + b * 0.35;
+  }
+
   void main() {
     vec3 viewDir = normalize(cameraPosition - vWorldPos);
     vec3 normal = normalize(vWorldNormal);
-    float fresnel = pow(1.0 - clamp(dot(normal, viewDir), 0.0, 1.0), uRimPower);
+    float ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
 
-    float flow = noise(vWorldPos * 0.25 + vec3(0.0, uTime * 0.15, 0.0));
-    vec3 base = mix(uColor, uRimColor, fresnel);
-    base += uRimColor * flow * 0.12;
+    // Sharp grazing rim plus a softer secondary halo for a thick wet edge. A
+    // tighter exponent on the core rim makes the bilayer near-invisible face on
+    // and brightens steeply toward the silhouette.
+    float fresnel = pow(1.0 - ndv, uRimPower * 1.25);
+    float halo = pow(1.0 - ndv, uRimPower * 0.4);
 
-    float alpha = uOpacity + fresnel * 0.55;
+    // Two flow samples at different scales and drifts give a layered, slowly
+    // churning lipid surface with more depth than a single octave.
+    float flow = flowField(vWorldPos);
+    float flowFine = flowField(vWorldPos * 2.3 + vec3(uTime * 0.03));
+    float lipid = flow * 0.7 + flowFine * 0.3;
+
+    // Faint inner depth: darker toward the core, brighter where light scatters
+    // through the membrane. A subtle secondary tint deepens the wet body.
+    float depth = mix(0.7, 1.18, lipid);
+    vec3 body = uColor * depth;
+    body += uColor * (lipid - 0.5) * 0.12;
+    vec3 base = mix(body, uRimColor, fresnel);
+    base += uRimColor * halo * 0.22;
+    base += uRimColor * lipid * 0.12;
+
+    // A thin iridescent sheen modulated by view angle and flow reads as the
+    // soap-film shimmer of the lipid bilayer at grazing angles.
+    float sheen = sin(lipid * 6.2831 + ndv * 4.0 + uTime * 0.3) * 0.5 + 0.5;
+    base += mix(vec3(0.0), uRimColor, sheen * fresnel * 0.3);
+
+    // Fine flowing speckle keeps the broad faces from reading as flat glass.
+    base += uRimColor * (flowFine - 0.5) * 0.06;
+
+    float alpha = uOpacity + fresnel * 0.66 + halo * 0.14;
     gl_FragColor = vec4(base, clamp(alpha, 0.0, 1.0));
   }
 `;

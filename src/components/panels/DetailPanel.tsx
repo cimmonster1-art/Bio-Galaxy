@@ -2,6 +2,7 @@ import React from 'react';
 import { MousePointerClick } from 'lucide-react';
 import { BioObject, DataSourceId } from '../../types';
 import { SourceBadge } from '../ui/SourceBadge';
+import { WikipediaSection } from './detail/WikipediaSection';
 import { UniProtSection } from './detail/UniProtSection';
 import { StructureSection } from './detail/StructureSection';
 import { MitochondrialProteins } from './detail/MitochondrialProteins';
@@ -10,14 +11,24 @@ import { TaxonomySection } from './detail/TaxonomySection';
 
 interface Props {
   selected: BioObject | null;
+  /**
+   * When set and non-empty, only database sections whose source is in this list
+   * are shown, driven by the searchable category pills above the panel. Null or
+   * empty shows everything.
+   */
+  visibleSources?: DataSourceId[] | null;
 }
+
+const show = (visible: DataSourceId[] | null | undefined, id: DataSourceId): boolean =>
+  !visible || visible.length === 0 || visible.includes(id);
 
 /**
  * Right column. Shows the selected object's curated metadata, its database
  * provenance, and live records pulled from the integrated sources. Sections are
- * conditional on what the object exposes (accession, pdb id, pathway id).
+ * conditional on what the object exposes (accession, pdb id, pathway id) and on
+ * the active category pills.
  */
-export const DetailPanel: React.FC<Props> = ({ selected }) => {
+export const DetailPanel: React.FC<Props> = ({ selected, visibleSources }) => {
   if (!selected) return <EmptyState />;
 
   const sources: DataSourceId[] = [
@@ -35,6 +46,8 @@ export const DetailPanel: React.FC<Props> = ({ selected }) => {
 
       <div className="flex-1 space-y-4 overflow-y-auto scroll-thin px-4 py-3.5">
         <p className="text-[12.5px] leading-relaxed text-slate-300">{selected.summary}</p>
+
+        <WikipediaSection title={selected.wikipedia ?? selected.name} />
 
         <div>
           <div className="meta-label mb-1.5">Provenance</div>
@@ -62,31 +75,31 @@ export const DetailPanel: React.FC<Props> = ({ selected }) => {
           </ul>
         )}
 
-        {selected.rank && (
+        {selected.rank && show(visibleSources, 'ncbi') && (
           <div className="border-t border-white/10 pt-3">
             <TaxonomySection selected={selected} />
           </div>
         )}
 
-        {selected.id === 'mitochondrion' && (
+        {selected.id === 'mitochondrion' && show(visibleSources, 'uniprot') && (
           <div className="border-t border-white/10 pt-3">
             <MitochondrialProteins />
           </div>
         )}
 
-        {selected.accession && (
+        {selected.accession && show(visibleSources, 'uniprot') && (
           <div className="border-t border-white/10 pt-3">
             <UniProtSection accession={selected.accession} />
           </div>
         )}
 
-        {selected.reactomeId && (
+        {selected.reactomeId && show(visibleSources, 'reactome') && (
           <div className="border-t border-white/10 pt-3">
             <PathwaySection reactomeId={selected.reactomeId} />
           </div>
         )}
 
-        {selected.pdbId && (
+        {selected.pdbId && show(visibleSources, 'rcsb') && (
           <div className="border-t border-white/10 pt-3">
             <StructureSection pdbId={selected.pdbId} />
           </div>

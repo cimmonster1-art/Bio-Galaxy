@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeft, Orbit, GitBranch, Volume2, VolumeX } from 'lucide-react';
 import { BioObject, PickTag, Scale } from '../types';
 import { FIRST_SCALE, LAST_SCALE } from '../data/scales';
 import { lineageOf } from '../data/taxonomy';
@@ -10,17 +10,23 @@ import { ModelEntry } from '../data/modelCatalog';
 
 import { BioGalaxyCanvas, OrganismModelRequest, StructurePayload } from './BioGalaxyCanvas';
 import { GlobalSearch } from './GlobalSearch';
-import { CosmicTimeline } from './CosmicTimeline';
+import { TimeScrubber } from './TimeScrubber';
+import { CladogramView } from './evolution/CladogramView';
 import { ScaleNavigatorPanel } from './panels/ScaleNavigatorPanel';
 import { ContextPanel } from './panels/ContextPanel';
 import { DataSourcesPanel } from './panels/DataSourcesPanel';
 import { TaxonomyNavigator } from './panels/TaxonomyNavigator';
 import { AnatomyModelsPanel, ModelStatus } from './panels/AnatomyModelsPanel';
-import { DetailPanel } from './panels/DetailPanel';
+import { AtlasSidebar } from './panels/AtlasSidebar';
 import { SceneControls } from './panels/SceneControls';
 import { ActivityStrip } from './panels/ActivityStrip';
+<<<<<<< HEAD
+import { createSoundscape, Soundscape } from '../audio/soundscape';
+import { Epoch } from '../data/epochs';
+=======
 import { AnatomyExplorer } from './AnatomyExplorer';
 import { AtlasCopilot } from './AtlasCopilot';
+>>>>>>> origin/main
 
 interface Props {
   onExit: () => void;
@@ -38,13 +44,61 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const [selected, setSelected] = useState<BioObject | null>(null);
   const [hovered, setHovered] = useState<BioObject | null>(null);
   const [focusTaxonId, setFocusTaxonId] = useState<string | null>(null);
+<<<<<<< HEAD
+  // The human model loads by default so the organism scale shows a real mesh.
+  const [organismModel, setOrganismModel] = useState<OrganismModelRequest | null>({
+    url: DEFAULT_MODEL.url,
+    label: DEFAULT_MODEL.label,
+    sourceUrl: DEFAULT_MODEL.repoUrl,
+  });
+  const [activeModelId, setActiveModelId] = useState<string | null>(DEFAULT_MODEL.id);
+  const [modelStatus, setModelStatus] = useState<ModelStatus>('loading');
+  const [view, setView] = useState<'explore' | 'evolution'>('explore');
+  const [simDate, setSimDate] = useState<Date | null>(null);
+  const [muted, setMuted] = useState(false);
+
+  // Sound design: a single soundscape, started on the first user gesture and
+  // cued by scale changes, epoch entries, and selections.
+  const soundRef = useRef<Soundscape | null>(null);
+  useEffect(() => {
+    soundRef.current = createSoundscape();
+    return () => {
+      soundRef.current?.dispose();
+      soundRef.current = null;
+    };
+  }, []);
+  const wakeSound = useCallback(() => {
+    soundRef.current?.start();
+  }, []);
+  useEffect(() => {
+    soundRef.current?.setScale(scale / Scale.Atom);
+  }, [scale]);
+  const toggleMute = useCallback(() => {
+    setMuted((m) => {
+      const next = !m;
+      soundRef.current?.start();
+      soundRef.current?.setMuted(next);
+      return next;
+    });
+  }, []);
+
+  const handleEpoch = useCallback(
+    (epoch: Epoch) => {
+      wakeSound();
+      soundRef.current?.epochCue(epoch.id);
+    },
+    [wakeSound],
+  );
+=======
   // The layered Z-Anatomy reference visualization is the always-available default.
   const [organismModel, setOrganismModel] = useState<OrganismModelRequest | null>(null);
   const [activeModelId, setActiveModelId] = useState<string | null>(null);
   const [modelStatus, setModelStatus] = useState<ModelStatus>('idle');
+>>>>>>> origin/main
 
   // Apply a resolved object's natural scale and phylogenetic focus.
   const applySelection = useCallback((obj: BioObject) => {
+    soundRef.current?.uiClick();
     setSelected(obj);
     if (obj.id.startsWith('taxon:')) {
       setFocusTaxonId(obj.id);
@@ -74,6 +128,17 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   );
 
   const handleScaleSettled = useCallback((s: Scale) => setScale(s), []);
+
+  // Selection coming from the 2D cladogram in the Evolution tab.
+  const selectByPickId = useCallback(
+    (pickId: string) => {
+      const obj = resolveObject(pickId);
+      if (obj) applySelection(obj);
+    },
+    [applySelection],
+  );
+
+  const handleDate = useCallback((d: Date) => setSimDate(d), []);
 
   const selectTaxon = useCallback(
     (taxonId: string) => {
@@ -143,8 +208,11 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const selectedTaxonId = focusTaxonId ? stripTaxon(focusTaxonId) : null;
   const selectedOrganelleId = selected?.kind === 'organelle' ? selected.id : null;
   const anatomyScale = scale >= Scale.Organism && scale <= Scale.Tissue;
+<<<<<<< HEAD
+=======
   const cosmicScale = scale <= Scale.Planet;
   const coreAnatomyScale = scale >= Scale.Organism && scale <= Scale.Organ;
+>>>>>>> origin/main
 
   return (
     <div className="flex h-screen w-screen flex-col bg-[#02040a] text-slate-100">
@@ -162,12 +230,41 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
             <span className="text-[13px] font-semibold tracking-tight">Bio Galaxy</span>
           </div>
         </div>
+        <div className="ml-1 flex shrink-0 items-center gap-1 rounded-full border border-white/10 p-0.5">
+          <button
+            onClick={() => {
+              wakeSound();
+              setView('explore');
+            }}
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] transition ${
+              view === 'explore' ? 'bg-cyan-500/20 text-cyan-200' : 'text-slate-400 hover:text-slate-100'
+            }`}
+          >
+            <Orbit className="h-3.5 w-3.5" aria-hidden /> Explore
+          </button>
+          <button
+            onClick={() => {
+              wakeSound();
+              setView('evolution');
+            }}
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] transition ${
+              view === 'evolution' ? 'bg-cyan-500/20 text-cyan-200' : 'text-slate-400 hover:text-slate-100'
+            }`}
+          >
+            <GitBranch className="h-3.5 w-3.5" aria-hidden /> Evolution
+          </button>
+        </div>
         <div className="flex flex-1 justify-center">
           <GlobalSearch onSelect={navigateTo} />
         </div>
-        <span className="meta-label hidden shrink-0 lg:block">
-          Phylogeny to molecular structure
-        </span>
+        <button
+          onClick={toggleMute}
+          aria-label={muted ? 'Unmute' : 'Mute'}
+          className="flex shrink-0 items-center gap-1.5 rounded-sm border border-white/10 px-2 py-1 text-[11px] text-slate-300 transition hover:border-cyan-500/40 hover:text-cyan-200"
+        >
+          {muted ? <VolumeX className="h-3.5 w-3.5" aria-hidden /> : <Volume2 className="h-3.5 w-3.5" aria-hidden />}
+          <span className="hidden sm:inline">{muted ? 'Muted' : 'Sound'}</span>
+        </button>
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -198,19 +295,42 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
             focusTaxonId={focusTaxonId}
             structure={structure}
             organismModel={organismModel}
+            simulationDate={simDate}
             onHover={handleHover}
             onSelect={handleSelect}
             onScaleSettled={handleScaleSettled}
             onModelResult={handleModelResult}
           />
+<<<<<<< HEAD
+
+          {/* Evolution tab: a dense 2D cladogram over the live scene. */}
+          {view === 'evolution' && (
+            <div className="absolute inset-0 z-10 bg-[#02040a]">
+              <CladogramView onSelect={selectByPickId} activeId={focusTaxonId} />
+            </div>
+          )}
+
+          {view === 'explore' && (
+            <>
+              <SceneControls scale={scale} hovered={hovered} onStep={stepScale} />
+              <TimeScrubber
+                scale={scale}
+                onSelectScale={setScale}
+                onDate={handleDate}
+                onEpoch={handleEpoch}
+              />
+            </>
+          )}
+=======
           <SceneControls scale={scale} hovered={hovered} onStep={stepScale} />
           {cosmicScale && <CosmicTimeline scale={scale} onSelectScale={setScale} />}
           {coreAnatomyScale && <AnatomyExplorer scale={scale} selectedId={selected?.id} onSelect={navigateTo} onScaleChange={setScale} />}
+>>>>>>> origin/main
         </main>
 
-        {/* Right column */}
-        <aside className="hidden w-80 shrink-0 border-l border-white/10 bg-[#04070f] md:block">
-          <DetailPanel selected={selected} />
+        {/* Right column: the third-of-screen detail sidebar with copilot. */}
+        <aside className="hidden w-[34%] min-w-[320px] max-w-[560px] shrink-0 border-l border-white/10 bg-[#04070f] md:block">
+          <AtlasSidebar selected={selected} />
         </aside>
       </div>
 

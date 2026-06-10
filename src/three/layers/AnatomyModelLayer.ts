@@ -54,10 +54,83 @@ export class AnatomyModelLayer implements SceneLayer {
     } catch { this.provenance = DEFAULT_PROVENANCE; return false; }
   }
 
+<<<<<<< HEAD
+  private clearLoaded(): void {
+    if (this.mixer) {
+      this.mixer.stopAllAction();
+      this.mixer = null;
+    }
+    if (this.loaded) {
+      disposeObject(this.loaded);
+      this.loaded = null;
+    }
+  }
+
+  /** Fit an arbitrary model into the scene's organism volume. */
+  private normalizeModel(object: THREE.Object3D): void {
+    this.enhanceShading(object);
+
+    const box = new THREE.Box3().setFromObject(object);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    const scale = 30 / maxDim;
+    object.scale.setScalar(scale);
+    object.position.sub(center.multiplyScalar(scale));
+  }
+
+  /**
+   * Improve the shading of a freshly loaded mesh so the real anatomy model reads
+   * well under the scene lighting. We lift the environment response, give flat
+   * materials a sensible roughness, and keep thin anatomical surfaces visible
+   * from both sides without losing correct front-facing normals.
+   */
+  private enhanceShading(object: THREE.Object3D): void {
+    object.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const mat of materials) {
+        const std = mat as THREE.MeshStandardMaterial;
+        if (!std || (!std.isMeshStandardMaterial && !(std as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial)) {
+          continue;
+        }
+        std.envMapIntensity = 1.1;
+        std.side = THREE.FrontSide;
+        // Flat materials with no metalness read as plastic; nudge them toward a
+        // soft organic finish so the surface catches light.
+        if (std.roughness >= 0.95 && std.metalness <= 0.05) {
+          std.roughness = 0.65;
+        }
+        std.metalness = Math.min(std.metalness, 0.1);
+        // Thin shells and cut surfaces should not vanish when viewed edge on.
+        if (std.transparent || std.opacity < 1) {
+          std.side = THREE.DoubleSide;
+        }
+        std.needsUpdate = true;
+      }
+    });
+  }
+
+  // ---- procedural fallback -------------------------------------------------
+
+  private buildPlaceholder(): void {
+    const bodyMat = createMembraneMaterial({
+      color: '#16607a',
+      rimColor: '#39d4e6',
+      opacity: 0.05,
+      rimPower: 2.6,
+    });
+    this.membranes.push(bodyMat);
+
+=======
   private buildAtlas(): void {
     this.atlas.userData.pick = { id: `organism:${this.organismId}`, scale: Scale.Organism };
     this.pickables.push(this.atlas);
     const skin = createMembraneMaterial({ color: '#478ca3', rimColor: '#70e5f2', opacity: 0.09, rimPower: 2.4 });
+>>>>>>> origin/main
     const body = new THREE.Group();
     const addSkin = (geometry: THREE.BufferGeometry, position: [number, number, number], rotation: [number, number, number] = [0, 0, 0]) => {
       const mesh = new THREE.Mesh(geometry, skin); mesh.position.set(...position); mesh.rotation.set(...rotation); body.add(mesh);
@@ -112,5 +185,37 @@ export class AnatomyModelLayer implements SceneLayer {
   dispose():void{this.clearLoaded();disposeObject(this.root);}
 }
 
+<<<<<<< HEAD
+// ---- loaders ----------------------------------------------------------------
+
+function formatFromUrl(url: string): ModelFormat {
+  const lower = url.toLowerCase();
+  if (lower.endsWith('.glb')) return 'glb';
+  if (lower.endsWith('.fbx')) return 'fbx';
+  return 'gltf';
+}
+
+interface LoadedModel {
+  object: THREE.Object3D;
+  animations: THREE.AnimationClip[];
+}
+
+async function loadObject(url: string, format: ModelFormat): Promise<LoadedModel> {
+  if (format === 'fbx') {
+    const { FBXLoader } = await import('three/examples/jsm/loaders/FBXLoader.js');
+    const object = await new FBXLoader().loadAsync(url);
+    return { object, animations: object.animations ?? [] };
+  }
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  // Z-Anatomy GLBs are meshopt-compressed (EXT_meshopt_compression), so the
+  // decoder must be attached before loading or the parse fails.
+  const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  const gltf = await loader.loadAsync(url);
+  return { object: gltf.scene, animations: gltf.animations ?? [] };
+}
+=======
 function formatFromUrl(url:string):ModelFormat{const l=url.toLowerCase();return l.endsWith('.glb')?'glb':l.endsWith('.fbx')?'fbx':'gltf';}
 async function loadObject(url:string,format:ModelFormat):Promise<{object:THREE.Object3D;animations:THREE.AnimationClip[]}>{if(format==='fbx'){const{FBXLoader}=await import('three/examples/jsm/loaders/FBXLoader.js');const object=await new FBXLoader().loadAsync(url);return{object,animations:object.animations??[]};}const{GLTFLoader}=await import('three/examples/jsm/loaders/GLTFLoader.js');const gltf=await new GLTFLoader().loadAsync(url);return{object:gltf.scene,animations:gltf.animations??[]};}
+>>>>>>> origin/main

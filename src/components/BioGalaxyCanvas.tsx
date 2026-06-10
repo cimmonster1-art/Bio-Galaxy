@@ -22,6 +22,8 @@ interface Props {
   structure?: StructurePayload | null;
   /** Open organism model to load at the anatomy scale. */
   organismModel?: OrganismModelRequest | null;
+  /** Simulation date driving the ephemeris-positioned solar system. */
+  simulationDate?: Date | null;
   onHover: (tag: PickTag | null) => void;
   onSelect: (tag: PickTag | null) => void;
   onScaleSettled: (scale: Scale) => void;
@@ -40,6 +42,7 @@ export const BioGalaxyCanvas: React.FC<Props> = ({
   focusTaxonId = null,
   structure = null,
   organismModel = null,
+  simulationDate = null,
   onHover,
   onSelect,
   onScaleSettled,
@@ -79,6 +82,10 @@ export const BioGalaxyCanvas: React.FC<Props> = ({
   useEffect(() => {
     sceneRef.current?.setFocusTaxon(focusTaxonId);
   }, [focusTaxonId]);
+
+  useEffect(() => {
+    if (simulationDate) sceneRef.current?.setSimulationDate(simulationDate);
+  }, [simulationDate]);
 
   useEffect(() => {
     if (structure) sceneRef.current?.setStructure(structure.atoms, structure.pickId);

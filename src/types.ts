@@ -102,6 +102,12 @@ export interface BioObject {
   pdbId?: string;
   /** Reactome pathway stable id when relevant. */
   reactomeId?: string;
+  /**
+   * Wikipedia article title used to fetch a thumbnail image and an
+   * encyclopedic extract for the rich detail card. When omitted, the object's
+   * name is used as the lookup title.
+   */
+  wikipedia?: string;
 }
 
 /** Minimal payload stamped onto Three.js mesh userData for raycasting. */

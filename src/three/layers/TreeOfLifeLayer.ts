@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { RANK_SCALE, Scale } from '../../types';
+import { RANK_SCALE, Scale, TaxonRank } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
-import { TREE_OF_LIFE, TaxonNode } from '../../data/taxonomy';
+import { TREE_OF_LIFE, TaxonNode, lineageOf } from '../../data/taxonomy';
 import { TAXONOMY_SCALES } from '../../data/scales';
+import { createSpriteLabel } from '../labels/SpriteLabel';
 
 interface PlacedNode {
   node: TaxonNode;
@@ -11,6 +12,13 @@ interface PlacedNode {
   /** Depth from the conceptual root: domain = 1 ... species = 8. */
   depth: number;
   parent: PlacedNode | null;
+}
+
+/** A billboard name tag pinned just outside its taxon node. */
+interface NodeLabel {
+  placed: PlacedNode;
+  sprite: THREE.Sprite;
+  material: THREE.SpriteMaterial;
 }
 
 const FORWARD = new THREE.Vector3(0, 0.12, 1).normalize();
@@ -42,6 +50,7 @@ export class TreeOfLifeLayer implements SceneLayer {
   private readonly proxies: THREE.Mesh[] = [];
   private readonly proxyGeo = new THREE.SphereGeometry(1, 12, 12);
   private readonly proxyMat: THREE.MeshBasicMaterial;
+  private readonly labels: NodeLabel[] = [];
 
   private readonly nodeScale: number[] = [];
   private readonly nodeCurrent: number[] = [];
@@ -68,11 +77,12 @@ export class TreeOfLifeLayer implements SceneLayer {
       3,
     );
     this.placed.forEach((p, i) => {
-      const baseSize = nodeSizeForDepth(p.depth);
+      const baseSize = nodeSizeForRank(p.node.rank);
       this.nodeScale[i] = baseSize;
       this.nodeCurrent[i] = depthVisibleAt(p.depth, this.currentScale) ? baseSize : 0;
-      const color = new THREE.Color().setHSL(p.node.hue / 360, 0.7, 0.62);
-      this.nodes.setColorAt(i, color);
+      // Brighten and saturate broad clades so a domain reads as a beacon and a
+      // species as a faint spark, giving the field obvious visual hierarchy.
+      this.nodes.setColorAt(i, colorForRank(p.node.hue, p.node.rank));
     });
     if (this.nodes.instanceColor) this.nodes.instanceColor.needsUpdate = true;
     this.root.add(this.nodes);
@@ -82,14 +92,23 @@ export class TreeOfLifeLayer implements SceneLayer {
     const cols: number[] = [];
     for (const p of this.placed) {
       if (!p.parent) continue;
-      const c = new THREE.Color().setHSL(p.node.hue / 360, 0.6, 0.45);
+      // Filaments brighten toward the parent so light appears to flow outward
+      // from each clade; brighter overall than before so branches read clearly.
+      const parentCol = new THREE.Color().setHSL(p.node.hue / 360, 0.7, 0.68);
+      const childCol = new THREE.Color().setHSL(p.node.hue / 360, 0.7, 0.5);
       segs.push(p.parent.pos.x, p.parent.pos.y, p.parent.pos.z, p.pos.x, p.pos.y, p.pos.z);
-      cols.push(c.r, c.g, c.b, c.r, c.g, c.b);
+      cols.push(parentCol.r, parentCol.g, parentCol.b, childCol.r, childCol.g, childCol.b);
     }
     const branchGeo = new THREE.BufferGeometry();
     branchGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(segs), 3));
     branchGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cols), 3));
-    this.branchMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0 });
+    this.branchMat = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
     this.branches = new THREE.LineSegments(branchGeo, this.branchMat);
     this.root.add(this.branches);
 
@@ -124,6 +143,42 @@ export class TreeOfLifeLayer implements SceneLayer {
     this.cloud.instanceMatrix.needsUpdate = true;
     if (this.cloud.instanceColor) this.cloud.instanceColor.needsUpdate = true;
     this.root.add(this.cloud);
+
+    this.buildLabels();
+  }
+
+  /**
+   * Billboard name tags for the prominent taxa: every domain, kingdom and
+   * phylum, plus the whole lineage down to Homo sapiens so the path to humans is
+   * always legible. Fine ranks stay unlabelled to keep the field uncluttered.
+   * Each sprite is parented under this.root so disposeObject frees it and its
+   * canvas texture on teardown.
+   */
+  private buildLabels(): void {
+    // Ids on the canonical human lineage always get a label, at any rank.
+    const lineageIds = new Set(lineageOf('homo_sapiens').map((t) => t.id));
+    for (const placed of this.placed) {
+      const rank = placed.node.rank;
+      const onLineage = lineageIds.has(placed.node.id);
+      const prominent = rank === 'domain' || rank === 'kingdom' || rank === 'phylum';
+      if (!prominent && !onLineage) continue;
+
+      // Tint the label to match its clade so name and node read as one object.
+      const tint = colorForRank(placed.node.hue, rank).getStyle();
+      const sprite = createSpriteLabel(placed.node.name, tint);
+      // Pin the tag just outside the node along its outward direction so it
+      // never sits on top of the glowing core.
+      const out = placed.pos.clone().normalize();
+      const offset = nodeSizeForRank(rank) * 1.6 + 0.6;
+      sprite.position.copy(placed.pos).addScaledVector(out, offset);
+      // Larger names for broader clades, echoing the node size hierarchy.
+      const labelScale = labelSizeForRank(rank);
+      sprite.scale.multiplyScalar(labelScale);
+      const material = sprite.material as THREE.SpriteMaterial;
+      material.opacity = 0;
+      this.labels.push({ placed, sprite, material });
+      this.root.add(sprite);
+    }
   }
 
   // ---- layout --------------------------------------------------------------
@@ -204,8 +259,17 @@ export class TreeOfLifeLayer implements SceneLayer {
 
   update(dt: number, elapsed: number): void {
     fadeMaterial(this.nodeMat, this.intensity, dt);
-    fadeMaterial(this.branchMat, this.intensity * 0.6, dt);
+    fadeMaterial(this.branchMat, this.intensity * 0.85, dt);
     fadeMaterial(this.cloudMat, this.intensity * 0.5, dt);
+
+    // Names fade in only when their node has resolved at the current level of
+    // detail, and the selected taxon's label burns a little brighter.
+    for (const label of this.labels) {
+      const visible = depthVisibleAt(label.placed.depth, this.currentScale);
+      const selected = `taxon:${label.placed.node.id}` === this.selectedId;
+      const target = visible ? this.intensity * (selected ? 1 : 0.85) : 0;
+      fadeMaterial(label.material, target, dt);
+    }
 
     // Gentle drift, unless we are settling a focus orientation.
     if (this.focusTarget) {
@@ -269,6 +333,39 @@ function coneAtDepth(depth: number): number {
 
 function nodeSizeForDepth(depth: number): number {
   return Math.max(0.5, 2.4 - depth * 0.22);
+}
+
+/** Ordinal position of a rank, broad (domain = 0) to fine (species = 7). */
+const RANK_ORDER: Record<TaxonRank, number> = {
+  domain: 0,
+  kingdom: 1,
+  phylum: 2,
+  class: 3,
+  order: 4,
+  family: 5,
+  genus: 6,
+  species: 7,
+};
+
+/** Node radius by rank: domains are bold beacons, species faint sparks. */
+function nodeSizeForRank(rank: TaxonRank): number {
+  return 3.1 - RANK_ORDER[rank] * 0.34;
+}
+
+/** On-screen label scale by rank, echoing the node size hierarchy. */
+function labelSizeForRank(rank: TaxonRank): number {
+  return 1.7 - RANK_ORDER[rank] * 0.13;
+}
+
+/**
+ * Tint a clade by hue, brightening and saturating broad ranks so the eye reads
+ * a clear hierarchy: domains glow near white-bright, species sit dimmer.
+ */
+function colorForRank(hue: number, rank: TaxonRank): THREE.Color {
+  const t = RANK_ORDER[rank] / 7;
+  const sat = 0.55 + (1 - t) * 0.3;
+  const light = 0.78 - t * 0.26;
+  return new THREE.Color().setHSL(hue / 360, sat, light);
 }
 
 /** A node resolves into view at its own scale and stays visible deeper in. */

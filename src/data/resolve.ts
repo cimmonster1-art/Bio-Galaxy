@@ -54,6 +54,8 @@ function taxonToObject(node: TaxonNode): BioObject {
     ],
     source: 'ncbi',
     crossRefs: node.rank === 'species' ? ['ensembl', 'hpa'] : ['ensembl'],
+    // Scientific names resolve cleanly on Wikipedia, often through a redirect.
+    wikipedia: node.name,
   };
 }
 
@@ -74,9 +76,48 @@ function speciesToOrganism(node: TaxonNode): BioObject {
     ],
     source: 'ensembl',
     crossRefs: ['hpa', 'ncbi'],
+    wikipedia: node.name,
   };
 }
 
+<<<<<<< HEAD
+// Organ-system and organ records surfaced by the anatomy layer.
+const anatomyObjects: Record<string, BioObject> = {
+  'system:cardiovascular': {
+    id: 'system:cardiovascular',
+    name: 'Cardiovascular System',
+    scale: Scale.OrganSystem,
+    kind: 'system',
+    summary: 'The heart and vessels that circulate blood, oxygen, and nutrients.',
+    size: 'organ system',
+    facts: [
+      'Couples the heart to arteries, veins, and capillary beds.',
+      'Delivers oxygen and removes metabolic waste.',
+      'Expression context available through the Human Protein Atlas.',
+    ],
+    source: 'hpa',
+    crossRefs: ['reactome', 'ncbi'],
+    wikipedia: 'Circulatory system',
+  },
+  'organ:heart': {
+    id: 'organ:heart',
+    name: 'Heart',
+    scale: Scale.Organ,
+    kind: 'organ',
+    summary: 'A muscular organ that pumps blood through the cardiovascular system.',
+    size: '~12 cm',
+    facts: [
+      'Four chambers coordinate filling and ejection.',
+      'Cardiac muscle is densely packed with mitochondria.',
+      'Tissue and cell expression mapped by the Human Protein Atlas.',
+    ],
+    source: 'hpa',
+    crossRefs: ['reactome', 'uniprot'],
+    wikipedia: 'Heart',
+  },
+};
+=======
+>>>>>>> origin/main
 
 // Cosmic bodies surfaced by the cosmos and solar-system layers. These are not
 // backed by a biological database, so they carry a plain provenance note for
@@ -93,6 +134,9 @@ function planet(id: string, name: string, summary: string, facts: string[], scal
     size: name,
     facts,
     provenanceNote: IMAGERY_NOTE,
+    // Planet and star names map directly to their Wikipedia articles, with the
+    // Sun resolving through its own page rather than a planet article.
+    wikipedia: name,
   };
 }
 

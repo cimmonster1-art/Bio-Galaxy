@@ -3,6 +3,7 @@ import { Scale } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
 import { createBumpTexture } from '../textures/proceduralTextures';
+import { cloneDetailTexture, getMuscleFibre, getTissueGrain } from '../textures/detailTextures';
 
 /**
  * A slab of living tissue: cells packed in three jittered layers, each a
@@ -39,22 +40,35 @@ export class TissueField implements SceneLayer {
     const spacing = 4.2;
     const dummy = new THREE.Object3D();
 
+    // Real anatomy maps: tissue grain drives the cell skin roughness and bump,
+    // muscle fibre lends the nucleus a chromatin-like striation. They tile over
+    // the instanced spheres so each cell reads as moist, pored living tissue.
+    const cellGrain = cloneDetailTexture(getTissueGrain(), 2);
+    const cellRough = cloneDetailTexture(getTissueGrain(), 2);
+    const nucleusFibre = cloneDetailTexture(getMuscleFibre(), 1.5);
+
     this.cellMat = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color('#2f93b0'),
       roughness: 0.22,
+      roughnessMap: cellRough,
       metalness: 0,
-      transmission: 0.55,
-      thickness: 2.2,
-      ior: 1.34,
+      transmission: 0.58,
+      thickness: 2.4,
+      ior: 1.35,
       clearcoat: 1,
-      clearcoatRoughness: 0.25,
+      clearcoatRoughness: 0.22,
+      iridescence: 0.3,
+      iridescenceIOR: 1.3,
+      sheen: 0.6,
+      sheenRoughness: 0.45,
+      sheenColor: new THREE.Color('#a6ecf6'),
       attenuationColor: new THREE.Color('#0f5a6e'),
       attenuationDistance: 6,
-      bumpMap: this.bump,
-      bumpScale: 0.06,
+      bumpMap: cellGrain,
+      bumpScale: 0.14,
       transparent: true,
       opacity: 0,
-      envMapIntensity: 1.1,
+      envMapIntensity: 1.3,
     });
 
     this.nucleusMat = new THREE.MeshStandardMaterial({
@@ -63,15 +77,16 @@ export class TissueField implements SceneLayer {
       metalness: 0,
       emissive: new THREE.Color('#10243c'),
       emissiveIntensity: 0.5,
-      bumpMap: this.bump,
-      bumpScale: 0.04,
+      bumpMap: nucleusFibre,
+      bumpScale: 0.12,
       transparent: true,
       opacity: 0,
+      envMapIntensity: 1.1,
     });
 
     const count = cols * rows * depth;
-    this.cells = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 32, 24), this.cellMat, count);
-    this.nuclei = new THREE.InstancedMesh(new THREE.SphereGeometry(0.42, 20, 16), this.nucleusMat, count);
+    this.cells = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 64, 48), this.cellMat, count);
+    this.nuclei = new THREE.InstancedMesh(new THREE.SphereGeometry(0.42, 40, 32), this.nucleusMat, count);
     this.cells.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
 
     const tint = new THREE.Color();

@@ -31,8 +31,11 @@ export class EarthLayer implements SceneLayer {
     this.root.visible = false;
     this.root.rotation.z = THREE.MathUtils.degToRad(23.4); // axial tilt
 
+    // The day map doubles as a subtle bump map for terrain relief.
     this.globeMat = new THREE.MeshStandardMaterial({
       map: loadColorTexture(EARTH_TEXTURES.day, this.loader),
+      bumpMap: loadColorTexture(EARTH_TEXTURES.day, this.loader),
+      bumpScale: 0.05,
       emissiveMap: loadColorTexture(EARTH_TEXTURES.night, this.loader),
       emissive: new THREE.Color('#ffd9a0'),
       emissiveIntensity: 0.55,
@@ -41,7 +44,7 @@ export class EarthLayer implements SceneLayer {
       transparent: true,
       opacity: 0,
     });
-    this.globe = new THREE.Mesh(new THREE.SphereGeometry(this.radius, 64, 64), this.globeMat);
+    this.globe = new THREE.Mesh(new THREE.SphereGeometry(this.radius, 128, 128), this.globeMat);
     this.globe.userData.pick = { id: 'planet:earth', scale: Scale.Planet };
     this.root.add(this.globe);
 
@@ -54,7 +57,7 @@ export class EarthLayer implements SceneLayer {
       roughness: 1,
     });
     this.clouds = new THREE.Mesh(
-      new THREE.SphereGeometry(this.radius * 1.015, 64, 64),
+      new THREE.SphereGeometry(this.radius * 1.015, 96, 96),
       this.cloudMat,
     );
     this.root.add(this.clouds);
