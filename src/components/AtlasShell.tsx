@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { BioObject, PickTag, Scale } from '../types';
 import { FIRST_SCALE, LAST_SCALE } from '../data/scales';
-import { lineageOf } from '../data/taxonomy';
 import { resolveObject } from '../data/resolve';
 import { rcsb } from '../data/clients';
 import { useAsync } from '../hooks/useAsync';
@@ -11,6 +10,10 @@ import { MODEL_CATALOG, ModelEntry } from '../data/modelCatalog';
 import { BioGalaxyCanvas, OrganismModelRequest, StructurePayload } from './BioGalaxyCanvas';
 import { GlobalSearch } from './GlobalSearch';
 import { CosmicTimeline } from './CosmicTimeline';
+import { AtlasTopNav, AtlasWorkspace } from './AtlasTopNav';
+import { EvolutionPlayback } from './EvolutionPlayback';
+import { LifeCladeExplorer } from './LifeCladeExplorer';
+import { WikipediaSidebar } from './WikipediaSidebar';
 import { ScaleNavigatorPanel } from './panels/ScaleNavigatorPanel';
 import { ContextPanel } from './panels/ContextPanel';
 import { DataSourcesPanel } from './panels/DataSourcesPanel';
@@ -18,7 +21,6 @@ import { TaxonomyNavigator } from './panels/TaxonomyNavigator';
 import { AnatomyModelsPanel, ModelStatus } from './panels/AnatomyModelsPanel';
 import { DetailPanel } from './panels/DetailPanel';
 import { SceneControls } from './panels/SceneControls';
-import { ActivityStrip } from './panels/ActivityStrip';
 import { AnatomyExplorer } from './AnatomyExplorer';
 import { AtlasCopilot } from './AtlasCopilot';
 
@@ -120,11 +122,6 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
     [selected],
   );
 
-  const lineage = useMemo(() => {
-    const taxonId = focusTaxonId ? stripTaxon(focusTaxonId) : null;
-    return taxonId ? lineageOf(taxonId).map((n) => n.name) : [];
-  }, [focusTaxonId]);
-
   // When a structure-backed object is selected, fetch its real PDB coordinates
   // and hand them to the scene to render as a live ball-and-stick model.
   const pdbId = selected?.pdbId ?? null;
@@ -144,7 +141,6 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
   const selectedTaxonId = focusTaxonId ? stripTaxon(focusTaxonId) : null;
   const selectedOrganelleId = selected?.kind === 'organelle' ? selected.id : null;
   const anatomyScale = scale >= Scale.Organism && scale <= Scale.Tissue;
-  const cosmicScale = scale <= Scale.Planet;
   const coreAnatomyScale = scale >= Scale.Organism && scale <= Scale.Organ;
 
   return (
@@ -163,12 +159,10 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
             <span className="text-[13px] font-semibold tracking-tight">Bio Galaxy</span>
           </div>
         </div>
-        <div className="flex flex-1 justify-center">
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
           <GlobalSearch onSelect={navigateTo} />
+          <AtlasTopNav active={workspace} onChange={setWorkspace} />
         </div>
-        <span className="meta-label hidden shrink-0 lg:block">
-          Phylogeny to molecular structure
-        </span>
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -205,17 +199,19 @@ export const AtlasShell: React.FC<Props> = ({ onExit }) => {
             onModelResult={handleModelResult}
           />
           <SceneControls scale={scale} hovered={hovered} onStep={stepScale} />
-          {cosmicScale && <CosmicTimeline scale={scale} onSelectScale={setScale} />}
-          {coreAnatomyScale && <AnatomyExplorer scale={scale} selectedId={selected?.id} onSelect={navigateTo} onScaleChange={setScale} />}
+          {workspace === 'eras' && <CosmicTimeline scale={scale} onSelectScale={setScale} onClose={() => setWorkspace(null)} />}
+          {workspace === 'playback' && <EvolutionPlayback onSelectScale={setScale} onClose={() => setWorkspace(null)} />}
+          {workspace === 'life' && <LifeCladeExplorer selectedTaxonId={selectedTaxonId} onSelect={selectTaxon} onClose={() => setWorkspace(null)} />}
+          {coreAnatomyScale && !workspace && <AnatomyExplorer scale={scale} selectedId={selected?.id} onSelect={navigateTo} onScaleChange={setScale} />}
         </main>
 
         {/* Right column */}
-        <aside className="hidden w-80 shrink-0 border-l border-white/10 bg-[#04070f] md:block">
-          <DetailPanel selected={selected} />
+        <aside className="hidden w-[min(33.333vw,26rem)] shrink-0 flex-col border-l border-white/10 bg-[#04070f] md:flex">
+          <WikipediaSidebar selected={selected} scale={scale} />
+          <div className="min-h-0 flex-1"><DetailPanel selected={selected} /></div>
         </aside>
       </div>
 
-      <ActivityStrip scale={scale} selected={selected} lineage={lineage} />
       <AtlasCopilot scale={scale} selected={selected} onNavigate={navigateTo} />
     </div>
   );
