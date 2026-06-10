@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, ChevronDown, Database, Eye, Send, X } from 'lucide-react';
 import { BioObject, Scale } from '../types';
 import { SCALE_LEVELS } from '../data/scales';
@@ -13,6 +13,7 @@ export const AtlasCopilot: React.FC<Props> = ({ scale, selected, hovered }) => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
   const context = useMemo(() => ({ scale, selected, hovered }), [scale, selected, hovered]);
   const observed = hovered ?? selected;
   const questions = useMemo(() => contextualQuestions(context), [context]);
@@ -34,6 +35,11 @@ export const AtlasCopilot: React.FC<Props> = ({ scale, selected, hovered }) => {
     if (!clean) return;
     setExchanges((current) => [...current, { question: clean, answer: answerQuestion(clean, context) }]);
     setQuery('');
+  };
+
+  const stageQuestion = (question: string) => {
+    setQuery(question);
+    requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const submit = (event: FormEvent) => {
@@ -61,10 +67,10 @@ export const AtlasCopilot: React.FC<Props> = ({ scale, selected, hovered }) => {
           <AnswerCard answer={exchange.answer}/>
         </div>)}
 
-        <div><div className="meta-label mb-2">Questions based on this view</div><div className="grid gap-2">{questions.map((question) => <button key={question} onClick={() => ask(question)} className="rounded-lg border border-white/10 bg-white/[.02] px-3 py-2 text-left text-[11px] text-slate-300 hover:border-cyan-400/30 hover:text-cyan-100">{question}</button>)}</div></div>
+        <div><div className="meta-label mb-2">Questions based on this view</div><div className="grid gap-2">{questions.map((question) => <button key={question} onClick={() => stageQuestion(question)} className="rounded-lg border border-white/10 bg-white/[.02] px-3 py-2 text-left text-[11px] text-slate-300 hover:border-cyan-400/30 hover:text-cyan-100">{question}</button>)}</div></div>
         <div><div className="meta-label mb-2">Related stops in the corpus</div><div className="grid grid-cols-1 gap-2 sm:grid-cols-3">{stops.map((stop) => <div key={stop.id} className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-2"><div className="text-[10px] font-medium text-slate-200">{stop.name}</div><div className="mt-1 font-mono text-[8px] uppercase text-slate-500">{SCALE_LEVELS[stop.scale].name}</div></div>)}</div><p className="mt-1.5 text-[9px] text-slate-500">Stops are informational only. The copilot does not navigate.</p></div>
       </div>
-      <form className="flex gap-2 border-t border-white/10 p-3" onSubmit={submit}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ask any question about this view" className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 text-[12px] outline-none focus:border-cyan-400/40"/><button className="grid h-9 w-9 place-items-center rounded-lg bg-cyan-400 text-slate-950 disabled:opacity-40" aria-label="Send" disabled={!query.trim()}><Send className="h-3.5 w-3.5"/></button></form>
+      <form className="flex gap-2 border-t border-white/10 p-3" onSubmit={submit}><input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ask any question about this view" className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 text-[12px] outline-none focus:border-cyan-400/40"/><button className="grid h-9 w-9 place-items-center rounded-lg bg-cyan-400 text-slate-950 disabled:opacity-40" aria-label="Send" disabled={!query.trim()}><Send className="h-3.5 w-3.5"/></button></form>
     </section>}
     <button onClick={() => setOpen((value) => !value)} className="copilot-launcher flex min-h-12 items-center gap-2 rounded-full border border-cyan-300/40 bg-[#08202b] px-4 py-3 text-[12px] font-semibold text-cyan-100 shadow-xl shadow-black/50 transition hover:scale-105 hover:border-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-300" aria-expanded={open} aria-label="Open atlas copilot"><Bot className="h-4 w-4"/><span>Copilot</span><span className="hidden font-mono text-[9px] text-cyan-300/60 sm:inline">⌘/</span></button>
   </div>;

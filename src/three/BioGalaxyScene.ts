@@ -56,6 +56,7 @@ export class BioGalaxyScene {
   private running = false;
   private hoverAccumulator = 0;
   private idleFrames = 0;
+  private cinematicProgress: number | null = null;
 
   private readonly resizeObserver: ResizeObserver;
 
@@ -144,6 +145,15 @@ export class BioGalaxyScene {
   /** Highlight a selected organelle inside the cell layer. */
   setSelected(id: string | null): void {
     this.cell.setSelected(id);
+    this.anatomy.setSelected(id);
+    this.start();
+  }
+
+  /** Keep every live layer animating beneath the interactive history cutscene. */
+  setCinematicProgress(progress: number | null): void {
+    this.cinematicProgress = progress;
+    this.anatomy.setCinematicProgress(progress);
+    if (progress !== null) this.start();
   }
 
   /** Focus a taxonomic lineage in the Tree of Life and orient toward it. */
@@ -218,7 +228,7 @@ export class BioGalaxyScene {
     this.postFX.render();
 
     // Idle the loop out once settled and the pointer is quiet, to save the GPU.
-    if (!camUpdate.moving && !this.raycaster.pointerActive) {
+    if (!camUpdate.moving && !this.raycaster.pointerActive && this.cinematicProgress === null) {
       if (++this.idleFrames > 90) {
         this.stop();
         this.idleFrames = 0;
