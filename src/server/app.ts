@@ -10,6 +10,7 @@ export async function createApp(): Promise<Express> {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
+  app.get('/favicon.ico', (_req, res) => res.redirect(308, '/favicon.svg'));
   app.get('/robots.txt', robotsTxt);
   app.get('/sitemap.xml', sitemapXml);
   app.use('/api', (_req, res, next) => {
