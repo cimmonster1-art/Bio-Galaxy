@@ -20,6 +20,8 @@ export class CosmosLayer implements SceneLayer {
   private readonly spiralMat: THREE.MeshBasicMaterial;
   private readonly core: THREE.Mesh;
   private readonly coreMat: THREE.MeshBasicMaterial;
+  private readonly dust: THREE.Points;
+  private readonly dustMat: THREE.PointsMaterial;
 
   private intensity = 0;
   private currentScale: Scale = Scale.Cosmos;
@@ -82,6 +84,26 @@ export class CosmosLayer implements SceneLayer {
     }
     this.spiral.instanceMatrix.needsUpdate = true;
     this.root.add(this.spiral);
+
+    // A broad, pale dust lane makes the Milky Way disk readable behind the stars.
+    const dustCount = 7200;
+    const dustPositions = new Float32Array(dustCount * 3);
+    for (let i = 0; i < dustCount; i++) {
+      const radius = 10 + Math.pow(Math.random(), 0.72) * 135;
+      const angle = Math.random() * Math.PI * 2 + radius * 0.018;
+      const thickness = (1 - radius / 170) * 5 + 1.2;
+      dustPositions[i * 3] = Math.cos(angle) * radius + (Math.random() - 0.5) * 8;
+      dustPositions[i * 3 + 1] = (Math.random() - 0.5) * thickness;
+      dustPositions[i * 3 + 2] = Math.sin(angle) * radius + (Math.random() - 0.5) * 8;
+    }
+    const dustGeometry = new THREE.BufferGeometry();
+    dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+    this.dustMat = new THREE.PointsMaterial({
+      color: '#ffffff', size: 1.15, sizeAttenuation: true, transparent: true,
+      opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    this.dust = new THREE.Points(dustGeometry, this.dustMat);
+    this.root.add(this.dust);
   }
 
   onScaleChange(scale: Scale, intensity: number): void {
@@ -97,8 +119,10 @@ export class CosmosLayer implements SceneLayer {
     fadeMaterial(this.coreMat, this.intensity, dt);
     fadeMaterial(this.fieldMat, this.intensity * fieldWeight, dt);
     fadeMaterial(this.spiralMat, this.intensity * galaxyWeight, dt);
+    fadeMaterial(this.dustMat, this.intensity * galaxyWeight * 0.78, dt);
 
     this.spiral.rotation.y = elapsed * 0.02;
+    this.dust.rotation.y = elapsed * 0.014;
     this.field.rotation.y = elapsed * 0.004;
     const pulse = 1 + Math.sin(elapsed * 1.5) * 0.05;
     this.core.scale.setScalar(pulse);
