@@ -59,9 +59,10 @@ export class EarthLayer implements SceneLayer {
     );
     this.root.add(this.clouds);
 
-    // Soft atmospheric halo: a slightly larger back-faced shell.
+    // A narrow back-faced shell keeps the atmospheric silhouette close to the
+    // horizon, with additive blue light providing a soft outer glow.
     this.atmosphereMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#5aa9ff'),
+      color: new THREE.Color('#168cff'),
       transparent: true,
       opacity: 0,
       side: THREE.BackSide,
@@ -69,7 +70,7 @@ export class EarthLayer implements SceneLayer {
       depthWrite: false,
     });
     this.atmosphere = new THREE.Mesh(
-      new THREE.SphereGeometry(this.radius * 1.06, 48, 48),
+      new THREE.SphereGeometry(this.radius * 1.02, 48, 48),
       this.atmosphereMat,
     );
     this.root.add(this.atmosphere);
@@ -83,7 +84,7 @@ export class EarthLayer implements SceneLayer {
   update(dt: number, _elapsed: number): void {
     fadeMaterial(this.globeMat, this.intensity, dt);
     fadeMaterial(this.cloudMat, this.intensity * 0.7, dt);
-    fadeMaterial(this.atmosphereMat, this.intensity * 0.35, dt);
+    fadeMaterial(this.atmosphereMat, this.intensity * 0.28, dt);
     this.globe.rotation.y += dt * 0.04;
     this.clouds.rotation.y += dt * 0.05;
   }
