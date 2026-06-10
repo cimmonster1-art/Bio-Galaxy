@@ -22,6 +22,7 @@ export interface SceneCallbacks {
   onHover?: (tag: PickTag | null) => void;
   onSelect?: (tag: PickTag | null) => void;
   onScaleSettled?: (scale: Scale) => void;
+  onError?: (error: Error) => void;
 }
 
 /**
@@ -207,6 +208,15 @@ export class BioGalaxyScene {
 
   private tick = (): void => {
     if (!this.running) return;
+    try {
+      this.renderFrame();
+    } catch (error) {
+      this.stop();
+      this.callbacks.onError?.(error instanceof Error ? error : new Error('The 3D scene stopped unexpectedly.'));
+    }
+  };
+
+  private renderFrame(): void {
     const dt = Math.min(this.clock.getDelta(), 0.05);
     const elapsed = this.clock.elapsedTime;
 
@@ -239,7 +249,7 @@ export class BioGalaxyScene {
     }
 
     this.rafId = requestAnimationFrame(this.tick);
-  };
+  }
 
   private applyScale(): void {
     const nearest = this.cameraController.nearestScale;
