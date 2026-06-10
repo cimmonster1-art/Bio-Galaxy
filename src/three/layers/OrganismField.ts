@@ -19,7 +19,6 @@ export class OrganismField implements SceneLayer {
 
   private readonly cloud: THREE.InstancedMesh;
   private readonly cloudMat: THREE.MeshBasicMaterial;
-  private readonly anchorMat: THREE.MeshBasicMaterial;
   private readonly anchors: THREE.Mesh[] = [];
   private readonly centers: THREE.Vector3[] = [];
   private intensity = 0;
@@ -63,8 +62,6 @@ export class OrganismField implements SceneLayer {
 
     this.cloud.instanceMatrix.needsUpdate = true;
     this.root.add(this.cloud);
-
-    this.anchorMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
   }
 
   private addAnchors(group: TaxonGroup, center: THREE.Vector3): void {

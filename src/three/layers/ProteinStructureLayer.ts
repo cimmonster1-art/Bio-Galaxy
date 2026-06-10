@@ -37,7 +37,6 @@ export class ProteinStructureLayer implements SceneLayer {
   private readonly atomMat: THREE.MeshStandardMaterial;
   private readonly bondMat: THREE.LineBasicMaterial;
   private readonly atomScale = new THREE.Group();
-  private readonly atomScaleMat: THREE.MeshBasicMaterial;
   private intensity = 0;
   private currentScale: Scale = Scale.ProteinComplex;
 
@@ -61,8 +60,6 @@ export class ProteinStructureLayer implements SceneLayer {
     this.loadStructure(generateAssembly());
     this.buildAtomScale();
     this.root.add(this.atomScale);
-
-    this.atomScaleMat = this.atomScale.userData.mat as THREE.MeshBasicMaterial;
   }
 
   /** Rebuild the instanced cloud from atom coordinates. Future RCSB hook. */
@@ -116,7 +113,6 @@ export class ProteinStructureLayer implements SceneLayer {
   }
 
   private buildAtomScale(): void {
-    const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
     const nucleus = new THREE.Mesh(
       new THREE.IcosahedronGeometry(1.4, 2),
       new THREE.MeshBasicMaterial({ color: '#ef6b5b', transparent: true, opacity: 0 }),
@@ -147,7 +143,6 @@ export class ProteinStructureLayer implements SceneLayer {
       ring.rotation.y = s * 0.4;
       this.atomScale.add(ring);
     }
-    this.atomScale.userData.mat = mat;
     this.atomScale.visible = false;
   }
 
