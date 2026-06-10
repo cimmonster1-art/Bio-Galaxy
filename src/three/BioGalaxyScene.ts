@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Scale, PickTag } from '../types';
 import { SceneLayer } from './core/SceneLayer';
 import { SceneLightingRig } from './core/SceneLightingRig';
@@ -38,11 +39,13 @@ export class BioGalaxyScene {
 
   private readonly nebula: THREE.Mesh;
   private readonly nebulaMat: THREE.ShaderMaterial;
+  private readonly envTexture: THREE.Texture;
 
   private readonly layers: SceneLayer[];
   private readonly tree: TreeOfLifeLayer;
   private readonly anatomy: AnatomyModelLayer;
   private readonly cell: CellScene;
+  private readonly protein: ProteinStructureLayer;
 
   private hoverTag: PickTag | null = null;
   private readonly clock = new THREE.Clock();
@@ -71,6 +74,13 @@ export class BioGalaxyScene {
 
     this.scene.fog = new THREE.FogExp2(0x02040a, 0.0011);
 
+    // Procedural studio environment for physically based reflections. Generated
+    // once with PMREM, applied to the whole scene, and disposed on teardown.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = this.envTexture;
+    pmrem.dispose();
+
     const bg = createNebulaBackground();
     this.nebula = bg.mesh;
     this.nebulaMat = bg.material;
@@ -83,13 +93,14 @@ export class BioGalaxyScene {
     this.tree = new TreeOfLifeLayer();
     this.anatomy = new AnatomyModelLayer();
     this.cell = new CellScene();
+    this.protein = new ProteinStructureLayer();
     this.layers = [
       this.tree,
       this.anatomy,
       new TissueField(),
       this.cell,
       new OrganelleDetailView(),
-      new ProteinStructureLayer(),
+      this.protein,
     ];
     for (const layer of this.layers) this.scene.add(layer.root);
 
@@ -143,6 +154,17 @@ export class BioGalaxyScene {
   loadOrganismModel(url: string, provenance: ModelProvenance): Promise<boolean> {
     this.start();
     return this.anatomy.loadModel(url, provenance);
+  }
+
+  /** Render a real molecular structure from parsed open PDB coordinates. */
+  setStructure(
+    atoms: { element: string; x: number; y: number; z: number }[] | null,
+    pickId: string,
+  ): void {
+    if (atoms && atoms.length > 0) {
+      this.protein.loadAtoms(atoms, pickId);
+      this.start();
+    }
   }
 
   get organismProvenance(): ModelProvenance {
@@ -274,6 +296,8 @@ export class BioGalaxyScene {
     this.cameraController.controls.removeEventListener('change', this.onControlsChange);
 
     for (const layer of this.layers) layer.dispose();
+    this.scene.environment = null;
+    this.envTexture.dispose();
     this.nebula.geometry.dispose();
     this.nebulaMat.dispose();
     this.lighting.dispose();

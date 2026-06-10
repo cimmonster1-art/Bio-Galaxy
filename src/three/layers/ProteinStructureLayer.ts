@@ -25,7 +25,35 @@ const ELEMENT_COLORS: Record<string, string> = {
   S: '#e6c54a',
   P: '#e6964a',
   H: '#f5f5f5',
+  FE: '#e0793b',
+  MG: '#3bd07a',
+  ZN: '#7d8aa0',
+  CA: '#5fd0c5',
+  NA: '#8f6fe0',
+  CL: '#6fe07a',
 };
+
+// Relative CPK-style radii for ball rendering, normalized to carbon.
+const ELEMENT_RADIUS: Record<string, number> = {
+  H: 0.6,
+  C: 1.0,
+  N: 0.95,
+  O: 0.9,
+  S: 1.2,
+  P: 1.2,
+  FE: 1.4,
+  MG: 1.3,
+  ZN: 1.35,
+  CA: 1.5,
+};
+
+function elementColor(el: string): string {
+  return ELEMENT_COLORS[el.toUpperCase()] ?? '#b0bec5';
+}
+
+function elementRadius(el: string): number {
+  return ELEMENT_RADIUS[el.toUpperCase()] ?? 1.0;
+}
 
 export class ProteinStructureLayer implements SceneLayer {
   readonly root = new THREE.Group();
@@ -62,8 +90,40 @@ export class ProteinStructureLayer implements SceneLayer {
     this.root.add(this.atomScale);
   }
 
-  /** Rebuild the instanced cloud from atom coordinates. Future RCSB hook. */
+  /** Rebuild from the procedural stand-in assembly (scene-unit coordinates). */
   loadStructure(atoms: AtomRecord[]): void {
+    const positions = atoms.map((a) => a.position);
+    const elements = atoms.map((a) => a.element);
+    const scales = elements.map((e) => elementRadius(e));
+    this.buildFromAtoms(positions, elements, scales, 1.7, 'atp_synthase');
+  }
+
+  /**
+   * Render a real structure from open PDB coordinates (centered, in angstroms).
+   * Coordinates and atom radii are scaled together so the ball-and-stick model
+   * stays physically proportioned regardless of the molecule's true size.
+   */
+  loadAtoms(coords: { element: string; x: number; y: number; z: number }[], pickId: string): void {
+    if (coords.length === 0) return;
+    let maxR = 0;
+    for (const c of coords) maxR = Math.max(maxR, Math.hypot(c.x, c.y, c.z));
+    const TARGET_EXTENT = 16;
+    const u = maxR > 0 ? Math.min(0.5, TARGET_EXTENT / maxR) : 0.5;
+
+    const positions = coords.map((c) => new THREE.Vector3(c.x * u, c.y * u, c.z * u));
+    const elements = coords.map((c) => c.element);
+    // atomGeo has radius 0.45; scale each instance to a fraction of its VdW size.
+    const scales = elements.map((e) => (elementRadius(e) * 1.7 * u * 0.62) / 0.45);
+    this.buildFromAtoms(positions, elements, scales, 1.95 * u, pickId);
+  }
+
+  private buildFromAtoms(
+    positions: THREE.Vector3[],
+    elements: string[],
+    scales: number[],
+    bondThreshold: number,
+    pickId: string,
+  ): void {
     // Geometry and material are shared and owned by the layer, so on rebuild we
     // only detach the previous instanced mesh; bonds own their own geometry.
     if (this.atoms) {
@@ -75,40 +135,25 @@ export class ProteinStructureLayer implements SceneLayer {
       this.root.remove(this.bonds);
     }
 
-    const mesh = new THREE.InstancedMesh(this.atomGeo, this.atomMat, atoms.length);
-    mesh.instanceColor = new THREE.InstancedBufferAttribute(
-      new Float32Array(atoms.length * 3),
-      3,
-    );
+    const mesh = new THREE.InstancedMesh(this.atomGeo, this.atomMat, positions.length);
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(positions.length * 3), 3);
     const dummy = new THREE.Object3D();
     const color = new THREE.Color();
-    atoms.forEach((atom, i) => {
-      dummy.position.copy(atom.position);
-      dummy.scale.setScalar(atom.element === 'H' ? 0.6 : 1);
+    positions.forEach((p, i) => {
+      dummy.position.copy(p);
+      dummy.scale.setScalar(scales[i]);
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
-      color.set(ELEMENT_COLORS[atom.element] ?? '#cfd8dc');
+      color.set(elementColor(elements[i]));
       mesh.setColorAt(i, color);
     });
     mesh.instanceMatrix.needsUpdate = true;
-    mesh.userData.pick = { id: 'atp_synthase', scale: Scale.ProteinComplex };
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.userData.pick = { id: pickId, scale: Scale.ProteinComplex };
     this.atoms = mesh;
     this.root.add(mesh);
 
-    // Bonds between nearby atoms.
-    const segs: number[] = [];
-    for (let i = 0; i < atoms.length; i++) {
-      for (let j = i + 1; j < atoms.length; j++) {
-        if (atoms[i].position.distanceTo(atoms[j].position) < 1.7) {
-          const a = atoms[i].position;
-          const b = atoms[j].position;
-          segs.push(a.x, a.y, a.z, b.x, b.y, b.z);
-        }
-      }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(segs), 3));
-    this.bonds = new THREE.LineSegments(geo, this.bondMat);
+    this.bonds = new THREE.LineSegments(buildBonds(positions, bondThreshold), this.bondMat);
     this.root.add(this.bonds);
   }
 
@@ -179,6 +224,52 @@ export class ProteinStructureLayer implements SceneLayer {
     this.atomGeo.dispose();
     disposeObject(this.root);
   }
+}
+
+/**
+ * Build bond line segments between atoms closer than a threshold, using a
+ * uniform spatial grid so the cost stays roughly linear even for large
+ * structures (the naive all-pairs scan is quadratic and janks the frame).
+ */
+function buildBonds(positions: THREE.Vector3[], threshold: number): THREE.BufferGeometry {
+  const segs: number[] = [];
+  const cell = Math.max(threshold, 0.0001);
+  const grid = new Map<string, number[]>();
+  const key = (x: number, y: number, z: number): string =>
+    `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
+
+  positions.forEach((p, i) => {
+    const k = key(p.x, p.y, p.z);
+    const bucket = grid.get(k);
+    if (bucket) bucket.push(i);
+    else grid.set(k, [i]);
+  });
+
+  const t2 = threshold * threshold;
+  positions.forEach((p, i) => {
+    const cx = Math.floor(p.x / cell);
+    const cy = Math.floor(p.y / cell);
+    const cz = Math.floor(p.z / cell);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const bucket = grid.get(`${cx + dx},${cy + dy},${cz + dz}`);
+          if (!bucket) continue;
+          for (const j of bucket) {
+            if (j <= i) continue;
+            const q = positions[j];
+            if (p.distanceToSquared(q) < t2) {
+              segs.push(p.x, p.y, p.z, q.x, q.y, q.z);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(segs), 3));
+  return geo;
 }
 
 /** Procedural stand-in assembly: a compact helical cluster of atoms. */

@@ -2,11 +2,18 @@ import React, { useEffect, useRef } from 'react';
 import { Scale, PickTag } from '../types';
 import { BioGalaxyScene } from '../three/BioGalaxyScene';
 
+export interface StructurePayload {
+  atoms: { element: string; x: number; y: number; z: number }[];
+  pickId: string;
+}
+
 interface Props {
   scale: Scale;
   selectedId: string | null;
   /** Taxon id (with `taxon:` prefix) to focus in the Tree of Life. */
   focusTaxonId?: string | null;
+  /** Parsed PDB coordinates to render at the molecular scale. */
+  structure?: StructurePayload | null;
   onHover: (tag: PickTag | null) => void;
   onSelect: (tag: PickTag | null) => void;
   onScaleSettled: (scale: Scale) => void;
@@ -21,6 +28,7 @@ export const BioGalaxyCanvas: React.FC<Props> = ({
   scale,
   selectedId,
   focusTaxonId = null,
+  structure = null,
   onHover,
   onSelect,
   onScaleSettled,
@@ -59,6 +67,10 @@ export const BioGalaxyCanvas: React.FC<Props> = ({
   useEffect(() => {
     sceneRef.current?.setFocusTaxon(focusTaxonId);
   }, [focusTaxonId]);
+
+  useEffect(() => {
+    if (structure) sceneRef.current?.setStructure(structure.atoms, structure.pickId);
+  }, [structure]);
 
   return <div ref={containerRef} className="absolute inset-0" />;
 };

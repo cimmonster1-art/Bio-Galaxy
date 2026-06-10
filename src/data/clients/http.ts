@@ -123,6 +123,49 @@ async function fetchOnce<T>(url: string, opts: RequestOptions): Promise<T> {
   }
 }
 
+/** Fetch plain text with timeout, retry, and error normalization. */
+export async function getText(url: string, opts: RequestOptions = {}): Promise<string> {
+  const { cacheMs = 0, retries = 1, signal, timeoutMs = DEFAULT_TIMEOUT, headers } = opts;
+
+  if (cacheMs > 0) {
+    const cached = readCache<string>(url);
+    if (cached !== undefined) return cached;
+  }
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (signal?.aborted) throw new ApiError('Request aborted', undefined, url);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const onAbort = (): void => controller.abort();
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+    try {
+      const res = await fetch(url, { headers: { ...headers }, signal: controller.signal });
+      if (!res.ok) throw new ApiError(`Request failed (${res.status})`, res.status, url);
+      const text = await res.text();
+      if (cacheMs > 0) cache.set(url, { expires: Date.now() + cacheMs, value: text });
+      return text;
+    } catch (err) {
+      lastError =
+        err instanceof ApiError
+          ? err
+          : err instanceof DOMException && err.name === 'AbortError'
+            ? new ApiError('Request timed out', undefined, url)
+            : new ApiError(err instanceof Error ? err.message : 'Network error', undefined, url);
+      if (signal?.aborted) throw lastError;
+      if (attempt < retries && isTransient(lastError)) {
+        await delay(250 * 2 ** attempt);
+        continue;
+      }
+      throw lastError;
+    } finally {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+    }
+  }
+  throw lastError;
+}
+
 /** Clear the shared response cache. Exposed mainly for tests and dev tooling. */
 export function clearApiCache(): void {
   cache.clear();
