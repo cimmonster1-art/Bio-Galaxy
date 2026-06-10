@@ -1,18 +1,42 @@
 # Bio Galaxy
 
-Bio Galaxy is an open-source 3D biological atlas that navigates from cosmic scale to atoms.
+> Bio Galaxy is an open-source, interactive 3D biological atlas that connects 22 scales from the observable cosmos to individual atoms through one continuous spatial interface.
 
-## Primary pages
-- /: Interactive landing page and atlas entry
-- /README.md: Architecture, data integrations, provenance, and local development
+Bio Galaxy is a source-aware educational visualization built with React, TypeScript, Three.js, and WebGL. It combines purpose-built scene layers with typed clients for respected public scientific databases. The result is an explorable map of biological context rather than a collection of disconnected diagrams.
 
-## Live biological integrations
-UniProt, Reactome, RCSB Protein Data Bank, Ensembl, Human Protein Atlas, and NCBI Taxonomy/E-utilities. These public endpoints are key free and accessed through typed clients and a same-origin server cache.
+## Why Bio Galaxy is technically distinctive
 
-## Attribution
-Planetary imagery includes NASA Visible Earth and Planet Pixel Emporium assets. Organism models include Khronos glTF Sample Models, CesiumMan, and three.js example assets. Swiss Ephemeris, NASA/JPL Horizons, and Z-Anatomy are labeled as compatible reference ecosystems, not live data integrations.
+- One scale navigator links cosmos, galaxy, Solar System, Earth, the Tree of Life, taxonomic ranks, organism, anatomy, tissue, cell, organelle, protein complex, molecule, and atom views.
+- Independent Three.js `SceneLayer` modules own their geometry, animation, visibility, interaction, and cleanup.
+- Repeated biological and cosmic objects use instanced rendering, while post-processing and performance controls protect frame rate.
+- Real RCSB PDB coordinates become interactive ball-and-stick molecular structures at protein, molecule, and atom scales.
+- Every database-backed record identifies its source in the interface.
+- Typed data clients normalize failures and route requests through an allowlisted, same-origin cache. No API keys or user secrets are accepted.
 
-## Notes for models
-- Content is educational and is not medical or diagnostic guidance.
-- Scale and orbital distances are compressed for legibility.
-- Database-backed records name their source in the interface.
+## Live public scientific integrations
+
+- UniProt: curated protein sequence, function, accessions, and cross references
+- Reactome: peer-reviewed pathways, reactions, and molecular participants
+- RCSB Protein Data Bank: experimentally determined macromolecular structures and coordinates
+- Ensembl: genes, transcripts, and genomic context
+- Human Protein Atlas: tissue, cell, and protein expression
+- NCBI Taxonomy and E-utilities: taxonomy identifiers, lineage, literature, and source links
+
+## Open visualization and asset ecosystem
+
+Bio Galaxy uses Three.js and glTF as its rendering foundation. Its astronomical and organism-scale context includes credited open assets from NASA Visible Earth, Planet Pixel Emporium, Khronos glTF Sample Models, CesiumMan, and three.js example assets. Swiss Ephemeris, NASA/JPL Horizons, and Z-Anatomy are labeled as compatible reference ecosystems, not claimed as live integrations.
+
+## Primary resources
+
+- `/`: Interactive landing page and 3D atlas entry
+- `/README.md`: Architecture, scale ladder, data provenance, setup, and SEO deployment notes
+- `/robots.txt`: Search crawler policy
+- `/sitemap.xml`: Canonical page discovery
+- `/site.webmanifest`: Installable web application metadata
+
+## Important interpretation notes
+
+- Bio Galaxy is educational software, not medical or diagnostic guidance.
+- Scale and orbital distances are compressed for visual legibility.
+- Public data providers remain the authoritative sources for their records.
+- JavaScript and WebGL are required for the interactive visualization; semantic metadata and fallback copy describe it to non-visual clients.
