@@ -94,9 +94,43 @@ export class AnatomyModelLayer implements SceneLayer {
   }
 
   private organ(id: string, group: THREE.Group, geometry: THREE.BufferGeometry, position: [number, number, number], color: string, scale: [number, number, number] = [1, 1, 1]): THREE.Mesh {
-    const mat = new THREE.MeshPhysicalMaterial({ color, roughness: .48, clearcoat: .35, transparent: true, opacity: .92, emissive: new THREE.Color(color).multiplyScalar(.08) });
+    // Wet, fleshy organ surface: clearcoat for a moist sheen, sheen for soft
+    // back-scatter, and a faint self-emissive so organs read in the dim atlas.
+    const mat = new THREE.MeshPhysicalMaterial({
+      color,
+      roughness: .42,
+      clearcoat: .6,
+      clearcoatRoughness: .35,
+      sheen: .6,
+      sheenColor: new THREE.Color(color),
+      sheenRoughness: .5,
+      transparent: true,
+      opacity: .92,
+      emissive: new THREE.Color(color).multiplyScalar(.12),
+      emissiveIntensity: .4,
+      envMapIntensity: 1.1,
+    });
     const mesh = new THREE.Mesh(geometry, mat); mesh.position.set(...position); mesh.scale.set(...scale); mesh.userData.pick = { id, scale: Scale.Organ };
     group.add(mesh); this.pickables.push(mesh); return mesh;
+  }
+
+  /** A glowing vessel/nerve swept as a smooth tube along a path of control points. */
+  private vessel(id: string, group: THREE.Group, points: THREE.Vector3[], color: string, radius = .12): THREE.Mesh {
+    const curve = new THREE.CatmullRomCurve3(points);
+    const geo = new THREE.TubeGeometry(curve, Math.max(24, points.length * 8), radius, 8, false);
+    const mat = new THREE.MeshStandardMaterial({
+      color,
+      emissive: new THREE.Color(color),
+      emissiveIntensity: .55,
+      roughness: .5,
+      metalness: .05,
+      transparent: true,
+      opacity: .82,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.pick = { id, scale: Scale.OrganSystem };
+    group.add(mesh);
+    return mesh;
   }
 
   private buildSkeleton(): void {
@@ -107,11 +141,38 @@ export class AnatomyModelLayer implements SceneLayer {
     for (let y=3; y<9; y+=1.1) { const curve = new THREE.EllipseCurve(0, y, 3.2-(y-5)*.12, 1.1, 0, Math.PI*2); const pts=curve.getPoints(28).map(p=>new THREE.Vector3(p.x,p.y,-.25)); g.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({color:'#e8e1cf',transparent:true,opacity:.55}))); }
   }
 
-  private buildNervous(): void { const g=this.system('system:nervous'); this.organ('organ:brain',g,new THREE.SphereGeometry(1.9,28,20),[0,12,0],'#f5b8c8',[1,.82,.86]); this.organ('system:nervous',g,new THREE.CylinderGeometry(.18,.28,12,12),[0,4.3,-.2],'#ffd65a'); }
-  private buildCardiovascular(): void { const g=this.system('system:cardiovascular'); const h=this.organ('organ:heart',g,new THREE.SphereGeometry(1.2,24,20),[-.8,4.7,1.7],'#ff4058',[.85,1.2,.75]); this.animated.push({object:h,base:1,speed:4.6}); const mat=new THREE.LineBasicMaterial({color:'#ff596d',transparent:true,opacity:.72}); const pts=[new THREE.Vector3(-.8,5,1),new THREE.Vector3(0,2,1),new THREE.Vector3(0,-5,.5),new THREE.Vector3(-2,-13,0),new THREE.Vector3(0,-5,.5),new THREE.Vector3(2,-13,0),new THREE.Vector3(0,5,1),new THREE.Vector3(-5,1,0),new THREE.Vector3(0,5,1),new THREE.Vector3(5,1,0)]; g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),mat)); }
-  private buildRespiratory(): void { const g=this.system('system:respiratory'); this.organ('organ:lungs',g,new THREE.SphereGeometry(1.8,24,20),[-2,5,.4],'#79d6df',[.85,1.55,.6]); this.organ('organ:lungs',g,new THREE.SphereGeometry(1.8,24,20),[2,5,.4],'#79d6df',[.85,1.55,.6]); this.organ('system:respiratory',g,new THREE.CylinderGeometry(.28,.42,5,12),[0,9,.4],'#78dce8'); }
-  private buildDigestive(): void { const g=this.system('system:digestive'); this.organ('organ:liver',g,new THREE.SphereGeometry(1.8,24,18),[1.5,1.7,1.5],'#9d503f',[1.6,.65,.75]); this.organ('organ:stomach',g,new THREE.SphereGeometry(1.25,22,18),[-1.25,.4,1.7],'#e59b69',[1,.8,.72]); const gut=this.organ('organ:intestines',g,new THREE.TorusKnotGeometry(1.45,.3,90,10,2,3),[0,-2.6,1.3],'#d88961',[1.5,1.7,.55]); gut.rotation.x=.25; }
-  private buildUrinary(): void { const g=this.system('system:urinary'); this.organ('organ:kidneys',g,new THREE.SphereGeometry(.75,20,16),[-1.65,-.2,.2],'#a45b73',[.7,1.35,.55]); this.organ('organ:kidneys',g,new THREE.SphereGeometry(.75,20,16),[1.65,-.2,.2],'#a45b73',[.7,1.35,.55]); }
+  private buildNervous(): void {
+    const g = this.system('system:nervous');
+    this.organ('organ:brain', g, new THREE.SphereGeometry(1.9, 40, 32), [0, 12, 0], '#f5b8c8', [1, .82, .86]);
+    // Spinal cord as a smooth cord, with peripheral nerves branching as tubes.
+    this.vessel('system:nervous', g, [
+      new THREE.Vector3(0, 10, -.2), new THREE.Vector3(0, 6, -.3),
+      new THREE.Vector3(0, 1, -.2), new THREE.Vector3(0, -3, -.1),
+    ], '#ffd65a', .2);
+    const nerve = (pts: THREE.Vector3[]) => this.vessel('system:nervous', g, pts, '#ffe08a', .07);
+    nerve([new THREE.Vector3(0, 6, -.3), new THREE.Vector3(-3.5, 5.5, 0), new THREE.Vector3(-5.5, 2, 0)]);
+    nerve([new THREE.Vector3(0, 6, -.3), new THREE.Vector3(3.5, 5.5, 0), new THREE.Vector3(5.5, 2, 0)]);
+    nerve([new THREE.Vector3(0, -3, -.1), new THREE.Vector3(-2, -8, 0), new THREE.Vector3(-2, -13, 0)]);
+    nerve([new THREE.Vector3(0, -3, -.1), new THREE.Vector3(2, -8, 0), new THREE.Vector3(2, -13, 0)]);
+  }
+  private buildCardiovascular(): void {
+    const g = this.system('system:cardiovascular');
+    const h = this.organ('organ:heart', g, new THREE.SphereGeometry(1.2, 32, 26), [-.8, 4.7, 1.7], '#ff4058', [.85, 1.2, .75]);
+    this.animated.push({ object: h, base: 1, speed: 4.6 });
+    // Aorta and major arteries as glowing red tubes; venous return in blue.
+    const artery = (pts: THREE.Vector3[]) => this.vessel('system:cardiovascular', g, pts, '#ff5066', .13);
+    const vein = (pts: THREE.Vector3[]) => this.vessel('system:cardiovascular', g, pts, '#4f78d6', .11);
+    artery([new THREE.Vector3(-.8, 5.4, 1), new THREE.Vector3(0, 6.4, .6), new THREE.Vector3(0, 2, .8), new THREE.Vector3(0, -4, .5)]);
+    artery([new THREE.Vector3(0, -4, .5), new THREE.Vector3(-2, -9, .2), new THREE.Vector3(-2, -13, 0)]);
+    artery([new THREE.Vector3(0, -4, .5), new THREE.Vector3(2, -9, .2), new THREE.Vector3(2, -13, 0)]);
+    artery([new THREE.Vector3(0, 5.5, .8), new THREE.Vector3(-3.5, 4.5, .4), new THREE.Vector3(-5, 1, 0)]);
+    artery([new THREE.Vector3(0, 5.5, .8), new THREE.Vector3(3.5, 4.5, .4), new THREE.Vector3(5, 1, 0)]);
+    vein([new THREE.Vector3(-2, -13, .2), new THREE.Vector3(-1.4, -6, .6), new THREE.Vector3(-.4, 4.4, 1.2)]);
+    vein([new THREE.Vector3(2, -13, .2), new THREE.Vector3(1.4, -6, .6), new THREE.Vector3(-.4, 4.4, 1.2)]);
+  }
+  private buildRespiratory(): void { const g=this.system('system:respiratory'); this.organ('organ:lungs',g,new THREE.SphereGeometry(1.8,32,26),[-2,5,.4],'#79d6df',[.85,1.55,.6]); this.organ('organ:lungs',g,new THREE.SphereGeometry(1.8,32,26),[2,5,.4],'#79d6df',[.85,1.55,.6]); this.vessel('system:respiratory',g,[new THREE.Vector3(0,10.5,.4),new THREE.Vector3(0,7.5,.4),new THREE.Vector3(0,6.2,.4)],'#78dce8',.34); this.vessel('system:respiratory',g,[new THREE.Vector3(0,6.4,.4),new THREE.Vector3(-1.2,5.6,.4),new THREE.Vector3(-2,5,.4)],'#78dce8',.16); this.vessel('system:respiratory',g,[new THREE.Vector3(0,6.4,.4),new THREE.Vector3(1.2,5.6,.4),new THREE.Vector3(2,5,.4)],'#78dce8',.16); }
+  private buildDigestive(): void { const g=this.system('system:digestive'); this.organ('organ:liver',g,new THREE.SphereGeometry(1.8,32,24),[1.5,1.7,1.5],'#9d503f',[1.6,.65,.75]); this.organ('organ:stomach',g,new THREE.SphereGeometry(1.25,28,22),[-1.25,.4,1.7],'#e59b69',[1,.8,.72]); this.organ('organ:pancreas',g,new THREE.CapsuleGeometry(.32,1.6,8,14),[.2,.1,1.4],'#d8a85a',[1,1,1]).rotation.z=.5; this.organ('organ:spleen',g,new THREE.SphereGeometry(.7,24,18),[-2.4,1.1,1],'#7d3a52',[1,1.3,.7]); const gut=this.organ('organ:intestines',g,new THREE.TorusKnotGeometry(1.45,.3,128,12,2,3),[0,-2.6,1.3],'#d88961',[1.5,1.7,.55]); gut.rotation.x=.25; }
+  private buildUrinary(): void { const g=this.system('system:urinary'); this.organ('organ:kidneys',g,new THREE.SphereGeometry(.75,28,20),[-1.65,-.2,.2],'#a45b73',[.7,1.35,.55]); this.organ('organ:kidneys',g,new THREE.SphereGeometry(.75,28,20),[1.65,-.2,.2],'#a45b73',[.7,1.35,.55]); this.organ('organ:bladder',g,new THREE.SphereGeometry(.8,24,18),[0,-6.5,1],'#c9a24a',[1,.85,.85]); this.vessel('system:urinary',g,[new THREE.Vector3(-1.65,-.6,.2),new THREE.Vector3(-.8,-3.5,.6),new THREE.Vector3(0,-6,1)],'#caa657',.06); this.vessel('system:urinary',g,[new THREE.Vector3(1.65,-.6,.2),new THREE.Vector3(.8,-3.5,.6),new THREE.Vector3(0,-6,1)],'#caa657',.06); }
 
   private prepareBodyMaterials(object: THREE.Object3D): void {
     object.traverse((child) => {

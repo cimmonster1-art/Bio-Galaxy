@@ -5,12 +5,15 @@ import { disposeObject } from '../core/dispose';
 import { createBumpTexture } from '../textures/proceduralTextures';
 import {
   Pickable,
+  buildCentriole,
   buildCytoskeleton,
   buildER,
   buildGolgi,
+  buildLysosome,
   buildMembrane,
   buildMitochondrion,
   buildNucleus,
+  buildPeroxisome,
   buildRibosomes,
   buildVesicles,
 } from './cell/builders';
@@ -51,9 +54,14 @@ export class CellScene implements SceneLayer {
     this.place(er, new THREE.Vector3(0, 0, 0));
 
     // Scatter the discrete organelles around the cytoplasm.
-    this.placeMany(() => buildMitochondrion(this.bump), 4, 10);
+    this.placeMany(() => buildMitochondrion(this.bump), 5, 10);
     this.place(buildGolgi(this.bump), new THREE.Vector3(-9, -4, 3));
     this.place(buildCytoskeleton(this.radius), new THREE.Vector3(0, 0, 0));
+
+    // Smaller specialized bodies add detail without crowding the interior.
+    this.placeMany(() => buildLysosome(this.bump), 3, 8);
+    this.placeMany(() => buildPeroxisome(this.bump), 3, 12);
+    this.place(buildCentriole(), new THREE.Vector3(7, 6, -4));
 
     this.vesicles = buildVesicles(40, this.radius);
     this.place(this.vesicles, new THREE.Vector3(0, 0, 0));

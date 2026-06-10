@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Scale } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
+import { createGlowTexture } from '../textures/proceduralTextures';
 
 /**
  * The cosmic backdrop: a luminous core standing in for the Big Bang and
@@ -9,6 +10,11 @@ import { disposeObject } from '../core/dispose';
  * resolves as the camera approaches the galaxy scale. Instanced throughout so
  * thousands of points cost only a couple of draw calls. Not pickable; it sets
  * the stage above the solar system.
+ *
+ * When the history cutscene plays, the core erupts into a Big Bang: a blinding
+ * singularity flash, an expanding recombination shock ring, and a burst of
+ * primordial shards that fly outward and cool, all keyed to cinematic progress so
+ * the opening epoch reads as a directed sequence rather than a static backdrop.
  */
 export class CosmosLayer implements SceneLayer {
   readonly root = new THREE.Group();
@@ -23,12 +29,26 @@ export class CosmosLayer implements SceneLayer {
   private readonly dust: THREE.Points;
   private readonly dustMat: THREE.PointsMaterial;
 
+  // Big Bang cutscene elements.
+  private readonly bang = new THREE.Group();
+  private readonly flash: THREE.Sprite;
+  private readonly flashMat: THREE.SpriteMaterial;
+  private readonly shock: THREE.Mesh;
+  private readonly shockMat: THREE.MeshBasicMaterial;
+  private readonly shards: THREE.Points;
+  private readonly shardMat: THREE.PointsMaterial;
+  private readonly shardDirs: Float32Array;
+  private readonly shardGeo: THREE.BufferGeometry;
+  private readonly glowTex: THREE.Texture;
+  private cinematic: number | null = null;
+
   private intensity = 0;
   private currentScale: Scale = Scale.Cosmos;
 
   constructor() {
     this.root.name = 'CosmosLayer';
     this.root.visible = false;
+    this.glowTex = createGlowTexture(256);
 
     // Bright core: the Big Bang origin and, later, the galactic center.
     this.coreMat = new THREE.MeshBasicMaterial({
@@ -104,12 +124,75 @@ export class CosmosLayer implements SceneLayer {
     });
     this.dust = new THREE.Points(dustGeometry, this.dustMat);
     this.root.add(this.dust);
+
+    // ---- Big Bang cutscene rig (hidden until the cinematic drives it) -------
+    this.bang.visible = false;
+    this.root.add(this.bang);
+
+    this.flashMat = new THREE.SpriteMaterial({
+      map: this.glowTex,
+      color: new THREE.Color('#fff6e0'),
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.flash = new THREE.Sprite(this.flashMat);
+    this.flash.scale.setScalar(1);
+    this.bang.add(this.flash);
+
+    // Recombination shock: a thin ring that expands outward from the origin.
+    this.shockMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#9ec9ff'),
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.shock = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 96), this.shockMat);
+    this.bang.add(this.shock);
+
+    // Primordial shards: points that fly outward and cool from white to amber.
+    const shardCount = 1400;
+    const shardPos = new Float32Array(shardCount * 3);
+    this.shardDirs = new Float32Array(shardCount * 3);
+    const shardCol = new Float32Array(shardCount * 3);
+    for (let i = 0; i < shardCount; i++) {
+      const d = randomDir();
+      this.shardDirs[i * 3] = d.x;
+      this.shardDirs[i * 3 + 1] = d.y;
+      this.shardDirs[i * 3 + 2] = d.z;
+      shardCol[i * 3] = 1;
+      shardCol[i * 3 + 1] = 1;
+      shardCol[i * 3 + 2] = 1;
+    }
+    this.shardGeo = new THREE.BufferGeometry();
+    this.shardGeo.setAttribute('position', new THREE.BufferAttribute(shardPos, 3));
+    this.shardGeo.setAttribute('color', new THREE.BufferAttribute(shardCol, 3));
+    this.shardMat = new THREE.PointsMaterial({
+      map: this.glowTex,
+      size: 2.4,
+      sizeAttenuation: true,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.shards = new THREE.Points(this.shardGeo, this.shardMat);
+    this.bang.add(this.shards);
+  }
+
+  /** Drive the Big Bang sequence from the history cutscene (null = idle). */
+  setCinematic(progress: number | null): void {
+    this.cinematic = progress;
   }
 
   onScaleChange(scale: Scale, intensity: number): void {
     this.currentScale = scale;
     this.intensity = intensity;
-    this.root.visible = intensity > 0.01;
+    this.root.visible = intensity > 0.01 || this.cinematic !== null;
   }
 
   update(dt: number, elapsed: number): void {
@@ -126,6 +209,54 @@ export class CosmosLayer implements SceneLayer {
     this.field.rotation.y = elapsed * 0.004;
     const pulse = 1 + Math.sin(elapsed * 1.5) * 0.05;
     this.core.scale.setScalar(pulse);
+
+    this.updateBigBang(elapsed);
+  }
+
+  /**
+   * Choreograph the opening epoch. The first slice of the timeline (0 → ~7%) is
+   * the Big Bang: an instant singularity flash, then an expanding shock and a
+   * burst of shards that cool as the universe expands.
+   */
+  private updateBigBang(elapsed: number): void {
+    if (this.cinematic === null) {
+      this.bang.visible = false;
+      fadeMaterial(this.flashMat, 0, 0.1);
+      fadeMaterial(this.shockMat, 0, 0.1);
+      fadeMaterial(this.shardMat, 0, 0.1);
+      return;
+    }
+    this.bang.visible = true;
+    // Local time within the opening epoch, 0..1.
+    const t = THREE.MathUtils.clamp(this.cinematic / 0.07, 0, 1);
+
+    // Singularity flash: blinding at t=0, fading fast as space expands.
+    const flashGlow = Math.pow(1 - t, 2.2);
+    this.flashMat.opacity = flashGlow;
+    this.flash.scale.setScalar(4 + Math.sin(elapsed * 30) * 0.4 + t * 18);
+
+    // Shock ring expands outward and thins.
+    const shockR = 1 + t * 220;
+    this.shock.scale.setScalar(shockR);
+    this.shock.rotation.x = Math.PI / 2 + Math.sin(elapsed * 0.2) * 0.05;
+    this.shockMat.opacity = Math.sin(t * Math.PI) * 0.7;
+
+    // Shards stream outward and redshift from white toward amber, then dim.
+    const pos = this.shardGeo.attributes.position as THREE.BufferAttribute;
+    const col = this.shardGeo.attributes.color as THREE.BufferAttribute;
+    const reach = t * 320;
+    const cool = THREE.MathUtils.clamp(t * 1.4, 0, 1);
+    for (let i = 0; i < pos.count; i++) {
+      const dx = this.shardDirs[i * 3];
+      const dy = this.shardDirs[i * 3 + 1];
+      const dz = this.shardDirs[i * 3 + 2];
+      const jitter = 0.6 + ((i % 7) / 7) * 0.8;
+      pos.setXYZ(i, dx * reach * jitter, dy * reach * jitter, dz * reach * jitter);
+      col.setXYZ(i, 1, 1 - cool * 0.35, 1 - cool * 0.7);
+    }
+    pos.needsUpdate = true;
+    col.needsUpdate = true;
+    this.shardMat.opacity = Math.sin(THREE.MathUtils.clamp(t * 1.2, 0, 1) * Math.PI) * 0.9;
   }
 
   getPickables(): THREE.Object3D[] {
@@ -133,6 +264,7 @@ export class CosmosLayer implements SceneLayer {
   }
 
   dispose(): void {
+    this.glowTex.dispose();
     disposeObject(this.root);
   }
 }
