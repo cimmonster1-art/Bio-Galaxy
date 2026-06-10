@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { ArrowDown, ArrowRight, Database, X } from 'lucide-react';
+import { ArrowDown, ArrowRight, Database, Layers3, Server, X } from 'lucide-react';
 import { Scale } from '../types';
 import { DATA_SOURCE_ORDER, getSource } from '../data/sources';
 import { BioGalaxyCanvas } from './BioGalaxyCanvas';
