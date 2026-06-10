@@ -7,6 +7,12 @@ export interface StructurePayload {
   pickId: string;
 }
 
+export interface OrganismModelRequest {
+  url: string;
+  label: string;
+  sourceUrl?: string;
+}
+
 interface Props {
   scale: Scale;
   selectedId: string | null;
@@ -14,9 +20,13 @@ interface Props {
   focusTaxonId?: string | null;
   /** Parsed PDB coordinates to render at the molecular scale. */
   structure?: StructurePayload | null;
+  /** Open organism model to load at the anatomy scale. */
+  organismModel?: OrganismModelRequest | null;
   onHover: (tag: PickTag | null) => void;
   onSelect: (tag: PickTag | null) => void;
   onScaleSettled: (scale: Scale) => void;
+  /** Reports whether an organism model loaded or fell back to procedural. */
+  onModelResult?: (ok: boolean) => void;
 }
 
 /**
@@ -29,16 +39,18 @@ export const BioGalaxyCanvas: React.FC<Props> = ({
   selectedId,
   focusTaxonId = null,
   structure = null,
+  organismModel = null,
   onHover,
   onSelect,
   onScaleSettled,
+  onModelResult,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<BioGalaxyScene | null>(null);
 
   // Keep the latest callbacks without re-creating the scene.
-  const cbRef = useRef({ onHover, onSelect, onScaleSettled });
-  cbRef.current = { onHover, onSelect, onScaleSettled };
+  const cbRef = useRef({ onHover, onSelect, onScaleSettled, onModelResult });
+  cbRef.current = { onHover, onSelect, onScaleSettled, onModelResult };
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -71,6 +83,23 @@ export const BioGalaxyCanvas: React.FC<Props> = ({
   useEffect(() => {
     if (structure) sceneRef.current?.setStructure(structure.atoms, structure.pickId);
   }, [structure]);
+
+  useEffect(() => {
+    if (!organismModel) return;
+    let active = true;
+    sceneRef.current
+      ?.loadOrganismModel(organismModel.url, {
+        label: organismModel.label,
+        url: organismModel.sourceUrl,
+        external: false,
+      })
+      .then((ok) => {
+        if (active) cbRef.current.onModelResult?.(ok);
+      });
+    return () => {
+      active = false;
+    };
+  }, [organismModel]);
 
   return <div ref={containerRef} className="absolute inset-0" />;
 };

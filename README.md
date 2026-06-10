@@ -44,6 +44,8 @@ src/
     clients/             NCBI Taxonomy, UniProt, Reactome, RCSB, Ensembl, HPA,
                          NCBI wrappers (timeout, retry, cache, normalization)
     taxonomy.ts          curated Tree of Life with NCBI tax ids
+    modelCatalog.ts      open-source organism glTF models hosted on GitHub
+    search.ts            global atlas search source
     registry.ts          curated subcellular objects
     scales.ts            the 18-step scale ladder
   components/            React shell, panels, and UI primitives
@@ -51,9 +53,16 @@ src/
 ```
 
 Scene logic is kept separate from the React UI panels, and API clients are kept
-separate from the rendering layers. Organism anatomy is loaded through a
-GLTF/GLB/FBX loader architecture (with a procedural fallback) so open models
-such as Z-Anatomy can be dropped in with cited provenance.
+separate from the rendering layers.
+
+Real 3D models are integrated at two scales:
+
+- Organism: open glTF meshes hosted on GitHub (three.js example animals and the
+  Khronos CC0 Fox) load at the organism scale with animation and cited
+  repository and license. The GLTF/GLB/FBX loader architecture and procedural
+  fallback let other open models (such as Z-Anatomy) drop in the same way.
+- Molecular: real RCSB PDB coordinate files are fetched and parsed into a live
+  ball-and-stick model at the protein, molecule, and atom scales.
 
 ## Run locally
 
