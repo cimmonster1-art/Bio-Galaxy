@@ -119,7 +119,103 @@ export function buildNucleus(radius: number, bump?: THREE.Texture): Pickable {
   nucleolus.position.set(radius * 0.2, -radius * 0.1, radius * 0.15);
   group.add(nucleolus);
 
+  // Nuclear pores: small rings studding the envelope where transport crosses it.
+  const poreMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#bfe4ff'),
+    emissive: new THREE.Color('#2b5b7d'),
+    emissiveIntensity: 0.5,
+    roughness: 0.5,
+  });
+  const poreGeo = new THREE.TorusGeometry(radius * 0.07, radius * 0.022, 8, 16);
+  for (let i = 0; i < 26; i++) {
+    const dir = randomInSphere(1).normalize();
+    const pore = new THREE.Mesh(poreGeo, poreMat);
+    pore.position.copy(dir.clone().multiplyScalar(radius));
+    pore.lookAt(dir.clone().multiplyScalar(radius * 2));
+    group.add(pore);
+  }
+
   return tag(group, 'nucleus');
+}
+
+/** Lysosome: an acidic vesicle holding a haze of digestive enzymes. */
+export function buildLysosome(bump?: THREE.Texture): Pickable {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(0.9, 28, 24),
+    jelly({ color: '#b65fd0', emissive: '#3a1248', transmission: 0.22, roughness: 0.3, bump, opacity: 0.95 }),
+  );
+  group.add(body);
+  // Granular enzyme load inside.
+  const enzymeGeo = new THREE.IcosahedronGeometry(0.07, 0);
+  const enzymeMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#f0c8ff'),
+    emissive: new THREE.Color('#5a2a6e'),
+    emissiveIntensity: 0.5,
+    roughness: 0.6,
+  });
+  const enzymes = new THREE.InstancedMesh(enzymeGeo, enzymeMat, 24);
+  const dummy = new THREE.Object3D();
+  for (let i = 0; i < 24; i++) {
+    dummy.position.copy(randomInSphere(0.6));
+    dummy.scale.setScalar(0.6 + Math.random() * 0.8);
+    dummy.updateMatrix();
+    enzymes.setMatrixAt(i, dummy.matrix);
+  }
+  enzymes.instanceMatrix.needsUpdate = true;
+  group.add(enzymes);
+  return tag(group, 'lysosome');
+}
+
+/** Peroxisome: a small body with a dense crystalline urate core. */
+export function buildPeroxisome(bump?: THREE.Texture): Pickable {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.SphereGeometry(0.7, 24, 20),
+    jelly({ color: '#7fd0b0', emissive: '#114436', transmission: 0.25, roughness: 0.32, bump, opacity: 0.95 }),
+  );
+  group.add(body);
+  const core = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.32, 0),
+    new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#d6fff0'),
+      emissive: new THREE.Color('#2a6e58'),
+      emissiveIntensity: 0.5,
+      roughness: 0.35,
+      flatShading: true,
+    }),
+  );
+  group.add(core);
+  return tag(group, 'peroxisome');
+}
+
+/** Centriole pair: two orthogonal barrels of nine microtubule triplets. */
+export function buildCentriole(): Pickable {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#cfe9ff'),
+    emissive: new THREE.Color('#2b5b7d'),
+    emissiveIntensity: 0.35,
+    roughness: 0.5,
+    metalness: 0.1,
+  });
+  const tubGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.1, 6);
+  const barrel = (rot: [number, number, number]) => {
+    const b = new THREE.Group();
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const tube = new THREE.Mesh(tubGeo, mat);
+      tube.position.set(Math.cos(a) * 0.32, 0, Math.sin(a) * 0.32);
+      b.add(tube);
+    }
+    b.rotation.set(...rot);
+    return b;
+  };
+  group.add(barrel([0, 0, 0]));
+  const second = barrel([Math.PI / 2, 0, 0]);
+  second.position.set(0.7, 0.2, 0);
+  group.add(second);
+  return tag(group, 'centriole');
 }
 
 /** Mitochondrion: outer capsule with folded inner cristae. */
