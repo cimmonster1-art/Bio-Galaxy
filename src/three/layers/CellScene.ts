@@ -3,14 +3,18 @@ import { Scale } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
 import { createBumpTexture } from '../textures/proceduralTextures';
+import { disposeDetailTextures } from '../textures/detailTextures';
 import {
   Pickable,
+  buildCentriole,
   buildCytoskeleton,
   buildER,
   buildGolgi,
+  buildLysosome,
   buildMembrane,
   buildMitochondrion,
   buildNucleus,
+  buildPeroxisome,
   buildRibosomes,
   buildVesicles,
 } from './cell/builders';
@@ -32,6 +36,7 @@ export class CellScene implements SceneLayer {
   private readonly vesicles: Pickable;
   private readonly bump: THREE.Texture;
   private readonly innerLight: THREE.PointLight;
+  private readonly warmLight: THREE.PointLight;
   private intensity = 0;
   private selectedId: string | null = null;
 
@@ -55,15 +60,28 @@ export class CellScene implements SceneLayer {
     this.place(buildGolgi(this.bump), new THREE.Vector3(-9, -4, 3));
     this.place(buildCytoskeleton(this.radius), new THREE.Vector3(0, 0, 0));
 
+    // The three new organelles: a couple of digestive lysosomes, a peroxisome,
+    // and the centrosome's paired centrioles near the nucleus.
+    this.place(buildLysosome(this.bump), new THREE.Vector3(8, 5, -5));
+    this.place(buildLysosome(this.bump), new THREE.Vector3(-6, 7, 6));
+    this.place(buildPeroxisome(this.bump), new THREE.Vector3(5, -7, 7));
+    this.place(buildCentriole(this.bump), new THREE.Vector3(-7, 2, -8));
+
     this.vesicles = buildVesicles(40, this.radius);
     this.place(this.vesicles, new THREE.Vector3(0, 0, 0));
 
     this.place(buildRibosomes(60, this.radius), new THREE.Vector3(0, 0, 0));
 
-    // A soft interior light gives the cytoplasm translucent depth.
+    // Two colored interior lights give the cytoplasm translucent depth: a cool
+    // teal key from one side and a warm amber fill from the other read as light
+    // scattering through the wet, crowded cytosol.
     this.innerLight = new THREE.PointLight(0x4fd6e6, 0, 50, 1.8);
     this.innerLight.position.set(2, 3, 2);
     this.root.add(this.innerLight);
+
+    this.warmLight = new THREE.PointLight(0xffb55a, 0, 46, 2.0);
+    this.warmLight.position.set(-8, -5, -6);
+    this.root.add(this.warmLight);
   }
 
   private place(p: Pickable, position: THREE.Vector3): void {
@@ -99,6 +117,8 @@ export class CellScene implements SceneLayer {
   update(dt: number, elapsed: number): void {
     fadeMaterial(this.membrane.material as THREE.MeshPhysicalMaterial, this.intensity * 0.16, dt);
     this.innerLight.intensity = this.intensity * 1.4;
+    // The warm fill pulses gently out of phase for a soft volumetric shimmer.
+    this.warmLight.intensity = this.intensity * (0.9 + Math.sin(elapsed * 0.6) * 0.25);
 
     for (const d of this.drifters) {
       d.group.position.y = d.base.y + Math.sin(elapsed * 0.4 + d.phase) * 0.4;
@@ -121,5 +141,9 @@ export class CellScene implements SceneLayer {
   dispose(): void {
     this.bump.dispose();
     disposeObject(this.root);
+    // Free the shared anatomy detail maps bootstrapped by the builders. Per
+    // material clones are freed above by disposeObject; this releases the
+    // module level source textures once.
+    disposeDetailTextures();
   }
 }

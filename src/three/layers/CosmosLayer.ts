@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { Scale } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
+import { loadColorTexture } from '../textures/loadTexture';
+import { MILKYWAY_TEXTURE } from '../../data/cosmos';
 
 /**
  * The cosmic backdrop: a luminous core standing in for the Big Bang and
@@ -20,6 +22,10 @@ export class CosmosLayer implements SceneLayer {
   private readonly spiralMat: THREE.MeshBasicMaterial;
   private readonly core: THREE.Mesh;
   private readonly coreMat: THREE.MeshBasicMaterial;
+  private readonly sky: THREE.Mesh;
+  private readonly skyMat: THREE.MeshBasicMaterial;
+
+  private readonly loader = new THREE.TextureLoader();
 
   private intensity = 0;
   private currentScale: Scale = Scale.Cosmos;
@@ -27,6 +33,19 @@ export class CosmosLayer implements SceneLayer {
   constructor() {
     this.root.name = 'CosmosLayer';
     this.root.visible = false;
+
+    // Milky Way panorama on the inside of a vast back-faced sphere, so the deep
+    // field sits inside the real galactic band at the cosmos scale.
+    this.skyMat = new THREE.MeshBasicMaterial({
+      map: loadColorTexture(MILKYWAY_TEXTURE, this.loader),
+      color: 0x8893a8,
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(620, 64, 64), this.skyMat);
+    this.root.add(this.sky);
 
     // Bright core: the Big Bang origin and, later, the galactic center.
     this.coreMat = new THREE.MeshBasicMaterial({
@@ -96,7 +115,9 @@ export class CosmosLayer implements SceneLayer {
     fadeMaterial(this.coreMat, this.intensity, dt);
     fadeMaterial(this.fieldMat, this.intensity * fieldWeight, dt);
     fadeMaterial(this.spiralMat, this.intensity * galaxyWeight, dt);
+    fadeMaterial(this.skyMat, this.intensity * fieldWeight * 0.8, dt);
 
+    this.sky.rotation.y = elapsed * 0.002;
     this.spiral.rotation.y = elapsed * 0.02;
     this.field.rotation.y = elapsed * 0.004;
     const pulse = 1 + Math.sin(elapsed * 1.5) * 0.05;

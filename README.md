@@ -41,14 +41,16 @@ src/
                          controller, selection raycaster, performance manager,
                          post-processing (bloom), disposal helpers
     shaders/             open-source GLSL: membrane and nebula materials
-    textures/            procedural canvas textures (no binary assets)
+    textures/            procedural canvas textures plus loaders for the
+                         bundled planetary and surface-detail maps
     layers/              TreeOfLifeLayer, AnatomyModelLayer, TissueField,
                          CellScene, OrganelleDetailView, ProteinStructureLayer
   data/
     clients/             NCBI Taxonomy, UniProt, Reactome, RCSB, Ensembl, HPA,
                          NCBI wrappers (timeout, retry, cache, normalization)
     taxonomy.ts          curated Tree of Life with NCBI tax ids
-    modelCatalog.ts      open-source organism glTF models hosted on GitHub
+    modelCatalog.ts      open organism glTF models (local Z-Anatomy human and
+                         skeleton, plus open animal meshes)
     search.ts            global atlas search source
     registry.ts          curated subcellular objects
     scales.ts            the 18-step scale ladder
@@ -59,17 +61,30 @@ src/
 Scene logic is kept separate from the React UI panels, and API clients are kept
 separate from the rendering layers.
 
-Real open assets are integrated at several scales:
+Real open assets are integrated at several scales. The cosmic and anatomy
+assets are now bundled locally under `public/` (served at `/textures` and
+`/models`) rather than fetched from GitHub at runtime, so the dive runs offline
+and the imagery is high resolution. Attribution travels with the files in
+`public/textures/CREDITS.txt`, `public/textures/anatomy/CREDITS.md`, and
+`public/models/ATTRIBUTION.txt`.
 
-- Cosmic: the solar system uses open-licensed planetary surface maps (Planet
-  Pixel Emporium via threex.planets, MIT) and the NASA Visible Earth "Blue
-  Marble" set (via the three.js repository), loaded from GitHub at runtime.
-- Organism: open glTF meshes hosted on GitHub (three.js example animals and the
-  Khronos CC0 Fox) load at the organism scale with animation and cited
-  repository and license. The GLTF/GLB/FBX loader architecture and procedural
-  fallback let other open models (such as Z-Anatomy) drop in the same way.
+- Cosmic: the solar system, Blue Marble Earth, Moon, and Milky Way backdrop use
+  the Solar System Scope planetary surface maps (CC BY 4.0, built on NASA
+  imagery), bundled locally.
+- Organism: the default human body and skeleton are the real Z-Anatomy meshes
+  (CC-BY-SA 4.0, derived from BodyParts3D / DBCLS), bundled locally as
+  meshopt-compressed glTF and decoded at load time. Open glTF animal meshes
+  still load at the organism scale, and the procedural body remains only as the
+  offline fallback.
+- Cell: organelles are shaded with physically based materials and real
+  open-licensed surface-detail maps (three.js MIT textures) for bump and
+  roughness, so the cell interior reads as a high-fidelity living structure.
 - Molecular: real RCSB PDB coordinate files are fetched and parsed into a live
   ball-and-stick model at the protein, molecule, and atom scales.
+
+Every selectable object opens an interactive card that pairs the curated
+metadata and live database records with a Wikipedia thumbnail and extract,
+fetched from the public Wikipedia REST API.
 
 ## Run locally
 

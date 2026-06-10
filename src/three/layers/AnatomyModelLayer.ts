@@ -108,6 +108,8 @@ export class AnatomyModelLayer implements SceneLayer {
 
   /** Fit an arbitrary model into the scene's organism volume. */
   private normalizeModel(object: THREE.Object3D): void {
+    this.enhanceShading(object);
+
     const box = new THREE.Box3().setFromObject(object);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
@@ -115,6 +117,41 @@ export class AnatomyModelLayer implements SceneLayer {
     const scale = 30 / maxDim;
     object.scale.setScalar(scale);
     object.position.sub(center.multiplyScalar(scale));
+  }
+
+  /**
+   * Improve the shading of a freshly loaded mesh so the real anatomy model reads
+   * well under the scene lighting. We lift the environment response, give flat
+   * materials a sensible roughness, and keep thin anatomical surfaces visible
+   * from both sides without losing correct front-facing normals.
+   */
+  private enhanceShading(object: THREE.Object3D): void {
+    object.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const mat of materials) {
+        const std = mat as THREE.MeshStandardMaterial;
+        if (!std || (!std.isMeshStandardMaterial && !(std as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial)) {
+          continue;
+        }
+        std.envMapIntensity = 1.1;
+        std.side = THREE.FrontSide;
+        // Flat materials with no metalness read as plastic; nudge them toward a
+        // soft organic finish so the surface catches light.
+        if (std.roughness >= 0.95 && std.metalness <= 0.05) {
+          std.roughness = 0.65;
+        }
+        std.metalness = Math.min(std.metalness, 0.1);
+        // Thin shells and cut surfaces should not vanish when viewed edge on.
+        if (std.transparent || std.opacity < 1) {
+          std.side = THREE.DoubleSide;
+        }
+        std.needsUpdate = true;
+      }
+    });
   }
 
   // ---- procedural fallback -------------------------------------------------
@@ -302,6 +339,11 @@ async function loadObject(url: string, format: ModelFormat): Promise<LoadedModel
     return { object, animations: object.animations ?? [] };
   }
   const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-  const gltf = await new GLTFLoader().loadAsync(url);
+  // Z-Anatomy GLBs are meshopt-compressed (EXT_meshopt_compression), so the
+  // decoder must be attached before loading or the parse fails.
+  const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+  const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  const gltf = await loader.loadAsync(url);
   return { object: gltf.scene, animations: gltf.animations ?? [] };
 }

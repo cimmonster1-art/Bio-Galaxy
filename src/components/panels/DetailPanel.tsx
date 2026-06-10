@@ -2,6 +2,7 @@ import React from 'react';
 import { MousePointerClick } from 'lucide-react';
 import { BioObject, DataSourceId } from '../../types';
 import { SourceBadge } from '../ui/SourceBadge';
+import { WikipediaSection } from './detail/WikipediaSection';
 import { UniProtSection } from './detail/UniProtSection';
 import { StructureSection } from './detail/StructureSection';
 import { MitochondrialProteins } from './detail/MitochondrialProteins';
@@ -35,6 +36,8 @@ export const DetailPanel: React.FC<Props> = ({ selected }) => {
 
       <div className="flex-1 space-y-4 overflow-y-auto scroll-thin px-4 py-3.5">
         <p className="text-[12.5px] leading-relaxed text-slate-300">{selected.summary}</p>
+
+        <WikipediaSection title={selected.wikipedia ?? selected.name} />
 
         <div>
           <div className="meta-label mb-1.5">Provenance</div>

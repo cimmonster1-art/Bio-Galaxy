@@ -4,7 +4,7 @@ import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
 import { loadColorTexture } from '../textures/loadTexture';
 import { createSpriteLabel } from '../labels/SpriteLabel';
-import { PLANETS, SUN, PlanetData } from '../../data/cosmos';
+import { PLANETS, SUN, PlanetData, MOON_TEXTURE, MILKYWAY_TEXTURE } from '../../data/cosmos';
 
 interface OrbitingBody {
   pivot: THREE.Group;
@@ -36,6 +36,21 @@ export class SolarSystemLayer implements SceneLayer {
     this.root.name = 'SolarSystemLayer';
     this.root.visible = false;
 
+    // Background sky dome: the real Milky Way panorama on the inside of a large
+    // back-faced sphere, so the system sits in an actual starfield. Fades with
+    // the layer intensity.
+    const skyMat = new THREE.MeshBasicMaterial({
+      map: loadColorTexture(MILKYWAY_TEXTURE, this.loader),
+      color: 0x9099aa,
+      side: THREE.BackSide,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(400, 64, 64), skyMat);
+    this.root.add(sky);
+    this.fadeables.push(skyMat);
+
     // Sun: unlit and bright so the bloom pass gives it a corona.
     const sunMat = new THREE.MeshBasicMaterial({
       map: loadColorTexture(SUN.texture, this.loader),
@@ -43,11 +58,25 @@ export class SolarSystemLayer implements SceneLayer {
       opacity: 0,
       color: 0xffffff,
     });
-    const sun = new THREE.Mesh(new THREE.SphereGeometry(SUN.radius, 48, 48), sunMat);
+    const sun = new THREE.Mesh(new THREE.SphereGeometry(SUN.radius, 64, 64), sunMat);
     sun.userData.pick = { id: 'planet:sun', scale: Scale.SolarSystem };
     this.root.add(sun);
     this.fadeables.push(sunMat);
     this.pickables.push(sun);
+
+    // Additive corona shell: a larger glow around the Sun so bloom renders it
+    // as a blazing, incandescent star.
+    const coronaMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#ffd28a'),
+      transparent: true,
+      opacity: 0,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const corona = new THREE.Mesh(new THREE.SphereGeometry(SUN.radius * 1.6, 64, 64), coronaMat);
+    sun.add(corona);
+    this.fadeables.push(coronaMat);
 
     const sunLabel = createSpriteLabel('Sun', '#ffd9a0');
     sunLabel.position.set(0, SUN.radius + 3, 0);
@@ -80,15 +109,18 @@ export class SolarSystemLayer implements SceneLayer {
     this.root.add(orbit);
     this.fadeables.push(orbitMat);
 
+    // Reuse the surface map as a subtle bump map for low-relief surface detail.
     const mat = new THREE.MeshStandardMaterial({
       map: loadColorTexture(data.texture, this.loader),
+      bumpMap: loadColorTexture(data.texture, this.loader),
+      bumpScale: 0.04,
       color: new THREE.Color(data.color),
       roughness: 0.85,
       metalness: 0.0,
       transparent: true,
       opacity: 0,
     });
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(data.radius, 40, 40), mat);
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(data.radius, 64, 64), mat);
     mesh.position.x = data.orbit;
     mesh.userData.pick = { id: `planet:${data.id}`, scale: data.id === 'earth' ? Scale.Planet : Scale.SolarSystem };
     pivot.add(mesh);
@@ -122,12 +154,15 @@ export class SolarSystemLayer implements SceneLayer {
       const moonPivot = new THREE.Group();
       mesh.add(moonPivot);
       const moonMat = new THREE.MeshStandardMaterial({
-        color: 0xb9b6b0,
+        map: loadColorTexture(MOON_TEXTURE, this.loader),
+        bumpMap: loadColorTexture(MOON_TEXTURE, this.loader),
+        bumpScale: 0.04,
+        color: 0xffffff,
         roughness: 0.9,
         transparent: true,
         opacity: 0,
       });
-      const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(moon.radius, 20, 20), moonMat);
+      const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(moon.radius, 32, 32), moonMat);
       moonMesh.position.x = moon.orbit;
       moonPivot.add(moonMesh);
       this.fadeables.push(moonMat);

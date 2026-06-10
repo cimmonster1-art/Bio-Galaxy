@@ -20,7 +20,8 @@ interface Props {
 export const AnatomyModelsPanel: React.FC<Props> = ({ activeId, status, onLoad }) => (
   <Panel eyebrow="Organism models" title="Open 3D Models">
     <p className="mb-2.5 text-[11px] leading-relaxed text-slate-500">
-      Real glTF organism meshes from open GitHub repositories, loaded at the organism scale.
+      Real glTF organism meshes, loaded at the organism scale. The human body and skeleton ship from
+      Z-Anatomy; the animal meshes stream from open GitHub repositories.
     </p>
     <ul className="space-y-1.5">
       {MODEL_CATALOG.map((entry) => {

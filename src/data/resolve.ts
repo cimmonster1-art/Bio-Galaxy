@@ -53,6 +53,8 @@ function taxonToObject(node: TaxonNode): BioObject {
     ],
     source: 'ncbi',
     crossRefs: node.rank === 'species' ? ['ensembl', 'hpa'] : ['ensembl'],
+    // Scientific names resolve cleanly on Wikipedia, often through a redirect.
+    wikipedia: node.name,
   };
 }
 
@@ -73,6 +75,7 @@ function speciesToOrganism(node: TaxonNode): BioObject {
     ],
     source: 'ensembl',
     crossRefs: ['hpa', 'ncbi'],
+    wikipedia: node.name,
   };
 }
 
@@ -92,6 +95,7 @@ const anatomyObjects: Record<string, BioObject> = {
     ],
     source: 'hpa',
     crossRefs: ['reactome', 'ncbi'],
+    wikipedia: 'Circulatory system',
   },
   'organ:heart': {
     id: 'organ:heart',
@@ -107,6 +111,7 @@ const anatomyObjects: Record<string, BioObject> = {
     ],
     source: 'hpa',
     crossRefs: ['reactome', 'uniprot'],
+    wikipedia: 'Heart',
   },
 };
 
@@ -125,6 +130,9 @@ function planet(id: string, name: string, summary: string, facts: string[], scal
     size: name,
     facts,
     provenanceNote: IMAGERY_NOTE,
+    // Planet and star names map directly to their Wikipedia articles, with the
+    // Sun resolving through its own page rather than a planet article.
+    wikipedia: name,
   };
 }
 
