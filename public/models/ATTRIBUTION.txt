@@ -1,0 +1,19 @@
+Anatomical 3D models
+====================
+
+Files:
+  anatomy-body.glb       — full segmented human body surface (278 named regions)
+  anatomy-skeleton.glb   — full human skeleton (1847 individually named bones)
+
+Source:   Z-Anatomy (https://www.z-anatomy.com / https://github.com/LluisV/Z-Anatomy-Sample)
+License:  CC-BY-SA 4.0  (https://creativecommons.org/licenses/by-sa/4.0/)
+Note:     Z-Anatomy incorporates upstream anatomical data from BodyParts3D
+          (© DBCLS, Japan); this line is retained solely to satisfy the
+          CC-BY-SA share-alike attribution chain.
+
+Processing: FBX → glTF (Facebook FBX2glTF) → meshopt-compressed (EXT_meshopt_compression)
+            via @gltf-transform/cli. Meshes/anatomical names preserved for
+            tissue-level interaction. No geometry was authored by Heliora Studio.
+
+Attribution is displayed in-app (Chakra Atlas) per the CC-BY-SA license. Any
+redistribution of these assets must retain this attribution and the share-alike terms.
