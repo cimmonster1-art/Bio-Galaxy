@@ -1,8 +1,39 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Scale, PickTag } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
 import { loadGlb, fitModel, WILDLIFE_MODELS } from '../core/glbLoader';
+import {
+  createFoliageTexture, createGroundTexture, createBarkTexture, createBumpTexture,
+} from '../textures/proceduralTextures';
+
+/** Merge several displaced spheres into one irregular, bushy crown so a canopy
+ *  reads as a clump of foliage rather than a single faceted ball. */
+function bushyCrown(radius: number): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  const blobs = 5 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < blobs; i++) {
+    const r = radius * (0.5 + Math.random() * 0.45);
+    const sphere = new THREE.IcosahedronGeometry(r, 2);
+    // Roughen each blob's surface so the silhouette is leafy, not smooth.
+    const p = sphere.attributes.position as THREE.BufferAttribute;
+    for (let v = 0; v < p.count; v++) {
+      const n = 1 + (Math.random() - 0.5) * 0.28;
+      p.setXYZ(v, p.getX(v) * n, p.getY(v) * n, p.getZ(v) * n);
+    }
+    sphere.translate(
+      (Math.random() - 0.5) * radius * 1.1,
+      radius * (0.3 + Math.random() * 0.7),
+      (Math.random() - 0.5) * radius * 1.1,
+    );
+    parts.push(sphere);
+  }
+  const merged = mergeGeometries(parts, false) ?? parts[0];
+  merged.computeVertexNormals();
+  for (const part of parts) if (part !== merged) part.dispose();
+  return merged;
+}
 
 /**
  * Biome — a living planetary environment you descend into from orbit. Built as a
@@ -70,9 +101,21 @@ export class BiomeLayer implements SceneLayer {
   private readonly animals: { group: THREE.Group; angle: number; radius: number; speed: number }[] = [];
   private readonly loadedRoots: THREE.Object3D[] = [];
 
+  // Shared living-world surfaces, generated once and reused across instances.
+  private readonly foliageTex = createFoliageTexture('#3f9d4a', 256);
+  private readonly foliageBump = createBumpTexture(256, 0.12);
+  private readonly barkTex = createBarkTexture('#3c2a1a', 256);
+  private readonly groundTex = createGroundTexture('#3f7d3a', '#3a2c1c', 512);
+  private readonly groundBump = createBumpTexture(512, 0.05);
+  private readonly textures: THREE.Texture[] = [this.foliageTex, this.foliageBump, this.barkTex, this.groundTex, this.groundBump];
+
   constructor() {
     this.root.name = 'BiomeLayer';
     this.root.visible = false;
+    this.foliageTex.repeat.set(2, 2);
+    this.barkTex.repeat.set(1, 3);
+    this.groundTex.repeat.set(18, 18);
+    this.groundBump.repeat.set(24, 24);
 
     // ── Dynamic sky ───────────────────────────────────────────────────────────
     this.skyMat = new THREE.ShaderMaterial({
@@ -105,6 +148,7 @@ export class BiomeLayer implements SceneLayer {
     groundGeo.computeVertexNormals();
     this.groundMat = new THREE.MeshStandardMaterial({
       color: this.active.ground, roughness: 0.97, metalness: 0, transparent: true, opacity: 0, envMapIntensity: 0.4,
+      map: this.groundTex, bumpMap: this.groundBump, bumpScale: 0.6,
     });
     this.ground = new THREE.Mesh(groundGeo, this.groundMat);
     this.ground.position.y = GROUND_Y;
@@ -138,8 +182,8 @@ export class BiomeLayer implements SceneLayer {
     this.scatterTrees('understory', 150, 14, RADIUS * 0.95, 3.5, 4, 0.12);
     // Shrubs and bushes.
     this.scatterShrubs(240);
-    // Ground cover: grass tufts and ferns.
-    this.scatterGrass(1700);
+    // Ground cover: dense grass tufts and ferns.
+    this.scatterGrass(4200);
     // Forest-floor clutter.
     this.scatterClutter();
 
@@ -183,8 +227,15 @@ export class BiomeLayer implements SceneLayer {
 
   private lastFoliage: THREE.InstancedMesh | null = null;
 
-  private windMaterial(color: number, roughness: number, sway: number): THREE.MeshStandardMaterial {
-    const mat = new THREE.MeshStandardMaterial({ color, roughness, metalness: 0, transparent: true, opacity: 0, envMapIntensity: 0.5, flatShading: true });
+  private windMaterial(
+    color: number, roughness: number, sway: number,
+    opts: { map?: THREE.Texture; bumpMap?: THREE.Texture; flat?: boolean } = {},
+  ): THREE.MeshStandardMaterial {
+    const mat = new THREE.MeshStandardMaterial({
+      color, roughness, metalness: 0, transparent: true, opacity: 0, envMapIntensity: 0.5,
+      flatShading: opts.flat ?? true, map: opts.map, bumpMap: opts.bumpMap,
+      bumpScale: opts.bumpMap ? 0.4 : undefined,
+    });
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uWind = this.wind;
       shader.uniforms.uSway = { value: sway };
@@ -213,14 +264,19 @@ export class BiomeLayer implements SceneLayer {
   private scatterTrees(
     key: string, count: number, baseH: number, maxR: number, hVar: number, crownR: number, sway: number,
   ): void {
-    const trunkGeo = new THREE.CylinderGeometry(0.16, 0.38, baseH, 6);
+    const trunkGeo = new THREE.CylinderGeometry(0.16, 0.42, baseH, 8);
     trunkGeo.translate(0, baseH / 2, 0);
-    const trunkMat = this.trackStd(new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.92, flatShading: true }));
+    const trunkMat = this.trackStd(new THREE.MeshStandardMaterial({
+      color: 0x6a4a30, roughness: 0.95, map: this.barkTex, bumpMap: this.barkTex, bumpScale: 0.5,
+    }));
     const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, count);
 
-    const crownGeo = new THREE.IcosahedronGeometry(crownR, 1);
-    crownGeo.translate(0, baseH + crownR * 0.5, 0);
-    const crownMat = this.windMaterial(this.active.canopy, 0.85, sway);
+    // A bushy clump of leaf-textured blobs instead of one faceted ball.
+    const crownGeo = bushyCrown(crownR);
+    crownGeo.translate(0, baseH, 0);
+    const crownMat = this.windMaterial(this.active.canopy, 0.92, sway, {
+      map: this.foliageTex, bumpMap: this.foliageBump, flat: false,
+    });
     const crowns = new THREE.InstancedMesh(crownGeo, crownMat, count);
     crowns.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
     crowns.castShadow = true;
@@ -265,9 +321,8 @@ export class BiomeLayer implements SceneLayer {
   }
 
   private scatterShrubs(count: number): void {
-    const geo = new THREE.IcosahedronGeometry(1.1, 0);
-    geo.translate(0, 0.8, 0);
-    const mat = this.windMaterial(0x356b2e, 0.9, 0.5);
+    const geo = bushyCrown(1.1);
+    const mat = this.windMaterial(0x356b2e, 0.9, 0.5, { map: this.foliageTex, bumpMap: this.foliageBump, flat: false });
     const shrubs = new THREE.InstancedMesh(geo, mat, count);
     shrubs.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
     const m = new THREE.Matrix4(); const q = new THREE.Quaternion(); const s = new THREE.Vector3(); const p = new THREE.Vector3();
@@ -292,9 +347,10 @@ export class BiomeLayer implements SceneLayer {
   }
 
   private scatterGrass(count: number): void {
-    const geo = new THREE.ConeGeometry(0.16, 1.5, 4);
-    geo.translate(0, 0.75, 0);
-    const mat = this.windMaterial(0x3f7d3a, 0.95, 1.0);
+    // A slim, slightly curved blade reads as grass rather than a spike.
+    const geo = new THREE.ConeGeometry(0.09, 1.7, 3);
+    geo.translate(0, 0.85, 0);
+    const mat = this.windMaterial(0x4f9a3e, 0.95, 1.2, { flat: false });
     const grass = new THREE.InstancedMesh(geo, mat, count);
     const m = new THREE.Matrix4(); const q = new THREE.Quaternion(); const s = new THREE.Vector3(); const p = new THREE.Vector3();
     for (let i = 0; i < count; i++) {
@@ -420,6 +476,7 @@ export class BiomeLayer implements SceneLayer {
 
   dispose(): void {
     for (const r of this.loadedRoots) disposeObject(r);
+    for (const t of this.textures) t.dispose();
     disposeObject(this.root);
   }
 }

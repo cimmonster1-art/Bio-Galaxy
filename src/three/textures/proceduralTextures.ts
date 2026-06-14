@@ -555,6 +555,182 @@ export function createIceGiantTexture(base: string, accent: string): THREE.Textu
   return finishSurface(ctx);
 }
 
+// ---- living-world surface maps ----------------------------------------------
+//
+// Tileable canvas textures for the biome, ecosystem, tissue, and organ scales so
+// foliage, ground, bark, and muscle read as real surfaces rather than flat
+// colour. Each returns a RepeatWrapping CanvasTexture owned by the caller.
+
+function tiled(canvas: HTMLCanvasElement, srgb = true): THREE.Texture {
+  const t = new THREE.CanvasTexture(canvas);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  t.needsUpdate = true;
+  return t;
+}
+
+/**
+ * Bushy foliage: a dense scatter of individual leaf blobs in varied greens, so a
+ * canopy reads as thousands of leaves instead of a smooth painted shell. Tints
+ * around the given base colour.
+ */
+export function createFoliageTexture(base = '#2f7d3a', size = 256): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const b = new THREE.Color(base);
+    const dark = b.clone().multiplyScalar(0.5);
+    ctx.fillStyle = `rgb(${(dark.r * 255) | 0},${(dark.g * 255) | 0},${(dark.b * 255) | 0})`;
+    ctx.fillRect(0, 0, size, size);
+    const col = new THREE.Color();
+    // Wrap leaves across the seam by drawing each blob in a 3×3 toroidal stamp.
+    for (let i = 0; i < 1500; i++) {
+      const x = Math.random() * size;
+      const y = Math.random() * size;
+      const r = 2 + Math.random() * 5;
+      col.copy(b).offsetHSL((Math.random() - 0.5) * 0.08, (Math.random() - 0.5) * 0.25, (Math.random() - 0.5) * 0.4);
+      ctx.fillStyle = `rgba(${(col.r * 255) | 0},${(col.g * 255) | 0},${(col.b * 255) | 0},0.85)`;
+      const rot = Math.random() * Math.PI;
+      for (const ox of [-size, 0, size]) {
+        for (const oy of [-size, 0, size]) {
+          ctx.save();
+          ctx.translate(x + ox, y + oy);
+          ctx.rotate(rot);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, r, r * 0.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+  }
+  return tiled(canvas);
+}
+
+/** A single leaf shape with a midrib, on transparent ground, for foliage cards. */
+export function createLeafCardTexture(base = '#3f9d4a', size = 128): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const c = size / 2;
+    const b = new THREE.Color(base);
+    const grad = ctx.createLinearGradient(0, 0, 0, size);
+    grad.addColorStop(0, `rgb(${(b.r * 255 * 1.2) | 0},${(b.g * 255 * 1.2) | 0},${(b.b * 255 * 1.2) | 0})`);
+    grad.addColorStop(1, `rgb(${(b.r * 255 * 0.55) | 0},${(b.g * 255 * 0.55) | 0},${(b.b * 255 * 0.55) | 0})`);
+    ctx.fillStyle = grad;
+    // A pointed-oval leaf silhouette.
+    ctx.beginPath();
+    ctx.moveTo(c, 6);
+    ctx.bezierCurveTo(size - 8, size * 0.3, size - 8, size * 0.7, c, size - 6);
+    ctx.bezierCurveTo(8, size * 0.7, 8, size * 0.3, c, 6);
+    ctx.fill();
+    // Midrib + a few veins.
+    ctx.strokeStyle = `rgba(${(b.r * 255 * 0.4) | 0},${(b.g * 255 * 0.45) | 0},${(b.b * 255 * 0.4) | 0},0.7)`;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(c, 8); ctx.lineTo(c, size - 8); ctx.stroke();
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= 4; i++) {
+      const y = 8 + (i / 5) * (size - 16);
+      ctx.beginPath(); ctx.moveTo(c, y); ctx.lineTo(c + (size * 0.3) * (1 - i / 6), y + size * 0.12); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(c, y); ctx.lineTo(c - (size * 0.3) * (1 - i / 6), y + size * 0.12); ctx.stroke();
+    }
+  }
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.needsUpdate = true;
+  return t;
+}
+
+/** Mottled grassy ground: a noisy grass/earth blend speckled with blades and pebbles. */
+export function createGroundTexture(grass = '#3f7d3a', earth = '#4a3a24', size = 512): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const g = new THREE.Color(grass);
+    const e = new THREE.Color(earth);
+    const img = ctx.createImageData(size, size);
+    const col = new THREE.Color();
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const n = fbm(x * 0.03, y * 0.03, 4) * 0.7 + fbm(x * 0.12, y * 0.12, 2) * 0.3;
+        col.copy(e).lerp(g, THREE.MathUtils.clamp(n * 1.5 - 0.1, 0, 1));
+        col.multiplyScalar(0.8 + valueNoise(x * 0.5, y * 0.5) * 0.4);
+        const i = (y * size + x) * 4;
+        img.data[i] = col.r * 255; img.data[i + 1] = col.g * 255; img.data[i + 2] = col.b * 255; img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    // Short grass-blade strokes and a few pebbles for fine detail.
+    for (let i = 0; i < 2600; i++) {
+      const x = Math.random() * size, y = Math.random() * size;
+      const c = g.clone().offsetHSL((Math.random() - 0.5) * 0.06, 0, (Math.random() - 0.3) * 0.3);
+      ctx.strokeStyle = `rgba(${(c.r * 255) | 0},${(c.g * 255) | 0},${(c.b * 255) | 0},0.5)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (Math.random() - 0.5) * 3, y - 2 - Math.random() * 4); ctx.stroke();
+    }
+  }
+  return tiled(canvas);
+}
+
+/** Tree bark: vertical fibrous streaks with darker cracks. */
+export function createBarkTexture(base = '#4a3322', size = 256): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const b = new THREE.Color(base);
+    ctx.fillStyle = `rgb(${(b.r * 255) | 0},${(b.g * 255) | 0},${(b.b * 255) | 0})`;
+    ctx.fillRect(0, 0, size, size);
+    for (let i = 0; i < 240; i++) {
+      const x = Math.random() * size;
+      const c = b.clone().multiplyScalar(0.5 + Math.random() * 0.9);
+      ctx.strokeStyle = `rgba(${(c.r * 255) | 0},${(c.g * 255) | 0},${(c.b * 255) | 0},0.55)`;
+      ctx.lineWidth = 0.6 + Math.random() * 2.4;
+      ctx.beginPath();
+      let y = 0; let cx = x;
+      ctx.moveTo(cx, y);
+      while (y < size) { y += 8; cx += (Math.random() - 0.5) * 4; ctx.lineTo(cx, y); }
+      ctx.stroke();
+    }
+  }
+  return tiled(canvas);
+}
+
+/**
+ * Myocardium grayscale relief: interwoven muscle-fibre striations with darker
+ * crevices. Sampled (red channel) as a triplanar detail/bump map so the heart
+ * and skeletal muscle read as real fibrous tissue rather than smooth rubber.
+ */
+export function createMuscleTexture(size = 512): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const img = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        // Wavy fibre bundles flowing across the surface, broken up by fbm so
+        // they twist like real muscle rather than ruled lines.
+        const warp = fbm(x * 0.02, y * 0.02, 3) * 6.0;
+        const fibre = 0.5 + 0.5 * Math.sin((y + warp * 8) * 0.32 + Math.sin(x * 0.05) * 2.0);
+        const bundle = 0.5 + 0.5 * Math.sin(y * 0.045 + fbm(x * 0.05, y * 0.05, 2) * 4.0);
+        const crev = fbm(x * 0.09, y * 0.015, 3);
+        let v = fibre * 0.55 + bundle * 0.3 + crev * 0.15;
+        v = Math.pow(THREE.MathUtils.clamp(v, 0, 1), 1.2);
+        const g = (40 + v * 200) | 0;
+        const i = (y * size + x) * 4;
+        img.data[i] = img.data[i + 1] = img.data[i + 2] = g; img.data[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+  return tiled(canvas, false);
+}
+
 /** Layered fractal Brownian motion built from the value-noise basis. */
 function fbm(x: number, y: number, octaves = 4): number {
   let v = 0;
