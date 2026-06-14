@@ -4,8 +4,9 @@ import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
 import { createSpriteLabel } from '../labels/SpriteLabel';
 import {
-  createGlowTexture,
-  createSunTexture,
+  createAstroSunTexture,
+  createLensFlareTexture,
+  createProminenceTexture,
   createGasGiantTexture,
   createRockyTexture,
   createIceGiantTexture,
@@ -64,13 +65,19 @@ export class SolarSystemLayer implements SceneLayer {
   private readonly beltMat: THREE.MeshStandardMaterial;
   private intensity = 0;
 
+  // Sun corona shells that breathe, and prominence flames that flicker — driven
+  // each frame so the star reads as a living photosphere, exactly as Astro's.
+  private readonly coronaShells: { mesh: THREE.Mesh; base: number; speed: number; phase: number; amp: number }[] = [];
+  private readonly prominences: THREE.Sprite[] = [];
+
   constructor() {
     this.root.name = 'SolarSystemLayer';
     this.root.visible = false;
 
-    // Sun: unlit and bright so the bloom pass gives it a corona, with a textured
-    // photosphere and an additive corona billboard for volumetric glow.
-    const sunTex = createSunTexture();
+    // Sun: a photoreal SDO-style photosphere — deep red-orange with a bright
+    // magma filament network — kept unlit so the bloom pass and the layered
+    // corona shells below give it a living glow. Ported to match Astro's sky.
+    const sunTex = createAstroSunTexture();
     this.ownedTextures.push(sunTex);
     const sunMat = new THREE.MeshBasicMaterial({
       map: sunTex,
@@ -78,27 +85,92 @@ export class SolarSystemLayer implements SceneLayer {
       opacity: 0,
       color: 0xffffff,
     });
-    this.upgradeMap(sunMat, SUN.texture);
-    const sun = new THREE.Mesh(new THREE.SphereGeometry(SUN.radius, 64, 64), sunMat);
+    const sun = new THREE.Mesh(new THREE.SphereGeometry(SUN.radius, 128, 128), sunMat);
     sun.userData.pick = { id: 'planet:sun', scale: Scale.SolarSystem };
     this.root.add(sun);
     this.fadeables.push(sunMat);
     this.pickables.push(sun);
 
-    const coronaTex = createGlowTexture(256);
-    this.ownedTextures.push(coronaTex);
-    const coronaMat = new THREE.SpriteMaterial({
-      map: coronaTex,
-      color: 0xffd9a0,
+    // Thin chromosphere shell — a hair brighter on the limb, suggesting the
+    // glowing atmosphere clinging to the photosphere.
+    const chromoMat = new THREE.MeshBasicMaterial({
+      color: 0xff5018,
       transparent: true,
       opacity: 0,
-      depthWrite: false,
       blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.BackSide,
     });
-    this.corona = new THREE.Sprite(coronaMat);
-    this.corona.scale.setScalar(SUN.radius * 5.5);
+    const chromo = new THREE.Mesh(new THREE.SphereGeometry(SUN.radius * 1.012, 96, 96), chromoMat);
+    sun.add(chromo);
+    chromoMat.userData.fadeWeight = 0.22;
+    this.fadeables.push(chromoMat);
+
+    // Corona: additive layered shells fading from hot orange to deep crimson,
+    // each breathing at its own rate. Exact colors/opacities/radii from Astro.
+    const coronaColors = [0xff7028, 0xe85a18, 0xc0380a, 0x9a2a08, 0x6a1a04, 0x401004];
+    const coronaOpacity = [0.22, 0.2, 0.17, 0.12, 0.08, 0.04];
+    [1.05, 1.14, 1.3, 1.6, 2.1, 2.9].forEach((mult, i) => {
+      const cm = new THREE.MeshBasicMaterial({
+        color: coronaColors[i],
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const cmesh = new THREE.Mesh(new THREE.SphereGeometry(SUN.radius * mult, 48, 48), cm);
+      this.root.add(cmesh);
+      cm.userData.fadeWeight = coronaOpacity[i];
+      this.fadeables.push(cm);
+      this.coronaShells.push({ mesh: cmesh, base: SUN.radius * mult, speed: 0.6 + i * 0.2, phase: i, amp: 0.025 + i * 0.012 });
+    });
+
+    // Prominence arcs: small bright flame loops licking off the limb, placed on
+    // a ring around the Sun and flickering with a slow independent pulse.
+    const promTex = createProminenceTexture();
+    this.ownedTextures.push(promTex);
+    const PROM_COUNT = 14;
+    for (let i = 0; i < PROM_COUNT; i++) {
+      const ang = (i / PROM_COUNT) * Math.PI * 2 + Math.random() * 0.3;
+      const tilt = (Math.random() - 0.5) * 0.6;
+      const scale = SUN.radius * (0.28 + Math.random() * 0.32);
+      const rDist = SUN.radius * 1.04;
+      const promMat = new THREE.SpriteMaterial({
+        map: promTex,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const sprite = new THREE.Sprite(promMat);
+      const sx = Math.cos(ang) * rDist;
+      const sy = Math.sin(tilt) * rDist * 0.4;
+      const sz = Math.sin(ang) * rDist;
+      const outDir = new THREE.Vector3(sx, sy, sz).normalize();
+      sprite.position.set(sx + outDir.x * scale * 0.45, sy + outDir.y * scale * 0.45, sz + outDir.z * scale * 0.45);
+      sprite.scale.set(scale * 0.8, scale, 1);
+      this.root.add(sprite);
+      promMat.userData.fadeWeight = 0.9;
+      this.fadeables.push(promMat);
+      this.prominences.push(sprite);
+    }
+
+    // Soft outer glare halo behind the disc — a tinted lens flare with faint
+    // diffraction spikes. depthTest stays on so planets in front still occlude.
+    const flareTex = createLensFlareTexture(255, 120, 50);
+    this.ownedTextures.push(flareTex);
+    const flareMat = new THREE.SpriteMaterial({
+      map: flareTex,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.corona = new THREE.Sprite(flareMat);
+    this.corona.scale.setScalar(SUN.radius * 4.2);
     this.root.add(this.corona);
-    this.fadeables.push(coronaMat);
+    flareMat.userData.fadeWeight = 0.35;
+    this.fadeables.push(flareMat);
 
     const sunLabel = createSpriteLabel('Sun', '#ffd9a0');
     sunLabel.position.set(0, SUN.radius + 3, 0);
@@ -141,7 +213,7 @@ export class SolarSystemLayer implements SceneLayer {
   private surfaceTexture(spec: SurfaceSpec): THREE.Texture {
     switch (spec.kind) {
       case 'sun':
-        return createSunTexture();
+        return createAstroSunTexture();
       case 'gas':
         return createGasGiantTexture({ palette: spec.palette, storm: spec.storm });
       case 'ice':
@@ -182,19 +254,23 @@ export class SolarSystemLayer implements SceneLayer {
     pivot.rotation.y = Math.random() * Math.PI * 2;
     orbitGroup.add(pivot);
 
-    // Faint orbit ring in the body's orbital plane.
+    // Orbit ring in the body's orbital plane: Astro's signature lavender, glowing
+    // additively so the whole solar system is laced with luminous ellipses.
     const orbitMat = new THREE.MeshBasicMaterial({
-      color: 0x3a5a78,
+      color: 0xb494f5,
       transparent: true,
       opacity: 0,
       side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
     });
     const orbitRing = new THREE.Mesh(
-      new THREE.RingGeometry(orbit - 0.04, orbit + 0.04, 192),
+      new THREE.RingGeometry(orbit - 0.05, orbit + 0.05, 256),
       orbitMat,
     );
     orbitRing.rotation.x = Math.PI / 2;
     orbitGroup.add(orbitRing);
+    orbitMat.userData.fadeWeight = 0.32;
     this.fadeables.push(orbitMat);
 
     const surfaceTex = this.surfaceTexture(data.surface);
@@ -300,8 +376,19 @@ export class SolarSystemLayer implements SceneLayer {
       const weight = (f.userData?.fadeWeight as number | undefined) ?? 1;
       fadeMaterial(f, this.intensity * weight, dt);
     }
-    // Gentle corona shimmer.
-    this.corona.scale.setScalar(SUN.radius * (5.2 + Math.sin(elapsed * 1.2) * 0.4));
+    // Gentle flare-halo shimmer.
+    this.corona.scale.setScalar(SUN.radius * (4.0 + Math.sin(elapsed * 1.2) * 0.35));
+    // Corona shells breathe, each at its own rate, for a living photosphere.
+    for (const shell of this.coronaShells) {
+      const s = 1 + Math.sin(elapsed * shell.speed + shell.phase) * shell.amp;
+      shell.mesh.scale.setScalar(s);
+    }
+    // Prominences flicker independently so the limb looks alive.
+    this.prominences.forEach((sprite, i) => {
+      const mat = sprite.material as THREE.SpriteMaterial;
+      const flicker = 0.7 + Math.sin(elapsed * (0.5 + (i % 5) * 0.13) + i) * 0.22;
+      mat.opacity = this.intensity * 0.9 * flicker;
+    });
     if (this.intensity < 0.02) return;
     this.belt.rotation.y += dt * 0.02;
     for (const body of this.bodies) {
