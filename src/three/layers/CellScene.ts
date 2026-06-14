@@ -26,7 +26,10 @@ import {
  */
 export class CellScene implements SceneLayer {
   readonly root = new THREE.Group();
-  readonly activeScales = [Scale.Cell, Scale.Organelle];
+  // The whole cell owns the Cell scale; the dedicated OrganelleDetailView takes
+  // over one step deeper, so descending from Cell to Organelle cross-fades from
+  // the populated cytoplasm into a detailed trio of organelles.
+  readonly activeScales = [Scale.Cell];
 
   private readonly radius = 18;
   private readonly membrane: THREE.Mesh;

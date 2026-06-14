@@ -26,8 +26,16 @@ export class CosmosLayer implements SceneLayer {
   private readonly spiralMat: THREE.MeshBasicMaterial;
   private readonly core: THREE.Mesh;
   private readonly coreMat: THREE.MeshBasicMaterial;
+  private readonly coreGlow: THREE.Sprite;
+  private readonly coreGlowMat: THREE.SpriteMaterial;
   private readonly dust: THREE.Points;
   private readonly dustMat: THREE.PointsMaterial;
+
+  // Cosmic web: dark-matter-style filament strands threading galaxy clusters.
+  private readonly web: THREE.LineSegments;
+  private readonly webMat: THREE.LineBasicMaterial;
+  private readonly webNodes: THREE.InstancedMesh;
+  private readonly webNodeMat: THREE.MeshBasicMaterial;
 
   // Big Bang cutscene elements.
   private readonly bang = new THREE.Group();
@@ -58,6 +66,20 @@ export class CosmosLayer implements SceneLayer {
     });
     this.core = new THREE.Mesh(new THREE.SphereGeometry(6, 32, 32), this.coreMat);
     this.root.add(this.core);
+
+    // Bright additive halo so the galactic core blooms instead of reading as a
+    // hard ball — the luminous heart of the spiral.
+    this.coreGlowMat = new THREE.SpriteMaterial({
+      map: this.glowTex,
+      color: new THREE.Color('#ffe9c2'),
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    this.coreGlow = new THREE.Sprite(this.coreGlowMat);
+    this.coreGlow.scale.setScalar(46);
+    this.root.add(this.coreGlow);
 
     // Deep field of distant galaxies.
     const fieldCount = 1800;
@@ -91,7 +113,8 @@ export class CosmosLayer implements SceneLayer {
       const arm = i % 2 === 0 ? 0 : Math.PI;
       const radius = 8 + t * 130;
       const angle = arm + t * 9 + (Math.random() - 0.5) * 0.5;
-      const spread = (1 - t) * 4 + 1.5;
+      // Tighter scatter than before so the two logarithmic arms stay distinct.
+      const spread = (1 - t) * 2 + 0.6;
       const x = Math.cos(angle) * radius + (Math.random() - 0.5) * spread;
       const z = Math.sin(angle) * radius + (Math.random() - 0.5) * spread;
       const y = (Math.random() - 0.5) * (3 + (1 - t) * 8);
@@ -124,6 +147,57 @@ export class CosmosLayer implements SceneLayer {
     });
     this.dust = new THREE.Points(dustGeometry, this.dustMat);
     this.root.add(this.dust);
+
+    // ---- Cosmic web: filaments and clusters of the large-scale universe ------
+    // Scatter cluster nodes through a large volume, then link each to its few
+    // nearest neighbours. The resulting strands read as the dark-matter web that
+    // galaxies condense along; bright nodes mark the densest knots.
+    const NODE_COUNT = 120;
+    const nodes: THREE.Vector3[] = [];
+    for (let i = 0; i < NODE_COUNT; i++) {
+      nodes.push(randomDir().multiplyScalar(120 + Math.random() * 430));
+    }
+    const segs: number[] = [];
+    for (let i = 0; i < NODE_COUNT; i++) {
+      // Connect to the 3 nearest neighbours to weave a sparse filament network.
+      const dists = nodes
+        .map((n, j) => ({ j, d: nodes[i].distanceToSquared(n) }))
+        .filter((e) => e.j !== i)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, 3);
+      for (const { j } of dists) {
+        if (j < i) continue; // avoid duplicate strands
+        segs.push(nodes[i].x, nodes[i].y, nodes[i].z, nodes[j].x, nodes[j].y, nodes[j].z);
+      }
+    }
+    const webGeo = new THREE.BufferGeometry();
+    webGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(segs), 3));
+    this.webMat = new THREE.LineBasicMaterial({
+      color: new THREE.Color('#5b6cff'),
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.web = new THREE.LineSegments(webGeo, this.webMat);
+    this.root.add(this.web);
+
+    this.webNodeMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#a9b8ff'),
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.webNodes = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.6, 0), this.webNodeMat, NODE_COUNT);
+    for (let i = 0; i < NODE_COUNT; i++) {
+      dummy.position.copy(nodes[i]);
+      dummy.scale.setScalar(0.6 + Math.random() * 2.2);
+      dummy.updateMatrix();
+      this.webNodes.setMatrixAt(i, dummy.matrix);
+    }
+    this.webNodes.instanceMatrix.needsUpdate = true;
+    this.root.add(this.webNodes);
 
     // ---- Big Bang cutscene rig (hidden until the cinematic drives it) -------
     this.bang.visible = false;
@@ -197,18 +271,27 @@ export class CosmosLayer implements SceneLayer {
 
   update(dt: number, elapsed: number): void {
     const galaxyWeight = this.currentScale >= Scale.Galaxy ? 1 : 0.32;
+    // The cosmic web rules the Cosmos scale and recedes as the camera dives into
+    // a single galaxy; the galactic core blooms the other way.
+    const webWeight = this.currentScale === Scale.Cosmos ? 1 : 0.08;
     // Pull the deep field back at galaxy scale so the Milky Way remains legible.
     const fieldWeight = this.currentScale === Scale.Cosmos ? 0.72 : 0.12;
     fadeMaterial(this.coreMat, this.intensity, dt);
+    fadeMaterial(this.coreGlowMat, this.intensity * (this.currentScale >= Scale.Galaxy ? 0.95 : 0.4), dt);
     fadeMaterial(this.fieldMat, this.intensity * fieldWeight, dt);
     fadeMaterial(this.spiralMat, this.intensity * galaxyWeight, dt);
     fadeMaterial(this.dustMat, this.intensity * galaxyWeight * 0.78, dt);
+    fadeMaterial(this.webMat, this.intensity * webWeight * 0.55, dt);
+    fadeMaterial(this.webNodeMat, this.intensity * webWeight * 0.7, dt);
 
     this.spiral.rotation.y = elapsed * 0.02;
     this.dust.rotation.y = elapsed * 0.014;
     this.field.rotation.y = elapsed * 0.004;
+    this.web.rotation.y = elapsed * 0.006;
+    this.webNodes.rotation.y = elapsed * 0.006;
     const pulse = 1 + Math.sin(elapsed * 1.5) * 0.05;
     this.core.scale.setScalar(pulse);
+    this.coreGlow.scale.setScalar(46 * (1 + Math.sin(elapsed * 1.5) * 0.04));
 
     this.updateBigBang(elapsed);
   }

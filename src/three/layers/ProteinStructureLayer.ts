@@ -80,6 +80,12 @@ export class ProteinStructureLayer implements SceneLayer {
   private readonly molAtomMat: THREE.MeshPhysicalMaterial;
   private readonly molBondMat: THREE.MeshStandardMaterial;
 
+  // Extra molecule-scale icons: a DNA double helix and a lipid bilayer, shown
+  // beside the water cluster so the scale reads as "the molecules of life".
+  private readonly molExtraMats: (THREE.Material & { opacity: number })[] = [];
+  private dnaPick: THREE.Object3D | null = null;
+  private membranePick: THREE.Object3D | null = null;
+
   // Atom-scale subgraph: a glowing nucleon cluster, luminous orbital shells, and
   // electrons that race along them. Tracked here so they can be faded and
   // animated independently of the ball-and-stick molecular assembly.
@@ -130,9 +136,105 @@ export class ProteinStructureLayer implements SceneLayer {
 
     this.loadStructure(generateAssembly());
     this.buildMolecule();
+    this.buildDNA();
+    this.buildLipidMembrane();
     this.buildAtomScale();
     this.root.add(this.molecule);
     this.root.add(this.atomScale);
+  }
+
+  /** A DNA double helix: two sugar-phosphate backbones with colour-coded base
+   *  pairs bridging them — the iconic molecule of heredity. */
+  private buildDNA(): void {
+    const group = new THREE.Group();
+    group.userData.pick = { id: 'dna_helix', scale: Scale.Molecule };
+    const N = 34;
+    const R = 2.1;
+    const pitch = 0.52;
+    const twist = 0.6;
+    const aPts: THREE.Vector3[] = [];
+    const bPts: THREE.Vector3[] = [];
+    for (let i = 0; i < N; i++) {
+      const ang = i * twist;
+      const y = i * pitch - (N * pitch) / 2;
+      aPts.push(new THREE.Vector3(Math.cos(ang) * R, y, Math.sin(ang) * R));
+      bPts.push(new THREE.Vector3(Math.cos(ang + Math.PI) * R, y, Math.sin(ang + Math.PI) * R));
+    }
+    const backMat = new THREE.MeshStandardMaterial({
+      color: 0xe6964a, emissive: 0x4a2e10, emissiveIntensity: 0.35,
+      roughness: 0.4, metalness: 0.05, transparent: true, opacity: 0,
+    });
+    this.molExtraMats.push(backMat);
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(aPts), 120, 0.26, 10, false), backMat));
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(bPts), 120, 0.26, 10, false), backMat));
+
+    const rungGeo = new THREE.CylinderGeometry(0.12, 0.12, 1, 10);
+    const pairColors = [0x5b8def, 0xef5b6b, 0x5fd0c5, 0xe6c54a];
+    const up = new THREE.Vector3(0, 1, 0);
+    const dir = new THREE.Vector3();
+    const mid = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    const scl = new THREE.Vector3();
+    const m4 = new THREE.Matrix4();
+    for (let i = 0; i < N; i += 2) {
+      const pa = aPts[i];
+      const pb = bPts[i];
+      dir.subVectors(pb, pa);
+      const len = dir.length();
+      mid.addVectors(pa, pb).multiplyScalar(0.5);
+      q.setFromUnitVectors(up, dir.clone().normalize());
+      scl.set(1, len, 1);
+      m4.compose(mid, q, scl);
+      const mat = new THREE.MeshStandardMaterial({
+        color: pairColors[(i / 2) % pairColors.length], emissive: 0x101820,
+        emissiveIntensity: 0.3, roughness: 0.5, transparent: true, opacity: 0,
+      });
+      this.molExtraMats.push(mat);
+      const rung = new THREE.Mesh(rungGeo, mat);
+      rung.applyMatrix4(m4);
+      group.add(rung);
+    }
+    group.rotation.z = 0.1;
+    this.molecule.add(group);
+    this.dnaPick = group;
+  }
+
+  /** A patch of lipid bilayer: two leaflets of hydrophilic heads with their
+   *  hydrophobic tails meeting in the middle — the basis of every membrane. */
+  private buildLipidMembrane(): void {
+    const group = new THREE.Group();
+    group.userData.pick = { id: 'lipid_membrane', scale: Scale.Molecule };
+    group.position.set(10.5, -1, 0);
+    const headMat = new THREE.MeshPhysicalMaterial({
+      color: 0x39d4e6, emissive: 0x0c4d57, emissiveIntensity: 0.4,
+      roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.3,
+      transparent: true, opacity: 0, envMapIntensity: 1,
+    });
+    const tailMat = new THREE.LineBasicMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0 });
+    this.molExtraMats.push(headMat, tailMat);
+    const G = 6;
+    const sp = 1.0;
+    const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.36, 14, 14), headMat, G * G * 2);
+    const dummy = new THREE.Object3D();
+    const tails: number[] = [];
+    let idx = 0;
+    for (let r = 0; r < G; r++) {
+      for (let c = 0; c < G; c++) {
+        const x = (c - (G - 1) / 2) * sp;
+        const z = (r - (G - 1) / 2) * sp;
+        dummy.position.set(x, 1.6, z); dummy.updateMatrix(); heads.setMatrixAt(idx++, dummy.matrix);
+        tails.push(x, 1.6, z, x, 0.2, z);
+        dummy.position.set(x, -1.6, z); dummy.updateMatrix(); heads.setMatrixAt(idx++, dummy.matrix);
+        tails.push(x, -1.6, z, x, -0.2, z);
+      }
+    }
+    heads.instanceMatrix.needsUpdate = true;
+    group.add(heads);
+    const tg = new THREE.BufferGeometry();
+    tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(tails), 3));
+    group.add(new THREE.LineSegments(tg, tailMat));
+    this.molecule.add(group);
+    this.membranePick = group;
   }
 
   /**
@@ -159,6 +261,7 @@ export class ProteinStructureLayer implements SceneLayer {
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.userData.pick = { id: 'water_cluster', scale: Scale.Molecule };
+    mesh.position.set(-10.5, 2, 0);
     this.molAtoms = mesh;
     this.molecule.add(mesh);
 
@@ -181,6 +284,7 @@ export class ProteinStructureLayer implements SceneLayer {
       bondMesh.setMatrixAt(b, m4);
     });
     bondMesh.instanceMatrix.needsUpdate = true;
+    bondMesh.position.set(-10.5, 2, 0);
     this.molBonds = bondMesh;
     this.molecule.add(bondMesh);
 
@@ -408,6 +512,7 @@ export class ProteinStructureLayer implements SceneLayer {
     this.molAtomMat.opacity += (molTarget - this.molAtomMat.opacity) * Math.min(1, dt * 6);
     this.molAtomMat.visible = this.molAtomMat.opacity > 0.01;
     fadeMaterial(this.molBondMat, molTarget * 0.85, dt);
+    for (const m of this.molExtraMats) fadeMaterial(m, molTarget, dt);
 
     if (this.atoms) this.atoms.rotation.y = elapsed * 0.25;
     if (this.bonds) this.bonds.rotation.y = elapsed * 0.25;
@@ -431,7 +536,9 @@ export class ProteinStructureLayer implements SceneLayer {
 
   getPickables(): THREE.Object3D[] {
     if (this.intensity <= 0.3) return [];
-    if (this.currentScale === Scale.Molecule && this.molAtoms) return [this.molAtoms];
+    if (this.currentScale === Scale.Molecule) {
+      return [this.molAtoms, this.dnaPick, this.membranePick].filter((o): o is THREE.Object3D => o !== null);
+    }
     if (this.currentScale === Scale.ProteinComplex && this.atoms) return [this.atoms];
     return [];
   }

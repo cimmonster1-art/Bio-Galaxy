@@ -339,6 +339,60 @@ export function buildVesicles(count: number, radius: number): Pickable {
   return tag(group, 'vesicles');
 }
 
+/**
+ * A single large ribosome for the organelle scale: a big and a small subunit,
+ * each a bumpy granular blob, clasped together with a faint mRNA groove between
+ * them. Tagged 'ribosomes' so it resolves to the same atlas record as the cell's
+ * ribosome cluster.
+ */
+export function jellyRibosome(bump?: THREE.Texture): Pickable {
+  const group = new THREE.Group();
+  const largeMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#9ec9e8'),
+    emissive: new THREE.Color('#274b5a'),
+    emissiveIntensity: 0.4,
+    roughness: 0.6,
+    bumpMap: bump,
+    bumpScale: 0.12,
+    envMapIntensity: 1,
+  });
+  const smallMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#bfe9ff'),
+    emissive: new THREE.Color('#2f5f72'),
+    emissiveIntensity: 0.45,
+    roughness: 0.55,
+    bumpMap: bump,
+    bumpScale: 0.1,
+    envMapIntensity: 1,
+  });
+  const large = new THREE.Mesh(new THREE.IcosahedronGeometry(1.4, 3), largeMat);
+  large.scale.set(1, 0.92, 1);
+  group.add(large);
+  const small = new THREE.Mesh(new THREE.IcosahedronGeometry(1.0, 3), smallMat);
+  small.position.set(0, 1.5, 0);
+  small.scale.set(1.1, 0.8, 1.1);
+  group.add(small);
+  // Speckle both subunits with finer surface granules for rRNA/protein texture.
+  const grainGeo = new THREE.IcosahedronGeometry(0.16, 0);
+  const grainMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#dff1ff'), emissive: new THREE.Color('#3a6e84'), emissiveIntensity: 0.5, roughness: 0.6,
+  });
+  const grains = new THREE.InstancedMesh(grainGeo, grainMat, 60);
+  const dummy = new THREE.Object3D();
+  for (let i = 0; i < 60; i++) {
+    const onSmall = i % 3 === 0;
+    const r = onSmall ? 1.0 : 1.4;
+    const c = onSmall ? new THREE.Vector3(0, 1.5, 0) : new THREE.Vector3(0, 0, 0);
+    dummy.position.copy(randomInSphere(1).normalize().multiplyScalar(r)).add(c);
+    dummy.scale.setScalar(0.6 + Math.random() * 0.8);
+    dummy.updateMatrix();
+    grains.setMatrixAt(i, dummy.matrix);
+  }
+  grains.instanceMatrix.needsUpdate = true;
+  group.add(grains);
+  return tag(group, 'ribosomes');
+}
+
 /** Ribosomes: dense clusters of tiny instanced particles. */
 export function buildRibosomes(count: number, radius: number): Pickable {
   const group = new THREE.Group();
