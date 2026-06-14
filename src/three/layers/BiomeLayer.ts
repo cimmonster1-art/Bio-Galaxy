@@ -90,17 +90,42 @@ function createGodRayTexture(): THREE.Texture {
  * vegetation, and animals are all clickable.
  */
 
+/** Airborne particle signature that gives each biome its instantly readable mood. */
+type Atmosphere = 'mist' | 'snow' | 'sand' | 'spores' | 'none';
+
 interface BiomeVariant {
   id: string; name: string; canopy: number; ground: number; horizon: number;
+  /** Grass-blade and shrub tints for the ground layer. */
+  grass: number; shrub: number;
+  /** Fraction (0–1) of the full vegetation set rendered, so deserts read sparse. */
+  treeDensity: number; grassDensity: number; shrubDensity: number;
+  /** Airborne identity: rainforest mist, tundra snow, desert sand, etc. */
+  atmosphere: Atmosphere; atmoColor: number;
+  /** Haze tint and strength, and how strong the sun shafts read. */
+  fog: number; fogStrength: number; rayStrength: number;
 }
 
+// Each biome is tuned to be recognizable at a glance — by palette, by how dense
+// or sparse its vegetation is, and above all by what hangs in its air.
 export const BIOME_VARIANTS: BiomeVariant[] = [
-  { id: 'rainforest', name: 'Tropical Rainforest', canopy: 0x1f6b3a, ground: 0x24351f, horizon: 0x123b32 },
-  { id: 'reef', name: 'Coral Reef', canopy: 0x18a3b8, ground: 0x0f3a55, horizon: 0x0a4a63 },
-  { id: 'tundra', name: 'Arctic Tundra', canopy: 0xbfe6ff, ground: 0x3a4a5a, horizon: 0x214055 },
-  { id: 'savanna', name: 'Savanna', canopy: 0xc7a14a, ground: 0x6b5a2a, horizon: 0x4a3a1e },
-  { id: 'temperate', name: 'Temperate Forest', canopy: 0x2f7d4a, ground: 0x2c3a22, horizon: 0x1d4034 },
-  { id: 'desert', name: 'Desert', canopy: 0xd9a35a, ground: 0x7a5a32, horizon: 0x5a3a22 },
+  { id: 'rainforest', name: 'Tropical Rainforest', canopy: 0x1f6b3a, ground: 0x24351f, horizon: 0x123b32,
+    grass: 0x3f8f3a, shrub: 0x356b2e, treeDensity: 1, grassDensity: 1, shrubDensity: 1,
+    atmosphere: 'mist', atmoColor: 0xbfe0d8, fog: 0x2a5a52, fogStrength: 1.4, rayStrength: 1.25 },
+  { id: 'reef', name: 'Coral Reef', canopy: 0x18a3b8, ground: 0x0f3a55, horizon: 0x0a4a63,
+    grass: 0x2fa39a, shrub: 0x2a8fa0, treeDensity: 0.5, grassDensity: 0.7, shrubDensity: 0.7,
+    atmosphere: 'spores', atmoColor: 0xcdeeff, fog: 0x12506b, fogStrength: 1.7, rayStrength: 0.85 },
+  { id: 'tundra', name: 'Arctic Tundra', canopy: 0xbfe6ff, ground: 0x9fb0bc, horizon: 0x214055,
+    grass: 0x8a9a92, shrub: 0x7d8a82, treeDensity: 0.12, grassDensity: 0.35, shrubDensity: 0.3,
+    atmosphere: 'snow', atmoColor: 0xffffff, fog: 0xb8c8d6, fogStrength: 1.15, rayStrength: 0.7 },
+  { id: 'savanna', name: 'Savanna', canopy: 0x7f8a3a, ground: 0x6b5a2a, horizon: 0x4a3a1e,
+    grass: 0xc7a14a, shrub: 0x9a8a3a, treeDensity: 0.25, grassDensity: 1, shrubDensity: 0.3,
+    atmosphere: 'spores', atmoColor: 0xe8d8a0, fog: 0xc8a060, fogStrength: 0.75, rayStrength: 1.05 },
+  { id: 'temperate', name: 'Temperate Forest', canopy: 0x2f7d4a, ground: 0x2c3a22, horizon: 0x1d4034,
+    grass: 0x5a9a3e, shrub: 0x3f7d36, treeDensity: 0.8, grassDensity: 0.9, shrubDensity: 0.8,
+    atmosphere: 'spores', atmoColor: 0xeae0a0, fog: 0x3a6a5a, fogStrength: 0.85, rayStrength: 1.0 },
+  { id: 'desert', name: 'Desert', canopy: 0x9a8a4a, ground: 0xc2a060, horizon: 0x5a3a22,
+    grass: 0xb89a5a, shrub: 0xa8924e, treeDensity: 0.06, grassDensity: 0.12, shrubDensity: 0.15,
+    atmosphere: 'sand', atmoColor: 0xe8c98a, fog: 0xd8b070, fogStrength: 0.6, rayStrength: 0.5 },
 ];
 
 const SUN = new THREE.Vector3(0.45, 0.62, 0.35).normalize();
@@ -140,6 +165,19 @@ export class BiomeLayer implements SceneLayer {
   private readonly pickables: THREE.Object3D[] = [];
   private readonly animals: { group: THREE.Group; angle: number; radius: number; speed: number }[] = [];
   private readonly loadedRoots: THREE.Object3D[] = [];
+
+  // Per-variant identity plumbing: instanced vegetation whose visible count is
+  // dialled by biome density, the foliage/grass/shrub materials to retint, and a
+  // single airborne particle field reconfigured into mist / snow / sand / spores.
+  private readonly vegLayers: { mesh: THREE.InstancedMesh; full: number; kind: 'tree' | 'shrub' | 'grass' }[] = [];
+  private readonly foliageMats: THREE.MeshStandardMaterial[] = [];
+  private readonly shrubMats: THREE.MeshStandardMaterial[] = [];
+  private readonly grassMats: THREE.MeshStandardMaterial[] = [];
+  private atmo: THREE.Points | null = null;
+  private atmoMat: THREE.PointsMaterial | null = null;
+  private atmoMode: Atmosphere = 'mist';
+  private rayStrength = 1.25;
+  private fogStrength = 1.4;
 
   // Shared living-world surfaces, generated once and reused across instances.
   private readonly foliageTex = createFoliageTexture('#3f9d4a', 256);
@@ -277,9 +315,61 @@ export class BiomeLayer implements SceneLayer {
       this.root.add(ring);
     });
 
+    // ── Airborne atmosphere: the single strongest biome tell ──────────────────
+    // One reusable particle field that becomes mist, snow, sand, or spores. It is
+    // reconfigured (colour, size, motion) whenever the biome changes.
+    const ATMO = 1400;
+    const atmoPos = new Float32Array(ATMO * 3);
+    for (let i = 0; i < ATMO; i++) {
+      atmoPos[i * 3] = (Math.random() - 0.5) * 300;
+      atmoPos[i * 3 + 1] = GROUND_Y + Math.random() * 90;
+      atmoPos[i * 3 + 2] = (Math.random() - 0.5) * 300;
+    }
+    const atmoGeo = new THREE.BufferGeometry();
+    atmoGeo.setAttribute('position', new THREE.BufferAttribute(atmoPos, 3));
+    this.atmoMat = new THREE.PointsMaterial({
+      color: 0xbfe0d8, size: 1.2, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+    });
+    this.atmo = new THREE.Points(atmoGeo, this.atmoMat);
+    this.atmo.frustumCulled = false;
+    this.root.add(this.atmo);
+    this.fadeables.push(this.atmoMat);
+
     // ── Real roaming wildlife (best-effort, with no fallback clutter) ──────────
     this.spawnAnimal('deer', 'organism:herbivore', 4, 40);
     this.spawnAnimal('wolf', 'organism:predator', 3.2, 60);
+
+    // Lock in the starting biome's full identity (densities, tints, air).
+    this.applyIdentity();
+  }
+
+  /** Reconfigure every per-variant trait: vegetation density, palette, haze,
+   *  ray strength, and the airborne particle signature. */
+  private applyIdentity(): void {
+    const v = this.active;
+    this.groundMat.color.setHex(v.ground);
+    this.skyMat.uniforms.uHorizon.value.setHex(v.horizon);
+    this.ground.userData.pick = { id: `biome:${v.id}`, scale: Scale.Biome };
+    this.hazeMat.color.setHex(v.fog);
+    this.fogStrength = v.fogStrength;
+    this.rayStrength = v.rayStrength;
+
+    for (const m of this.foliageMats) m.color.setHex(v.canopy);
+    for (const m of this.shrubMats) m.color.setHex(v.shrub);
+    for (const m of this.grassMats) m.color.setHex(v.grass);
+
+    for (const layer of this.vegLayers) {
+      const density = layer.kind === 'tree' ? v.treeDensity : layer.kind === 'grass' ? v.grassDensity : v.shrubDensity;
+      layer.mesh.count = Math.max(0, Math.round(layer.full * density));
+    }
+
+    this.atmoMode = v.atmosphere;
+    if (this.atmoMat) {
+      this.atmoMat.color.setHex(v.atmoColor);
+      this.atmoMat.size = v.atmosphere === 'snow' ? 1.8 : v.atmosphere === 'sand' ? 0.8 : v.atmosphere === 'mist' ? 2.6 : 1.1;
+      this.atmoMat.opacity = 0; // re-faded in by update()
+    }
   }
 
   // ── construction helpers ────────────────────────────────────────────────────
@@ -377,6 +467,9 @@ export class BiomeLayer implements SceneLayer {
     this.root.add(trunks, crowns);
     this.pickables.push(trunks, crowns);
     this.lastFoliage = crowns;
+    this.foliageMats.push(crownMat);
+    this.vegLayers.push({ mesh: trunks, full: count, kind: 'tree' });
+    this.vegLayers.push({ mesh: crowns, full: count, kind: 'tree' });
   }
 
   private scatterShrubs(count: number): void {
@@ -403,6 +496,8 @@ export class BiomeLayer implements SceneLayer {
     shrubs.userData.pick = { id: `biome:${this.active.id}`, scale: Scale.Biome };
     this.root.add(shrubs);
     this.pickables.push(shrubs);
+    this.shrubMats.push(mat);
+    this.vegLayers.push({ mesh: shrubs, full: count, kind: 'shrub' });
   }
 
   private scatterGrass(count: number): void {
@@ -424,6 +519,8 @@ export class BiomeLayer implements SceneLayer {
     }
     grass.instanceMatrix.needsUpdate = true;
     this.root.add(grass);
+    this.grassMats.push(mat);
+    this.vegLayers.push({ mesh: grass, full: count, kind: 'grass' });
   }
 
   /** Forest-floor clutter: fallen logs, rocks, mushrooms, and dead snags. */
@@ -481,10 +578,7 @@ export class BiomeLayer implements SceneLayer {
     const variant = BIOME_VARIANTS.find((v) => v.id === id);
     if (!variant || variant === this.active) return;
     this.active = variant;
-    this.groundMat.color.setHex(variant.ground);
-    (this.canopyFoliage.material as THREE.MeshStandardMaterial).color.setHex(variant.canopy);
-    this.skyMat.uniforms.uHorizon.value.setHex(variant.horizon);
-    this.ground.userData.pick = { id: `biome:${variant.id}`, scale: Scale.Biome };
+    this.applyIdentity();
   }
 
   onScaleChange(_scale: Scale, intensity: number): void {
@@ -497,12 +591,14 @@ export class BiomeLayer implements SceneLayer {
     this.skyMat.uniforms.uTime.value = elapsed;
     for (const mat of this.fadeables) fadeMaterial(mat, this.intensity, dt);
     this.skyMat.uniforms.uOpacity.value = this.skyMat.opacity;
-    // Re-weight the atmospheric extras below full strength.
-    this.hazeMat.opacity = Math.min(this.hazeMat.opacity, this.intensity * 0.35);
+    // Re-weight the atmospheric extras below full strength, scaled per biome so a
+    // rainforest is thick and humid while a desert sky stays clear and bright.
+    this.hazeMat.opacity = Math.min(this.hazeMat.opacity, this.intensity * 0.35 * this.fogStrength);
     // Hold the rays subtle, with a slow shimmer and drift so the beam dazzles
     // gently rather than sitting as a static slab.
-    this.godRayMat.opacity = Math.min(this.godRayMat.opacity, this.intensity * (0.2 + 0.05 * Math.sin(elapsed * 0.6)));
+    this.godRayMat.opacity = Math.min(this.godRayMat.opacity, this.intensity * this.rayStrength * (0.2 + 0.05 * Math.sin(elapsed * 0.6)));
     this.godRayGroup.rotateY(dt * 0.05);
+    this.updateAtmosphere(dt, elapsed);
     this.markerMats.forEach((mat, i) => {
       const pulse = 0.5 + 0.5 * Math.sin(elapsed * 1.5 + i);
       mat.opacity = Math.min(mat.opacity, this.intensity * (0.35 + pulse * 0.45));
@@ -525,6 +621,40 @@ export class BiomeLayer implements SceneLayer {
       a.group.position.set(x, GROUND_Y + heightAt(x, z), z);
       a.group.rotation.y = -a.angle + Math.PI / 2;
     }
+  }
+
+  /** Drive the airborne particles according to the active biome's signature. */
+  private updateAtmosphere(dt: number, elapsed: number): void {
+    if (!this.atmo) return;
+    const pos = this.atmo.geometry.attributes.position as THREE.BufferAttribute;
+    const top = GROUND_Y + 90;
+    for (let i = 0; i < pos.count; i++) {
+      let x = pos.getX(i); let y = pos.getY(i); let z = pos.getZ(i);
+      switch (this.atmoMode) {
+        case 'snow': // flakes fall and drift, recycling from the top
+          y -= dt * (6 + (i % 5));
+          x += Math.sin(elapsed * 0.6 + i) * dt * 1.2;
+          if (y < GROUND_Y) y = top;
+          break;
+        case 'sand': // sand blows fast and low across the dunes
+          x += dt * (26 + (i % 7) * 4);
+          y = GROUND_Y + 1 + ((y - GROUND_Y + Math.sin(elapsed + i) * 0.6) % 18 + 18) % 18;
+          if (x > 150) x = -150;
+          break;
+        case 'mist': // humid mist hangs low and rolls slowly
+          x += Math.sin(elapsed * 0.2 + i) * dt * 1.4;
+          z += Math.cos(elapsed * 0.18 + i) * dt * 1.4;
+          y = GROUND_Y + 2 + ((y - GROUND_Y + dt * 0.5) % 26);
+          break;
+        default: // spores / pollen / marine snow rise gently and wander
+          y += dt * (1.2 + (i % 4) * 0.4);
+          x += Math.sin(elapsed * 0.3 + i) * dt * 0.8;
+          if (y > top) y = GROUND_Y + 1;
+          break;
+      }
+      pos.setXYZ(i, x, y, z);
+    }
+    pos.needsUpdate = true;
   }
 
   getPickables(): THREE.Object3D[] {
