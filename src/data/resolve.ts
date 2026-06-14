@@ -142,8 +142,11 @@ const biomeObjects: Record<string, BioObject> = {
 
 const ECO_STRUCTURES: { id: string; name: string; summary: string }[] = [
   { id: 'sun', name: 'Solar energy', summary: 'The energy input driving primary production across the ecosystem.' },
-  { id: 'canopy', name: 'Canopy producers', summary: 'Photosynthetic plants forming the productive base of the food web.' },
+  { id: 'canopy', name: 'Canopy producers', summary: 'Photosynthetic trees forming the productive base of the food web.' },
   { id: 'flowering', name: 'Flowering plants', summary: 'Producers that exchange nectar for pollination services.' },
+  { id: 'grass', name: 'Ground-cover producers', summary: 'Grasses and low plants grazed by herbivores at the base of the chain.' },
+  { id: 'fungus', name: 'Fungal decomposers', summary: 'Fungi breaking down dead matter and returning nutrients to the soil.' },
+  { id: 'bacteria', name: 'Bacterial decomposers', summary: 'Microbes mineralizing organic matter back into soil nutrients.' },
   { id: 'decomposer', name: 'Decomposers', summary: 'Fungi and microbes returning nutrients from dead matter to the soil.' },
   { id: 'soil', name: 'Soil & nutrients', summary: 'The nutrient reservoir cycling matter back into living producers.' },
 ];
@@ -162,15 +165,26 @@ for (const o of ECO_ORGANISMS) {
   ecosystemObjects[`organism:${o.id}`] = { id: `organism:${o.id}`, name: o.name, scale: Scale.Organism, kind: 'organism', summary: o.summary, size: 'organism scale', facts: ['Selecting it descends to the organism scale.', 'A node in the ecosystem interaction network.'], provenanceNote: ECO_NOTE };
 }
 
-// Histology specimens shown at the tissue scale.
+// Cosmic structures clickable at the largest scales.
+const cosmicStructures: Record<string, BioObject> = {
+  cosmos: { id: 'cosmos', name: 'Observable Universe', scale: Scale.Cosmos, kind: 'cosmos', summary: 'The cosmic web of galaxy filaments, clusters, and voids spanning the observable universe.', size: '~93 billion light-years across', facts: ['Matter is organized into filaments and clusters separated by vast voids.', 'Structure traces the underlying dark-matter scaffold.'], provenanceNote: 'Procedural large-scale-structure visualization.' },
+  galaxy: { id: 'galaxy', name: 'Spiral Galaxy', scale: Scale.Galaxy, kind: 'galaxy', summary: 'A spiral galaxy of hundreds of billions of stars with a bright core and winding arms.', size: '~100,000 light-years across', facts: ['A dense bulge surrounds the central core.', 'Spiral arms are sites of active star formation.'], provenanceNote: 'Procedural galaxy visualization.' },
+};
+
+// A representative atom, clickable at the deepest scale.
+const atomObjects: Record<string, BioObject> = {
+  atom_carbon: { id: 'atom_carbon', name: 'Atom', scale: Scale.Atom, kind: 'atom', summary: 'A dense nucleus of protons and neutrons surrounded by orbiting electrons.', size: '~100 pm', facts: ['Nearly all the mass sits in the tiny nucleus.', 'Electrons occupy quantized orbital shells.'], provenanceNote: 'Schematic atomic model rendered procedurally.' },
+};
+
+// Tissue: one immersive specimen (skeletal muscle) and its substructures.
 function tissue(id: string, name: string, summary: string, facts: string[]): BioObject {
   return { id: `tissue:${id}`, name, scale: Scale.Tissue, kind: 'tissue', summary, size: 'tissue scale (~0.1–1 mm)', facts, source: 'hpa', crossRefs: ['ensembl', 'uniprot'] };
 }
 const tissueObjects: Record<string, BioObject> = {
-  'tissue:muscle': tissue('muscle', 'Skeletal muscle', 'Bundled striated muscle fibres whose banded sarcomeres drive contraction.', ['Striations are repeating actin–myosin sarcomeres.', 'Multinucleate fibres fused from myoblasts.']),
-  'tissue:neuron': tissue('neuron', 'Neural tissue', 'A web of neurons with branching dendrites and connecting axons.', ['Dendrites receive signals; axons transmit them.', 'Synapses link one neuron to the next.']),
-  'tissue:alveoli': tissue('alveoli', 'Alveolar tissue', 'Clustered air sacs where oxygen and carbon dioxide cross thin walls.', ['Vast surface area for gas exchange.', 'Wrapped in dense pulmonary capillaries.']),
-  'tissue:skin': tissue('skin', 'Skin layers', 'The stacked epidermis, dermis, and hypodermis that protect the body.', ['Epidermis renews continuously from its base.', 'Dermis carries vessels, nerves, and glands.']),
+  'tissue:muscle': tissue('muscle', 'Skeletal muscle fibre', 'A giant multinucleate fibre packed with striated myofibrils that contract.', ['Striations are repeating actin–myosin sarcomeres.', 'Fibres bundle into fascicles wrapped in connective tissue.']),
+  'tissue:capillary': tissue('capillary', 'Capillary', 'A microvessel threading between fibres, delivering oxygen and nutrients.', ['Walls are a single endothelial cell thick.', 'Site of gas and nutrient exchange with tissue.']),
+  'tissue:motor_neuron': tissue('motor_neuron', 'Motor neuron', 'A neuron whose axon reaches the muscle at the neuromuscular junction.', ['Releases acetylcholine to trigger contraction.', 'One motor neuron drives many fibres as a motor unit.']),
+  'tissue:ecm': tissue('ecm', 'Extracellular matrix', 'The collagen-rich scaffold of connective tissue surrounding the fibres.', ['Mostly collagen and elastin fibres.', 'Transmits force and holds the tissue together.']),
 };
 
 // Molecule-scale icons of the chemistry of life.
@@ -186,7 +200,7 @@ const moleculeObjects: Record<string, BioObject> = {
 export function resolveObject(id: string): BioObject | undefined {
   const tissueMatch = /^tissue:cell:(\d+)$/.exec(id);
   if (tissueMatch) return tissueCellObject(Number(tissueMatch[1]));
-  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? cosmicObjects[id] ?? biomeObjects[id] ?? ecosystemObjects[id] ?? tissueObjects[id] ?? moleculeObjects[id];
+  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? cosmicObjects[id] ?? cosmicStructures[id] ?? atomObjects[id] ?? biomeObjects[id] ?? ecosystemObjects[id] ?? tissueObjects[id] ?? moleculeObjects[id];
 }
 
 /** Complete locally indexed corpus used by search and the read-only copilot. */
@@ -196,6 +210,8 @@ export function allResolvedObjects(): BioObject[] {
     ...Object.values(taxonObjects),
     ...Object.values(ANATOMY_OBJECTS),
     ...Object.values(cosmicObjects),
+    ...Object.values(cosmicStructures),
+    ...Object.values(atomObjects),
     ...Object.values(biomeObjects),
     ...Object.values(ecosystemObjects),
     ...Object.values(tissueObjects),

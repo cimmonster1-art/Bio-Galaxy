@@ -31,11 +31,10 @@ export class CosmosLayer implements SceneLayer {
   private readonly dust: THREE.Points;
   private readonly dustMat: THREE.PointsMaterial;
 
-  // Cosmic web: dark-matter-style filament strands threading galaxy clusters.
-  private readonly web: THREE.LineSegments;
-  private readonly webMat: THREE.LineBasicMaterial;
-  private readonly webNodes: THREE.InstancedMesh;
-  private readonly webNodeMat: THREE.MeshBasicMaterial;
+  // Cosmic web: a particle field condensed into filaments and cluster knots, so
+  // the large-scale structure reads as glowing cosmic matter — not a graph.
+  private readonly web: THREE.Points;
+  private readonly webMat: THREE.PointsMaterial;
 
   // Big Bang cutscene elements.
   private readonly bang = new THREE.Group();
@@ -65,6 +64,7 @@ export class CosmosLayer implements SceneLayer {
       opacity: 0,
     });
     this.core = new THREE.Mesh(new THREE.SphereGeometry(6, 32, 32), this.coreMat);
+    this.core.userData.pick = { id: 'galaxy', scale: Scale.Galaxy };
     this.root.add(this.core);
 
     // Bright additive halo so the galactic core blooms instead of reading as a
@@ -99,6 +99,7 @@ export class CosmosLayer implements SceneLayer {
       this.field.setColorAt(i, color);
     }
     this.field.instanceMatrix.needsUpdate = true;
+    this.field.userData.pick = { id: 'cosmos', scale: Scale.Cosmos };
     this.root.add(this.field);
 
     // Spiral galaxy that resolves near the galaxy scale.
@@ -126,6 +127,7 @@ export class CosmosLayer implements SceneLayer {
       this.spiral.setColorAt(i, color);
     }
     this.spiral.instanceMatrix.needsUpdate = true;
+    this.spiral.userData.pick = { id: 'galaxy', scale: Scale.Galaxy };
     this.root.add(this.spiral);
 
     // A broad, pale dust lane makes the Milky Way disk readable behind the stars.
@@ -148,56 +150,64 @@ export class CosmosLayer implements SceneLayer {
     this.dust = new THREE.Points(dustGeometry, this.dustMat);
     this.root.add(this.dust);
 
-    // ---- Cosmic web: filaments and clusters of the large-scale universe ------
-    // Scatter cluster nodes through a large volume, then link each to its few
-    // nearest neighbours. The resulting strands read as the dark-matter web that
-    // galaxies condense along; bright nodes mark the densest knots.
-    const NODE_COUNT = 120;
-    const nodes: THREE.Vector3[] = [];
-    for (let i = 0; i < NODE_COUNT; i++) {
-      nodes.push(randomDir().multiplyScalar(120 + Math.random() * 430));
+    // ---- Cosmic web: filaments and cluster knots as a particle field --------
+    // Scatter cluster knots through a large volume, link each to its nearest
+    // neighbours, and seed dense points ALONG those links plus tight swarms at
+    // the knots. The result reads as glowing filaments threading dark voids —
+    // cosmic structure rather than a wireframe graph.
+    const KNOTS = 90;
+    const knots: THREE.Vector3[] = [];
+    for (let i = 0; i < KNOTS; i++) {
+      knots.push(randomDir().multiplyScalar(120 + Math.random() * 430));
     }
-    const segs: number[] = [];
-    for (let i = 0; i < NODE_COUNT; i++) {
-      // Connect to the 3 nearest neighbours to weave a sparse filament network.
-      const dists = nodes
-        .map((n, j) => ({ j, d: nodes[i].distanceToSquared(n) }))
+    const webPos: number[] = [];
+    const webCol: number[] = [];
+    const pale = new THREE.Color('#b9b0ff');
+    const knotCol = new THREE.Color('#dfe6ff');
+    const pushPoint = (p: THREE.Vector3, c: THREE.Color, jitter: number) => {
+      webPos.push(p.x + (Math.random() - 0.5) * jitter, p.y + (Math.random() - 0.5) * jitter, p.z + (Math.random() - 0.5) * jitter);
+      webCol.push(c.r, c.g, c.b);
+    };
+    // Dense swarm at each cluster knot.
+    for (const k of knots) {
+      for (let s = 0; s < 70; s++) pushPoint(k, knotCol, 10 + Math.random() * 16);
+    }
+    // Filament strands: points strung between each knot and its nearest neighbours.
+    for (let i = 0; i < KNOTS; i++) {
+      const near = knots
+        .map((n, j) => ({ j, d: knots[i].distanceToSquared(n) }))
         .filter((e) => e.j !== i)
         .sort((a, b) => a.d - b.d)
-        .slice(0, 3);
-      for (const { j } of dists) {
-        if (j < i) continue; // avoid duplicate strands
-        segs.push(nodes[i].x, nodes[i].y, nodes[i].z, nodes[j].x, nodes[j].y, nodes[j].z);
+        .slice(0, 2);
+      for (const { j } of near) {
+        if (j < i) continue;
+        const a = knots[i];
+        const b = knots[j];
+        const steps = 26;
+        for (let t = 1; t < steps; t++) {
+          const f = t / steps;
+          const p = a.clone().lerp(b, f);
+          // Thin the strand toward its middle so knots stay denser than voids.
+          const taper = 2 + Math.sin(f * Math.PI) * 5;
+          pushPoint(p, pale, taper);
+        }
       }
     }
     const webGeo = new THREE.BufferGeometry();
-    webGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(segs), 3));
-    this.webMat = new THREE.LineBasicMaterial({
-      color: new THREE.Color('#5b6cff'),
+    webGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(webPos), 3));
+    webGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(webCol), 3));
+    this.webMat = new THREE.PointsMaterial({
+      size: 1.5,
+      sizeAttenuation: true,
+      vertexColors: true,
       transparent: true,
       opacity: 0,
-      blending: THREE.AdditiveBlending,
       depthWrite: false,
+      blending: THREE.AdditiveBlending,
     });
-    this.web = new THREE.LineSegments(webGeo, this.webMat);
+    this.web = new THREE.Points(webGeo, this.webMat);
+    this.web.frustumCulled = false;
     this.root.add(this.web);
-
-    this.webNodeMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#a9b8ff'),
-      transparent: true,
-      opacity: 0,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    this.webNodes = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1.6, 0), this.webNodeMat, NODE_COUNT);
-    for (let i = 0; i < NODE_COUNT; i++) {
-      dummy.position.copy(nodes[i]);
-      dummy.scale.setScalar(0.6 + Math.random() * 2.2);
-      dummy.updateMatrix();
-      this.webNodes.setMatrixAt(i, dummy.matrix);
-    }
-    this.webNodes.instanceMatrix.needsUpdate = true;
-    this.root.add(this.webNodes);
 
     // ---- Big Bang cutscene rig (hidden until the cinematic drives it) -------
     this.bang.visible = false;
@@ -281,14 +291,12 @@ export class CosmosLayer implements SceneLayer {
     fadeMaterial(this.fieldMat, this.intensity * fieldWeight, dt);
     fadeMaterial(this.spiralMat, this.intensity * galaxyWeight, dt);
     fadeMaterial(this.dustMat, this.intensity * galaxyWeight * 0.78, dt);
-    fadeMaterial(this.webMat, this.intensity * webWeight * 0.55, dt);
-    fadeMaterial(this.webNodeMat, this.intensity * webWeight * 0.7, dt);
+    fadeMaterial(this.webMat, this.intensity * webWeight * 0.85, dt);
 
     this.spiral.rotation.y = elapsed * 0.02;
     this.dust.rotation.y = elapsed * 0.014;
     this.field.rotation.y = elapsed * 0.004;
     this.web.rotation.y = elapsed * 0.006;
-    this.webNodes.rotation.y = elapsed * 0.006;
     const pulse = 1 + Math.sin(elapsed * 1.5) * 0.05;
     this.core.scale.setScalar(pulse);
     this.coreGlow.scale.setScalar(46 * (1 + Math.sin(elapsed * 1.5) * 0.04));
@@ -343,7 +351,9 @@ export class CosmosLayer implements SceneLayer {
   }
 
   getPickables(): THREE.Object3D[] {
-    return [];
+    if (this.intensity < 0.3) return [];
+    // Galaxy core/arms select the galaxy; the deep field selects the cosmos.
+    return this.currentScale >= Scale.Galaxy ? [this.core, this.spiral] : [this.field, this.core];
   }
 
   dispose(): void {

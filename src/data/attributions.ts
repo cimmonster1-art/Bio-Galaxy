@@ -63,7 +63,8 @@ export const ATTRIBUTION_GROUPS: AttributionGroup[] = [
     label: 'Living world and environments',
     description: 'How the biome and ecosystem scales are built, and the open asset libraries they can draw on.',
     entries: [
-      { name: 'Procedural biomes & ecosystems', institution: 'Bio Galaxy', role: 'Terrain, dynamic sky, volumetric god-rays, wind-animated vegetation, wildlife particles, and the ecological network are generated procedurally in-engine — no downloads', url: 'https://threejs.org', status: 'asset' },
+      { name: 'Procedural biomes & ecosystems', institution: 'Bio Galaxy', role: 'Hierarchical vegetation, terrain, dynamic sky, volumetric god-rays, wind, and the ecological food web are generated procedurally in-engine', url: 'https://threejs.org', status: 'asset' },
+      { name: 'Wildlife models (Fox, Horse, Parrot, Stork)', institution: 'three.js examples & KhronosGroup glTF Sample Assets', role: 'Real open-source animal GLBs (CC0 / CC-BY) roaming the biome and populating the ecosystem food web', url: 'https://github.com/KhronosGroup/glTF-Sample-Assets', status: 'asset' },
       { name: 'Poly Haven', institution: 'Poly Haven', role: 'CC0 HDRIs, PBR textures, and vegetation models compatible with the biome scenes', url: 'https://polyhaven.com', status: 'compatible' },
       { name: 'Kenney Nature Kit', institution: 'Kenney', role: 'CC0 low-poly nature assets ready to drop into the biome loader', url: 'https://kenney.nl/assets/nature-kit', status: 'compatible' },
       { name: 'OpenGameArt', institution: 'OpenGameArt contributors', role: 'Openly licensed vegetation and nature asset collections', url: 'https://opengameart.org', status: 'compatible' },
