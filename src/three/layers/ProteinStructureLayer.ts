@@ -417,6 +417,7 @@ export class ProteinStructureLayer implements SceneLayer {
     const nucleusGlow = new THREE.Sprite(nucleusGlowMat);
     nucleusGlow.scale.setScalar(7.5);
     this.nucleus.add(nucleusGlow);
+    this.nucleus.userData.pick = { id: 'atom_carbon', scale: Scale.Atom };
     nucleusGlowMat.userData.fadeWeight = 0.85;
     this.atomFadeables.push(nucleusGlowMat);
     this.atomScale.add(this.nucleus);
@@ -536,6 +537,7 @@ export class ProteinStructureLayer implements SceneLayer {
 
   getPickables(): THREE.Object3D[] {
     if (this.intensity <= 0.3) return [];
+    if (this.currentScale === Scale.Atom) return [this.nucleus];
     if (this.currentScale === Scale.Molecule) {
       return [this.molAtoms, this.dnaPick, this.membranePick].filter((o): o is THREE.Object3D => o !== null);
     }

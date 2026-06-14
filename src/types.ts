@@ -83,6 +83,8 @@ export interface BioObject {
   kind:
     | 'star'
     | 'planet'
+    | 'cosmos'
+    | 'galaxy'
     | 'biome'
     | 'ecosystem'
     | 'clade'
