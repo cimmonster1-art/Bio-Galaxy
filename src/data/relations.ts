@@ -1,16 +1,19 @@
 import { BioObject } from '../types';
 import { resolveObject } from './resolve';
-import { childrenOf, getTaxon } from './taxonomy';
+import { childrenOf, getTaxon, lineageOf } from './taxonomy';
 
 /**
- * The ontology made navigable. Given any selected object, this returns the
- * records "inside" or directly connected to it — the children the bottom-card
- * rail surfaces so every object in the atlas opens onto another set of objects.
+ * The ontology made navigable — in both directions. Given any selected object,
+ * this returns the records inside it (descend) AND the records it is part of
+ * (ascend), so a student never hits a dead end: descend from an organ to the gene
+ * that builds it, or climb from a single atom up through chemistry into living
+ * pathways and beyond.
  *
- * Connections come from three places, in order of specificity:
- *   1. the Tree of Life (a clade's child taxa),
- *   2. a curated cross-scale CONTAINS map for the physical spine, and
+ * Links come from three places:
+ *   1. the Tree of Life (a clade's child taxa and parent lineage),
+ *   2. a curated cross-scale, cross-domain CONTAINS graph, and
  *   3. a generic by-kind fallback, so a selection is rarely a dead end.
+ * The ascend direction is derived automatically by reversing CONTAINS.
  */
 
 // Representative member sets reused across several parents.
@@ -30,7 +33,9 @@ const ORGANELLES = ['nucleus', 'mitochondrion', 'golgi', 'er', 'ribosomes', 'cyt
 const COMPLEXES = ['atp_synthase', 'cytochrome_c'];
 const MOLECULES = ['dna_helix', 'lipid_membrane', 'water_cluster'];
 
-// Curated parent → children links along the continuous physical spine.
+// Curated parent → children links. The spine runs cosmos → atom, but the graph
+// also threads two deep cross-domain chains (heart → ACTA1 gene; carbon → ATP)
+// and the cycles that connect chemistry back into living biology.
 const CONTAINS: Record<string, string[]> = {
   cosmos: ['galaxy'],
   galaxy: ['planet:sun', 'star:0', 'star:1', 'star:2', 'star:3', 'star:4', 'star:5'],
@@ -44,17 +49,44 @@ const CONTAINS: Record<string, string[]> = {
   'biome:desert': BIOME_MEMBERS,
   'organism:homo_sapiens': ORGAN_SYSTEMS,
   ...SYSTEM_ORGANS,
-  'organ:heart': ['tissue:muscle', 'tissue:capillary', 'tissue:motor_neuron'],
-  'tissue:muscle': ['tissue:capillary', 'tissue:motor_neuron', 'tissue:ecm', 'nucleus', 'mitochondrion'],
+
+  // Biology deep chain: heart → left ventricle → cardiomyocyte → sarcomere →
+  // actin filament → actin protein → ACTA1 gene.
+  'organ:heart': ['region:left_ventricle', 'tissue:muscle', 'tissue:capillary'],
+  'region:left_ventricle': ['cell:cardiomyocyte', 'tissue:muscle'],
+  'cell:cardiomyocyte': ['organelle:sarcomere', 'nucleus', 'mitochondrion'],
+  'organelle:sarcomere': ['complex:actin_filament'],
+  'complex:actin_filament': ['protein:actin'],
+  'protein:actin': ['gene:acta1', 'atom_carbon'],
+  'gene:acta1': ['protein:actin', 'dna_helix'],
+  'tissue:muscle': ['cell:cardiomyocyte', 'tissue:capillary', 'tissue:motor_neuron', 'tissue:ecm'],
+
+  // Cell interior.
   mitochondrion: ['atp_synthase', 'cytochrome_c'],
   nucleus: ['dna_helix', 'ribosomes'],
-  atp_synthase: ['lipid_membrane', 'water_cluster', 'atom_carbon'],
+  atp_synthase: ['mol_atp', 'lipid_membrane', 'water_cluster', 'atom_carbon'],
   cytochrome_c: ['atom_carbon'],
-  dna_helix: ['atom_carbon'],
+  dna_helix: ['gene:acta1', 'atom_carbon'],
+
+  // Chemistry deep chain: carbon → methane → glucose → glycolysis → ATP, with
+  // ATP cycling back to the enzyme that makes it.
+  atom_carbon: ['mol_methane', 'dna_helix'],
+  mol_methane: ['mol_glucose', 'atom_carbon'],
+  mol_glucose: ['pathway_glycolysis', 'atom_carbon'],
+  pathway_glycolysis: ['mol_atp', 'mol_glucose'],
+  mol_atp: ['atp_synthase', 'atom_carbon'],
 };
 
-/** Generic fallback by object kind, so most selections still open onto more. */
-function genericRelated(object: BioObject): string[] {
+// Reverse the CONTAINS graph once so every link is traversable upward too.
+const PARENTS: Record<string, string[]> = {};
+for (const [parent, children] of Object.entries(CONTAINS)) {
+  for (const child of children) {
+    (PARENTS[child] ??= []).push(parent);
+  }
+}
+
+/** Generic descend fallback by object kind, so most selections open onto more. */
+function genericChildren(object: BioObject): string[] {
   switch (object.kind) {
     case 'planet': return PLANETS.filter((id) => id !== object.id);
     case 'star': {
@@ -72,7 +104,21 @@ function genericRelated(object: BioObject): string[] {
   }
 }
 
-function relatedIds(object: BioObject): string[] {
+/** Generic ascend fallback for objects with no curated parent. */
+function genericParents(object: BioObject): string[] {
+  switch (object.kind) {
+    case 'planet': return object.id === 'planet:sun' ? ['galaxy'] : ['planet:sun'];
+    case 'star': return ['galaxy'];
+    case 'galaxy': return ['cosmos'];
+    case 'biome': return ['planet:earth'];
+    case 'ecosystem': return ['planet:earth'];
+    case 'system': return ['organism:homo_sapiens'];
+    case 'atom': return ['mol_methane', 'dna_helix'];
+    default: return [];
+  }
+}
+
+function childIds(object: BioObject): string[] {
   if (object.id.startsWith('taxon:')) {
     const node = getTaxon(object.id.replace(/^taxon:/, ''));
     if (node) {
@@ -80,14 +126,22 @@ function relatedIds(object: BioObject): string[] {
       if (kids.length) return kids;
     }
   }
-  return CONTAINS[object.id] ?? genericRelated(object);
+  return CONTAINS[object.id] ?? genericChildren(object);
 }
 
-/** The connected/child records for a selection, resolved and de-duplicated. */
-export function relatedObjects(object: BioObject, limit = 14): BioObject[] {
+function parentIds(object: BioObject): string[] {
+  if (object.id.startsWith('taxon:')) {
+    const lineage = lineageOf(object.id.replace(/^taxon:/, ''));
+    const parent = lineage.at(-2);
+    return parent ? [`taxon:${parent.id}`] : [];
+  }
+  return PARENTS[object.id] ?? genericParents(object);
+}
+
+function resolveAll(ids: string[], excludeId: string, limit: number): BioObject[] {
   const out: BioObject[] = [];
-  const seen = new Set<string>([object.id]);
-  for (const id of relatedIds(object)) {
+  const seen = new Set<string>([excludeId]);
+  for (const id of ids) {
     if (seen.has(id)) continue;
     seen.add(id);
     const resolved = resolveObject(id);
@@ -95,4 +149,17 @@ export function relatedObjects(object: BioObject, limit = 14): BioObject[] {
     if (out.length >= limit) break;
   }
   return out;
+}
+
+/** Both directions of the graph for a selection: what it is part of, and what is inside it. */
+export function relatedGroups(object: BioObject): { up: BioObject[]; down: BioObject[] } {
+  return {
+    up: resolveAll(parentIds(object), object.id, 6),
+    down: resolveAll(childIds(object), object.id, 14),
+  };
+}
+
+/** The records inside / connected to a selection (descend direction). */
+export function relatedObjects(object: BioObject, limit = 14): BioObject[] {
+  return resolveAll(childIds(object), object.id, limit);
 }
