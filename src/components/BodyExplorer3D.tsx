@@ -6,6 +6,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Bone, HeartPulse, Layers, Loader as LoaderIcon } from 'lucide-react';
 import { Scale, PickTag } from '../types';
 import { createNebulaBackground } from '../three/shaders/nebula';
@@ -154,6 +155,16 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   // ── Scene + camera ────────────────────────────────────────────────────────
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x02040a, 0.0011);
+
+  // Procedural studio environment for physically based reflections — the same
+  // technique the main galaxy scene uses. Without it the PBR organ/skin
+  // materials have nothing to reflect and read as flat; with it they pick up
+  // soft specular highlights that sculpt their real surface relief.
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = envTexture;
+  pmrem.dispose();
+
   const w = Math.max(canvas.clientWidth, 1), h = Math.max(canvas.clientHeight, 1);
   const camera = new THREE.PerspectiveCamera(52, w / h, 0.05, 40);
   camera.position.set(0, 0, 3.3);
@@ -325,6 +336,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     heart: 0xd83a4e, lungs: 0xd79bb0, brain: 0xc9b5d6, body: 0xe9c39a,
     liver: 0x9d503f, kidneys: 0xa45b73, spleen: 0x7d3a52, pancreas: 0xd8a85a, intestines: 0xd88961,
   };
+  const ORGAN_KEYS = new Set(['heart', 'lungs', 'brain', 'liver', 'kidneys', 'spleen', 'pancreas', 'intestines']);
   const sharedMats: Record<string, THREE.MeshStandardMaterial> = {};
   const matFor = (key: string) => {
     if (sharedMats[key]) return sharedMats[key];
@@ -332,20 +344,35 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     const isSkin = key === 'body';
     const opaque = key === 'skeleton';
     const isBone = key === 'skeleton';
-    const mat = new THREE.MeshStandardMaterial({
-      color: tint, emissive: tint,
-      emissiveIntensity: isBone ? 0.22 : isSkin ? 0.07 : 0.4,
-      metalness: isBone ? 0.05 : 0.12, roughness: isBone ? 0.82 : 0.5,
-      transparent: !opaque,
-      // Skin barely visible so the organs read through it; organs themselves
-      // sit near-opaque so each one stays legible inside the translucent body.
-      opacity: isSkin ? 0.2 : 0.86,
-      depthWrite: opaque,
-      side: THREE.FrontSide,
-    });
+    const isOrgan = ORGAN_KEYS.has(key);
+
+    // Organs get a wet, fleshy MeshPhysicalMaterial — clearcoat for a moist
+    // sheen, sheen for soft back-scatter, low self-emission so the light rig and
+    // the environment reflections (not a flat glow) define their form.
+    const mat: THREE.MeshStandardMaterial = isOrgan
+      ? new THREE.MeshPhysicalMaterial({
+          color: tint, emissive: tint, emissiveIntensity: 0.12,
+          metalness: 0.0, roughness: 0.4,
+          clearcoat: 0.72, clearcoatRoughness: 0.38,
+          sheen: 0.55, sheenColor: new THREE.Color(tint), sheenRoughness: 0.6,
+          transparent: true, opacity: 0.96, depthWrite: true,
+          envMapIntensity: 1.25, side: THREE.FrontSide,
+        })
+      : new THREE.MeshStandardMaterial({
+          color: tint, emissive: tint,
+          emissiveIntensity: isBone ? 0.22 : isSkin ? 0.07 : 0.4,
+          metalness: isBone ? 0.05 : 0.12, roughness: isBone ? 0.82 : 0.5,
+          transparent: !opaque,
+          // Skin barely visible so the organs read through it.
+          opacity: isSkin ? 0.2 : 0.86,
+          depthWrite: opaque,
+          envMapIntensity: 0.9,
+          side: THREE.FrontSide,
+        });
     if (isSkin)                 enrich(mat, { rim: 0.9, detail: 0.32, detailScale: 34, striation: 0.35, bump: 0.25 });
     else if (isBone)            enrich(mat, { rim: 0.5, detail: 0.5, detailScale: 50, bump: 1.1, tex: grainTex, texAmt: 0.5, texScale: 1.8 });
     else if (key === 'muscles') enrich(mat, { detail: 0.7, detailScale: 36, striation: 1.0, bump: 0.95, tex: muscleTex, texAmt: 0.6, texScale: 1.2 });
+    else if (isOrgan)           enrich(mat, { detail: 0.5, detailScale: 46, bump: 0.85, tex: grainTex, texAmt: 0.4, texScale: 1.7 });
     else                        enrich(mat, { detail: 0.4, detailScale: 32, bump: 0.55, tex: grainTex, texAmt: 0.35, texScale: 1.3 });
     sharedMats[key] = mat;
     return mat;
@@ -580,6 +607,8 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
         if (o instanceof THREE.Mesh || o instanceof THREE.Points) o.geometry?.dispose();
       });
       nebula.material.dispose();
+      scene.environment = null;
+      envTexture.dispose();
       renderer.dispose();
       try { renderer.forceContextLoss(); } catch { /* noop */ }
     },
