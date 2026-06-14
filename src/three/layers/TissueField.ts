@@ -59,7 +59,10 @@ export class TissueField implements SceneLayer {
   private readonly fibres: { mesh: THREE.Mesh; phase: number }[] = [];
   private readonly blood: THREE.Points;
   private readonly bloodMat: THREE.PointsMaterial;
+  private readonly dust: THREE.Points;
+  private readonly dustMat: THREE.PointsMaterial;
   private readonly fill: THREE.PointLight;
+  private readonly rim: THREE.PointLight;
   private readonly pickables: THREE.Object3D[] = [];
   private intensity = 0;
 
@@ -123,6 +126,11 @@ export class TissueField implements SceneLayer {
         packing.push([x, y, 0.7 + Math.random() * 0.6]);
       }
     }
+    // Peripheral nuclei: skeletal-muscle fibres are multinucleate, with flattened
+    // nuclei pressed just under the sarcolemma. Scattering a few on each fibre is
+    // the detail that reads as "living cell" rather than a smooth rod.
+    const nucleusGeo = new THREE.SphereGeometry(0.7, 14, 10);
+    let fibreIndex = 0;
     for (const [x, y, s] of packing) {
       const mat = this.track(new THREE.MeshStandardMaterial({
         color: 0xa83a47, emissive: 0x300d14, emissiveIntensity: 0.45,
@@ -139,6 +147,21 @@ export class TissueField implements SceneLayer {
       this.root.add(fibre);
       this.fibres.push({ mesh: fibre, phase: Math.random() * Math.PI * 2 });
       this.pickables.push(fibre);
+
+      if (fibreIndex++ % 2 === 0) {
+        const nucMat = this.track(new THREE.MeshStandardMaterial({
+          color: 0x3a1a40, emissive: 0x180a22, emissiveIntensity: 0.6, roughness: 0.7,
+        }));
+        for (let n = 0; n < 3; n++) {
+          const nuc = new THREE.Mesh(nucleusGeo, nucMat);
+          const theta = Math.random() * Math.PI * 2;
+          // Local fibre space runs along Z; seat the nucleus just under the surface.
+          nuc.position.set(Math.cos(theta) * 4.5, Math.sin(theta) * 4.5, (Math.random() - 0.5) * 280);
+          nuc.scale.set(1.5, 1.5, 2.6); // flattened, elongated along the fibre
+          nuc.userData.pick = fibre.userData.pick;
+          fibre.add(nuc);
+        }
+      }
     }
 
     // ── Capillaries: blood vessels winding between the fibres ──────────────────
@@ -208,13 +231,62 @@ export class TissueField implements SceneLayer {
     const dgeo = new THREE.BufferGeometry();
     dgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(dpts), 3));
     neuron.add(new THREE.LineSegments(dgeo, axonMat));
+
+    // Neuromuscular junction: the axon terminal arborizes into synaptic boutons
+    // pressed onto a motor end-plate on the central fibre — the point where the
+    // nerve actually drives contraction.
+    const nmj = new THREE.Vector3(2, 2, 6);
+    const boutonMat = this.track(new THREE.MeshStandardMaterial({
+      color: 0xfff0a8, emissive: 0xffd24a, emissiveIntensity: 1.1, roughness: 0.3,
+    }));
+    const boutonGeo = new THREE.SphereGeometry(0.5, 12, 10);
+    for (let b = 0; b < 7; b++) {
+      const bouton = new THREE.Mesh(boutonGeo, boutonMat);
+      bouton.position.set(
+        nmj.x + (Math.random() - 0.5) * 3,
+        nmj.y + (Math.random() - 0.5) * 3,
+        nmj.z + (Math.random() - 0.5) * 4,
+      );
+      neuron.add(bouton);
+    }
+    const endPlateMat = this.track(new THREE.MeshBasicMaterial({
+      color: 0xffe07a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    const endPlate = new THREE.Mesh(new THREE.CircleGeometry(3.4, 24), endPlateMat);
+    endPlate.position.copy(nmj);
+    endPlate.lookAt(nmj.clone().add(new THREE.Vector3(0.3, 0.3, 1)));
+    neuron.add(endPlate);
+
     this.root.add(neuron);
     this.pickables.push(neuron);
 
-    // Warm interior fill so the fibres read with translucent depth.
+    // ── Atmosphere: fine cytoplasmic dust suspended in the interstitial fluid,
+    // catching the light to give the depth and volume of a real microscopic space.
+    const DUST = 520;
+    const dustPos = new Float32Array(DUST * 3);
+    for (let i = 0; i < DUST; i++) {
+      dustPos[i * 3] = (Math.random() - 0.5) * 110;
+      dustPos[i * 3 + 1] = (Math.random() - 0.5) * 80;
+      dustPos[i * 3 + 2] = (Math.random() - 0.5) * 200;
+    }
+    const dgeo2 = new THREE.BufferGeometry();
+    dgeo2.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+    this.dustMat = this.track(new THREE.PointsMaterial({
+      color: 0xffd9c4, size: 0.6, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+    }));
+    this.dust = new THREE.Points(dgeo2, this.dustMat);
+    this.dust.frustumCulled = false;
+    this.root.add(this.dust);
+
+    // Soft biological lighting: a warm key fill from the front and a cool rim
+    // from behind so the fibres read with rounded, translucent volume.
     this.fill = new THREE.PointLight(0xff9a8a, 0, 160, 1.6);
     this.fill.position.set(0, 6, 20);
     this.root.add(this.fill);
+    this.rim = new THREE.PointLight(0x6ad0ff, 0, 200, 1.8);
+    this.rim.position.set(-30, 24, -60);
+    this.root.add(this.rim);
   }
 
   private track<T extends THREE.Material & { opacity: number }>(mat: T): T {
@@ -235,7 +307,19 @@ export class TissueField implements SceneLayer {
       mat.uniforms.uOpacity.value += (this.intensity - mat.uniforms.uOpacity.value) * Math.min(1, dt * 6);
     }
     this.fill.intensity = this.intensity * 2.0;
+    this.rim.intensity = this.intensity * 1.4;
     if (this.intensity < 0.02) return;
+
+    // Drift the suspended dust slowly so the fluid feels alive, recycling it
+    // through the volume.
+    const dpos = this.dust.geometry.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < dpos.count; i++) {
+      let z = dpos.getZ(i) + dt * (1.5 + (i % 4));
+      if (z > 100) z = -100;
+      dpos.setZ(i, z);
+      dpos.setY(i, dpos.getY(i) + Math.sin(elapsed * 0.5 + i) * dt * 0.4);
+    }
+    dpos.needsUpdate = true;
 
     // Subtle contraction ripple across the fibres.
     for (const f of this.fibres) {

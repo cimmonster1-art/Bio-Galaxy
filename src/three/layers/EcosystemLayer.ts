@@ -116,6 +116,8 @@ export class EcosystemLayer implements SceneLayer {
 
   private intensity = 0;
   private skyMat: THREE.ShaderMaterial | null = null;
+  private pollen: THREE.Points | null = null;
+  private pollenMat: THREE.PointsMaterial | null = null;
   private readonly nodeGroups: { group: THREE.Group; node: EcoNode; baseY: number }[] = [];
   private readonly edgeMats: THREE.ShaderMaterial[] = [];
   private readonly fadeables: (THREE.Material & { opacity: number })[] = [];
@@ -189,6 +191,27 @@ export class EcosystemLayer implements SceneLayer {
     }
     grass.instanceMatrix.needsUpdate = true;
     this.root.add(grass);
+
+    // Pollen, spores, and insects drifting in the air, lit by the sun — the
+    // atmosphere that makes the clearing feel alive rather than staged.
+    const MOTES = 600;
+    const motePos = new Float32Array(MOTES * 3);
+    for (let i = 0; i < MOTES; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 90;
+      motePos[i * 3] = Math.cos(a) * r;
+      motePos[i * 3 + 1] = GROUND_Y + 1 + Math.random() * 40;
+      motePos[i * 3 + 2] = Math.sin(a) * r;
+    }
+    const moteGeo = new THREE.BufferGeometry();
+    moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+    this.pollenMat = this.track(new THREE.PointsMaterial({
+      color: 0xfff0b8, size: 0.5, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+    }));
+    this.pollen = new THREE.Points(moteGeo, this.pollenMat);
+    this.pollen.frustumCulled = false;
+    this.root.add(this.pollen);
   }
 
   private track<T extends THREE.Material & { opacity: number }>(mat: T, _w?: number): T {
@@ -402,6 +425,17 @@ export class EcosystemLayer implements SceneLayer {
       n.group.rotation.y += dt * 0.25;
       n.group.position.y = n.baseY + Math.sin(elapsed * 0.7 + i) * 0.35;
     });
+    // Let the pollen drift and gently rise on the air.
+    if (this.pollen) {
+      const pos = this.pollen.geometry.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) {
+        let y = pos.getY(i) + dt * (0.6 + (i % 4) * 0.25);
+        if (y > GROUND_Y + 44) y = GROUND_Y + 1;
+        pos.setY(i, y);
+        pos.setX(i, pos.getX(i) + Math.sin(elapsed * 0.3 + i) * dt * 0.5);
+      }
+      pos.needsUpdate = true;
+    }
   }
 
   getPickables(): THREE.Object3D[] {
