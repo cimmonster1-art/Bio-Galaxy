@@ -1,6 +1,9 @@
 import React from 'react';
+import { Scale } from '../types';
+import { getEcologyCity } from '../data/ecology';
 import type { AtlasController } from '../hooks/useAtlasController';
 import { AnatomyExplorer } from './AnatomyExplorer';
+import { CityDiveView } from './ecology/CityDiveView';
 import { BioGalaxyCanvas } from './BioGalaxyCanvas';
 import { BodyExplorer3D } from './BodyExplorer3D';
 import { CosmicTimeline } from './CosmicTimeline';
@@ -15,7 +18,13 @@ import { ScaleNavigatorPanel } from './panels/ScaleNavigatorPanel';
 import { SceneControls } from './panels/SceneControls';
 import { SceneErrorBoundary } from './errors/SceneErrorBoundary';
 
-export const AtlasWorkspaceView: React.FC<{ atlas: AtlasController }> = ({ atlas }) => <>
+export const AtlasWorkspaceView: React.FC<{ atlas: AtlasController }> = ({ atlas }) => {
+  // City dive: a selected city at the Ecosystem scale opens the Earth Ecology
+  // Explorer over the globe — the Astro Insight interaction, rebuilt for science.
+  const diveCity = !atlas.workspace && atlas.scale === Scale.Ecosystem && atlas.selected?.id.startsWith('city:')
+    ? getEcologyCity(atlas.selected.id.replace(/^city:/, ''))
+    : undefined;
+  return <>
   <div className="flex min-h-0 flex-1">
     <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto scroll-thin border-r border-white/10 p-3 lg:flex">
       <ScaleNavigatorPanel scale={atlas.scale} onScaleChange={atlas.setScale} />
@@ -32,8 +41,10 @@ export const AtlasWorkspaceView: React.FC<{ atlas: AtlasController }> = ({ atlas
       {atlas.workspace === 'eras' && <CosmicTimeline scale={atlas.scale} onSelectScale={atlas.setScale} onClose={() => atlas.setWorkspace(null)} />}
       {atlas.workspace === 'playback' && <EvolutionPlayback onSelectScale={atlas.setScale} onProgress={atlas.setCinematicProgress} onClose={() => atlas.setWorkspace(null)} />}
       {atlas.coreAnatomyScale && !atlas.workspace && <AnatomyExplorer scale={atlas.scale} selectedId={atlas.selected?.id} onSelect={atlas.navigateTo} onScaleChange={atlas.setScale} />}
+      {diveCity && <CityDiveView city={diveCity} onNavigate={atlas.navigateTo} onClose={() => atlas.handleSelect(null)} />}
     </main>
     <aside className="hidden w-[min(33.333vw,26rem)] shrink-0 flex-col border-l border-white/10 bg-[#04070f] lg:flex"><WikipediaSidebar selected={atlas.selected} scale={atlas.scale} /><div className="min-h-0 flex-1"><DetailPanel selected={atlas.selected} /></div></aside>
   </div>
   <div className="hidden lg:block"><ActivityStrip scale={atlas.scale} selected={atlas.selected} lineage={atlas.lineage} /></div>
 </>;
+};
