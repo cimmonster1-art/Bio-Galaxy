@@ -7,7 +7,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { Bone, HeartPulse, Layers, Loader as LoaderIcon } from 'lucide-react';
+import { Loader as LoaderIcon } from 'lucide-react';
 import { Scale, PickTag } from '../types';
 import { createNebulaBackground } from '../three/shaders/nebula';
 import { ORGAN_MODELS, ORGAN_FIT } from '../data/organModels';
@@ -90,6 +90,8 @@ interface SceneHandle {
   loadSkeleton: () => void;
   loadOrgans: () => void;
   setLayerVisible: (key: LayerKey, visible: boolean) => void;
+  setScale: (scale: number) => void;
+  setFocus: (key: string | null) => void;
   resize: () => void;
   cleanup: () => void;
 }
@@ -110,9 +112,12 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   renderer.setPixelRatio(dpr);
   renderer.setSize(Math.max(canvas.clientWidth, 1), Math.max(canvas.clientHeight, 1));
   renderer.setClearColor(0x02040a, 1);
-  renderer.shadowMap.enabled = false;
+  // Soft real-time shadows: the skeleton and organs cast onto one another so the
+  // viscera read with genuine depth instead of floating flat inside the surface.
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.55;
+  renderer.toneMappingExposure = 1.3;
 
   // ── Open-source anatomy detail textures (MIT, from three.js) ───────────────
   // Sampled triplanar in `enrich` (no UVs needed) to add real photographic
@@ -217,11 +222,84 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     camera.position.copy(controls.target).add(offset.multiplyScalar(next / dist));
   };
 
-  // Three-point light rig — sculpts the bump-mapped relief.
-  scene.add(new THREE.AmbientLight(0x140a32, 0.42));
-  const keyLight = new THREE.DirectionalLight(0xcdbcff, 1.15); keyLight.position.set(-1.5, 3, 2.5); scene.add(keyLight);
-  const fillLight = new THREE.DirectionalLight(0x4070ff, 0.3); fillLight.position.set(1.5, 1, 1.5); scene.add(fillLight);
-  const rimLight = new THREE.DirectionalLight(0x6a20d8, 0.6); rimLight.position.set(0, 0.5, -3); scene.add(rimLight);
+  // ── Scale-aware framing + organ focus ───────────────────────────────────────
+  // Moving along the scale ladder reframes the whole body; selecting an organ /
+  // system eases the orbit pivot onto that structure and dollies in to frame it.
+  const BODY_CENTER = new THREE.Vector3(0, 0.15, 0);
+  // Resting dolly distance per anatomy scale (Organism → OrganSystem → Organ).
+  const SCALE_DIST: Record<number, number> = { 13: 4.6, 14: 3.4, 15: 2.4 };
+  const focusCenter = BODY_CENTER.clone();
+  let focusKey: string | null = null;
+  let desiredScaleDist = 3.3;
+
+  /** Distance needed to frame a bounding sphere of the given radius. */
+  const fitDistance = (radius: number) => {
+    const vFov = (camera.fov * Math.PI) / 180;
+    const vDist = radius / Math.tan(vFov / 2);
+    const hDist = radius / Math.tan(Math.atan(Math.tan(vFov / 2) * camera.aspect));
+    return clampZoom(Math.max(vDist, hDist) * 1.5 + 0.2);
+  };
+
+  /** Recompute the orbit pivot + dolly: organ box if a focus key resolves,
+   *  otherwise the resting whole-body framing for the current scale. */
+  const recomputeFocus = () => {
+    if (focusKey) {
+      const box = new THREE.Box3();
+      let found = false;
+      for (const m of anatomyTargets) {
+        if (m.userData.anatomyKey !== focusKey || !worldVisible(m)) continue;
+        box.expandByObject(m);
+        found = true;
+      }
+      if (found && !box.isEmpty()) {
+        const center = box.getCenter(new THREE.Vector3());
+        const sphere = box.getBoundingSphere(new THREE.Sphere(center));
+        focusCenter.copy(center);
+        zoomTarget = fitDistance(sphere.radius);
+        return;
+      }
+      // Meshes not loaded yet — keep the body framing; ingest retriggers this.
+    }
+    focusCenter.copy(BODY_CENTER);
+    zoomTarget = desiredScaleDist;
+  };
+
+  const setScale = (scale: number) => {
+    desiredScaleDist = SCALE_DIST[scale] ?? 3.3;
+    focusKey = null;
+    recomputeFocus();
+  };
+  const setFocus = (key: string | null) => {
+    focusKey = key;
+    // The skeleton/organs load lazily; make sure the structure is on its way.
+    loadSkeleton(); loadOrgans();
+    recomputeFocus();
+  };
+
+  // ── Cinematic light rig ─────────────────────────────────────────────────────
+  // A soft sky/ground hemisphere fills the form naturally, a warm shadow-casting
+  // key sculpts the relief and throws real soft shadows between the organs and
+  // skeleton, and cool fill + violet rim lights separate the body from the void.
+  scene.add(new THREE.HemisphereLight(0xa9c4ff, 0x140a26, 0.55));
+  scene.add(new THREE.AmbientLight(0x140a32, 0.18));
+
+  const keyLight = new THREE.DirectionalLight(0xfff1e0, 1.5);
+  keyLight.position.set(-2, 3.6, 2.8);
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(2048, 2048);
+  keyLight.shadow.radius = 4;
+  keyLight.shadow.bias = -0.0006;
+  keyLight.shadow.normalBias = 0.02;
+  {
+    const sc = keyLight.shadow.camera as THREE.OrthographicCamera;
+    sc.left = -2.4; sc.right = 2.4; sc.top = 2.4; sc.bottom = -2.4;
+    sc.near = 0.5; sc.far = 14;
+    sc.updateProjectionMatrix();
+  }
+  scene.add(keyLight);
+
+  const fillLight = new THREE.DirectionalLight(0x4070ff, 0.35); fillLight.position.set(2, 1, 1.5); scene.add(fillLight);
+  const rimLight = new THREE.DirectionalLight(0x8a5cff, 0.7); rimLight.position.set(0, 0.6, -3.2); scene.add(rimLight);
 
   // ── Deep-space backdrop — the SAME procedural nebula + starfield the rest of
   //    Bio Galaxy renders, so the organism tab's sky matches every other scale ──
@@ -429,6 +507,9 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       const key = anatomyKeyForMeshName(nm) ?? (kind === 'skeleton' ? 'skeleton' : 'body');
       obj.material = matFor(key);
       obj.frustumCulled = true;
+      // The translucent skin only receives shadow; the opaque interior casts it.
+      obj.castShadow = key !== 'body';
+      obj.receiveShadow = true;
       obj.userData.anatomyKey = key;
       obj.userData.anatomyName = cleanAnatomyName(nm);
       anatomyTargets.push(obj);
@@ -441,6 +522,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       modelGroup.add(root);
       breathers.push({ obj: root, base: root.scale.clone() });
     }
+    if (focusKey) recomputeFocus();
   };
 
   gltfLoader.load(ANATOMY_BODY_URL, (g) => ingest(g.scene, 'body'), undefined,
@@ -461,6 +543,8 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       if (!(obj instanceof THREE.Mesh)) return;
       obj.material = matFor(entry.anatomyKey);
       obj.frustumCulled = true;
+      obj.castShadow = true;
+      obj.receiveShadow = true;
       obj.userData.anatomyKey = entry.anatomyKey;
       obj.userData.anatomyName = entry.label;
       anatomyTargets.push(obj);
@@ -481,6 +565,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     } else {
       organsGroup.add(root);
     }
+    if (focusKey) recomputeFocus();
   };
 
   let organsRequested = false;
@@ -563,6 +648,8 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       const dt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
       timeUniform.value += dt;
+      // Glide the orbit pivot onto the focused structure, then dolly + damp.
+      controls.target.lerp(focusCenter, 1 - Math.exp(-dt * 4));
       applyZoom(dt);
       controls.update();
 
@@ -612,10 +699,17 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   const resizeObs = new ResizeObserver(resize);
   resizeObs.observe(canvas);
 
+  // The skeleton and internal organs are always part of the specimen now — no
+  // toggles. Reveal (and lazily load) both the moment the scene comes up.
+  setLayerVisible('skeletal', true);
+  setLayerVisible('organs', true);
+
   return {
     loadSkeleton,
     loadOrgans,
     setLayerVisible,
+    setScale,
+    setFocus,
     resize,
     cleanup() {
       cancelAnimationFrame(rafId);
@@ -645,30 +739,43 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
 
 // ─── React component ──────────────────────────────────────────────────────────
 interface Props {
-  /** Currently selected atlas record id (e.g. "organ:heart"), reflected in the layers. */
+  /** Current anatomy scale (Organism / OrganSystem / Organ), drives the dolly. */
+  scale: Scale;
+  /** Currently selected atlas record id (e.g. "organ:heart"), focused in 3D. */
   selectedId?: string | null;
   onSelect: (tag: PickTag | null) => void;
   onHover: (tag: PickTag | null) => void;
   className?: string;
 }
 
-const LAYERS: { key: LayerKey; label: string; icon: React.ReactNode }[] = [
-  { key: 'body', label: 'Body surface', icon: <Layers className="h-3.5 w-3.5" /> },
-  { key: 'organs', label: 'Internal organs', icon: <HeartPulse className="h-3.5 w-3.5" /> },
-  { key: 'skeletal', label: 'Skeleton', icon: <Bone className="h-3.5 w-3.5" /> },
-];
+/** Map an atlas record id → the coarse anatomy key its meshes are tagged with,
+ *  so a selection can be framed in the model. */
+function focusKeyForId(id: string | null | undefined): string | null {
+  if (!id) return null;
+  if (id.startsWith('organ:')) return id.slice('organ:'.length);
+  const SYSTEM_KEY: Record<string, string> = {
+    'system:skeletal': 'skeleton',
+    'system:nervous': 'nerves',
+    'system:muscular': 'muscles',
+    'system:digestive': 'intestines',
+    'system:respiratory': 'lungs',
+    'system:circulatory': 'heart',
+  };
+  return SYSTEM_KEY[id] ?? null;
+}
 
 /**
  * Organism screen. Mounts the real Z-Anatomy 3D body explorer and wires its
  * tissue-level clicks into Bio Galaxy's selection so the detail panel updates.
+ * The skeleton and internal organs always render — no toggles — and the camera
+ * dollies with the scale ladder, focusing on whatever organ / system is picked.
  */
-export const BodyExplorer3D: React.FC<Props> = ({ selectedId, onSelect, onHover, className }) => {
+export const BodyExplorer3D: React.FC<Props> = ({ scale, selectedId, onSelect, onHover, className }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<SceneHandle | null>(null);
   const cbRef = useRef({ onSelect, onHover });
   cbRef.current = { onSelect, onHover };
 
-  const [layers, setLayers] = useState<Set<LayerKey>>(() => new Set<LayerKey>(['body']));
   const [picked, setPicked] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -689,45 +796,20 @@ export const BodyExplorer3D: React.FC<Props> = ({ selectedId, onSelect, onHover,
     return () => { handle?.cleanup(); sceneRef.current = null; };
   }, []);
 
-  // Apply layer visibility whenever the toggle set changes.
+  // Dolly to frame the active scale (Organism → OrganSystem → Organ). Reframing
+  // by scale also clears any organ focus, so the scale ladder always zooms.
   useEffect(() => {
-    const s = sceneRef.current;
-    if (!s) return;
-    for (const { key } of LAYERS) s.setLayerVisible(key, layers.has(key));
-  }, [layers, ready]);
+    sceneRef.current?.setScale(scale);
+  }, [scale, ready]);
 
-  // Reveal the matching layer when a record is selected elsewhere: the skeleton
-  // for bone records, and the internal organs for any organ / soft-tissue system.
+  // Focus the camera on whatever organ / system is selected elsewhere.
   useEffect(() => {
-    if (!selectedId) return;
-    const reveal = (key: LayerKey) => setLayers((prev) => prev.has(key) ? prev : new Set(prev).add(key));
-    if (selectedId === 'system:skeletal') reveal('skeletal');
-    else if (selectedId.startsWith('organ:') || selectedId.startsWith('system:')) reveal('organs');
-  }, [selectedId]);
-
-  const toggle = (key: LayerKey) => setLayers((prev) => {
-    const next = new Set(prev);
-    if (next.has(key)) next.delete(key); else next.add(key);
-    return next;
-  });
+    sceneRef.current?.setFocus(focusKeyForId(selectedId));
+  }, [selectedId, ready]);
 
   return (
     <div className={`absolute inset-0 ${className ?? ''}`}>
       <canvas ref={canvasRef} className="h-full w-full" style={{ display: 'block', touchAction: 'none', cursor: 'grab' }} />
-
-      {/* Layer controls — the explorer's see-through stack. */}
-      <div className="pointer-events-auto absolute left-3 top-3 z-20 flex flex-col gap-1.5 panel rounded-xl px-2.5 py-2 shadow-2xl shadow-black/40">
-        <span className="meta-label px-1">Anatomy layers</span>
-        {LAYERS.map(({ key, label, icon }) => {
-          const on = layers.has(key);
-          return (
-            <button key={key} onClick={() => toggle(key)}
-              className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-[11px] font-semibold transition ${on ? 'border-cyan-300/60 bg-cyan-400/15 text-slate-100' : 'border-white/10 bg-[#07101d]/85 text-slate-400 hover:border-cyan-300/40'}`}>
-              {icon}<span>{label}</span>
-            </button>
-          );
-        })}
-      </div>
 
       {/* Provenance + current pick. */}
       <div className="pointer-events-none absolute bottom-3 left-3 z-20 max-w-xs">
