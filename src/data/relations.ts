@@ -57,9 +57,21 @@ const CONTAINS: Record<string, string[]> = {
   'cell:cardiomyocyte': ['organelle:sarcomere', 'nucleus', 'mitochondrion'],
   'organelle:sarcomere': ['complex:actin_filament'],
   'complex:actin_filament': ['protein:actin'],
-  'protein:actin': ['gene:acta1', 'atom_carbon'],
+  'protein:actin': ['gene:acta1', 'mol_glycine', 'atom_carbon'],
   'gene:acta1': ['protein:actin', 'dna_helix'],
   'tissue:muscle': ['cell:cardiomyocyte', 'tissue:capillary', 'tissue:motor_neuron', 'tissue:ecm'],
+
+  // Biology: brain → cortex → neuron → synapse → acetylcholine (into chemistry).
+  'organ:brain': ['region:cerebral_cortex'],
+  'region:cerebral_cortex': ['cell:neuron'],
+  'cell:neuron': ['organelle:synapse', 'nucleus', 'mitochondrion'],
+  'organelle:synapse': ['mol_acetylcholine'],
+  'mol_acetylcholine': ['atom_carbon'],
+
+  // Biology: lungs → alveolus → oxygen → water.
+  'organ:lungs': ['region:alveolus'],
+  'region:alveolus': ['mol_oxygen'],
+  'mol_oxygen': ['water_cluster'],
 
   // Cell interior.
   mitochondrion: ['atp_synthase', 'cytochrome_c'],
@@ -68,13 +80,15 @@ const CONTAINS: Record<string, string[]> = {
   cytochrome_c: ['atom_carbon'],
   dna_helix: ['gene:acta1', 'atom_carbon'],
 
-  // Chemistry deep chain: carbon → methane → glucose → glycolysis → ATP, with
-  // ATP cycling back to the enzyme that makes it.
-  atom_carbon: ['mol_methane', 'dna_helix'],
+  // Chemistry: carbon branches into methane and benzene; the methane chain runs
+  // carbon → methane → glucose → glycolysis → ATP, cycling back to its enzyme.
+  atom_carbon: ['mol_methane', 'mol_benzene', 'dna_helix'],
   mol_methane: ['mol_glucose', 'atom_carbon'],
+  mol_benzene: ['atom_carbon'],
   mol_glucose: ['pathway_glycolysis', 'atom_carbon'],
   pathway_glycolysis: ['mol_atp', 'mol_glucose'],
   mol_atp: ['atp_synthase', 'atom_carbon'],
+  mol_glycine: ['protein:actin', 'atom_carbon'],
 };
 
 // Reverse the CONTAINS graph once so every link is traversable upward too.
