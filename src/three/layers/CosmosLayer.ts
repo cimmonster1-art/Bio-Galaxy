@@ -214,41 +214,54 @@ export class CosmosLayer implements SceneLayer {
     // neighbours, and seed dense points ALONG those links plus tight swarms at
     // the knots. The result reads as glowing filaments threading dark voids —
     // cosmic structure rather than a wireframe graph.
-    const KNOTS = 90;
+    const KNOTS = 130;
     const knots: THREE.Vector3[] = [];
     for (let i = 0; i < KNOTS; i++) {
       knots.push(randomDir().multiplyScalar(120 + Math.random() * 430));
     }
+    // A handful of knots are superclusters: much denser, larger, and brighter,
+    // anchoring the great filaments the way Virgo/Coma anchor the local universe.
+    const superclusters = new Set<number>();
+    for (let i = 0; i < 9; i++) superclusters.add(Math.floor(Math.random() * KNOTS));
+
     const webPos: number[] = [];
     const webCol: number[] = [];
-    const pale = new THREE.Color('#b9b0ff');
-    const knotCol = new THREE.Color('#dfe6ff');
+    const pale = new THREE.Color('#a99fff');     // cool filament strands
+    const knotCol = new THREE.Color('#dfe6ff');  // cluster cores
+    const superCol = new THREE.Color('#fff0d8'); // hot supercluster cores
     const pushPoint = (p: THREE.Vector3, c: THREE.Color, jitter: number) => {
       webPos.push(p.x + (Math.random() - 0.5) * jitter, p.y + (Math.random() - 0.5) * jitter, p.z + (Math.random() - 0.5) * jitter);
       webCol.push(c.r, c.g, c.b);
     };
-    // Dense swarm at each cluster knot.
-    for (const k of knots) {
-      for (let s = 0; s < 70; s++) pushPoint(k, knotCol, 10 + Math.random() * 16);
-    }
-    // Filament strands: points strung between each knot and its nearest neighbours.
+    // Dense swarm at each cluster knot; superclusters get a far larger halo.
+    knots.forEach((k, i) => {
+      if (superclusters.has(i)) {
+        for (let s = 0; s < 260; s++) pushPoint(k, superCol, 16 + Math.random() * 34);
+      } else {
+        for (let s = 0; s < 90; s++) pushPoint(k, knotCol, 10 + Math.random() * 18);
+      }
+    });
+    // Filament strands: points strung between each knot and its three nearest
+    // neighbours, so the web reads as a connected cosmic scaffold around dark voids.
     for (let i = 0; i < KNOTS; i++) {
       const near = knots
         .map((n, j) => ({ j, d: knots[i].distanceToSquared(n) }))
         .filter((e) => e.j !== i)
         .sort((a, b) => a.d - b.d)
-        .slice(0, 2);
+        .slice(0, 3);
       for (const { j } of near) {
         if (j < i) continue;
         const a = knots[i];
         const b = knots[j];
-        const steps = 26;
+        const steps = 34;
         for (let t = 1; t < steps; t++) {
           const f = t / steps;
           const p = a.clone().lerp(b, f);
           // Thin the strand toward its middle so knots stay denser than voids.
           const taper = 2 + Math.sin(f * Math.PI) * 5;
           pushPoint(p, pale, taper);
+          // A second, slightly offset point thickens the strand into a real filament.
+          if (t % 2 === 0) pushPoint(p, pale, taper + 4);
         }
       }
     }
@@ -256,7 +269,7 @@ export class CosmosLayer implements SceneLayer {
     webGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(webPos), 3));
     webGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(webCol), 3));
     this.webMat = new THREE.PointsMaterial({
-      size: 1.5,
+      size: 1.8,
       sizeAttenuation: true,
       vertexColors: true,
       transparent: true,
@@ -343,14 +356,16 @@ export class CosmosLayer implements SceneLayer {
     // The cosmic web rules the Cosmos scale and recedes as the camera dives into
     // a single galaxy; the galactic core blooms the other way.
     const webWeight = this.currentScale === Scale.Cosmos ? 1 : 0.08;
-    // Pull the deep field back at galaxy scale so the Milky Way remains legible.
-    const fieldWeight = this.currentScale === Scale.Cosmos ? 0.72 : 0.12;
+    // Pull the random deep field well back at Cosmos scale so the filaments,
+    // superclusters, and voids of the cosmic web — not a uniform haze of points —
+    // define the large-scale structure.
+    const fieldWeight = this.currentScale === Scale.Cosmos ? 0.4 : 0.12;
     fadeMaterial(this.coreMat, this.intensity, dt);
     fadeMaterial(this.coreGlowMat, this.intensity * (this.currentScale >= Scale.Galaxy ? 0.95 : 0.4), dt);
     fadeMaterial(this.fieldMat, this.intensity * fieldWeight, dt);
     fadeMaterial(this.spiralMat, this.intensity * galaxyWeight, dt);
     fadeMaterial(this.dustMat, this.intensity * galaxyWeight * 0.78, dt);
-    fadeMaterial(this.webMat, this.intensity * webWeight * 0.85, dt);
+    fadeMaterial(this.webMat, this.intensity * webWeight * 1.15, dt);
     // Catalogue stars belong to the Galaxy scale; they recede at Cosmos scale so
     // the large-scale web stays legible.
     const starWeight = this.currentScale >= Scale.Galaxy ? 1 : 0.18;
