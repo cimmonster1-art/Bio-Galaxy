@@ -31,6 +31,12 @@ export interface OrganModel {
   url: string;
   /** Approximate download size in MB, for ordering light organs first. */
   sizeMB: number;
+  /**
+   * Optional per-organ correction applied in the organ's own local (HuBMAP)
+   * space before the shared fit. Lets one organ be nudged/resized without
+   * disturbing the rest — used to seat the brain up in the cranium.
+   */
+  adjust?: { scale?: number; offset?: [number, number, number] };
 }
 
 export const ORGAN_REPO = {
@@ -55,7 +61,7 @@ export const ORGAN_MODELS: OrganModel[] = [
   { id: 'heart',           label: 'Heart',           recordId: 'organ:heart',          system: 'system:cardiovascular', anatomyKey: 'heart',      url: `${BASE}/VH_M_Heart.glb`,           sizeMB: 1.7 },
   { id: 'liver',           label: 'Liver',           recordId: 'organ:liver',          system: 'system:digestive',      anatomyKey: 'liver',      url: `${BASE}/VH_M_Liver.glb`,           sizeMB: 1.7 },
   { id: 'lungs',           label: 'Lungs',           recordId: 'organ:lungs',          system: 'system:respiratory',    anatomyKey: 'lungs',      url: `${BASE}/VH_M_Lung.glb`,            sizeMB: 6.4 },
-  { id: 'brain',           label: 'Brain',           recordId: 'organ:brain',          system: 'system:nervous',        anatomyKey: 'brain',      url: `${BASE}/Allen_M_Brain.glb`,        sizeMB: 12 },
+  { id: 'brain',           label: 'Brain',           recordId: 'organ:brain',          system: 'system:nervous',        anatomyKey: 'brain',      url: `${BASE}/Allen_M_Brain.glb`,        sizeMB: 12, adjust: { scale: 1.08, offset: [0, 0.06, 0.015] } },
 ];
 
 /**

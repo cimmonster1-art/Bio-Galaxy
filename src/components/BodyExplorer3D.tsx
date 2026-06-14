@@ -240,7 +240,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   const enrich = (
     mat: THREE.MeshStandardMaterial,
     o: { rim?: number; detail?: number; detailScale?: number; striation?: number; bump?: number;
-         tex?: THREE.Texture; texAmt?: number; texScale?: number } = {},
+         folds?: number; tex?: THREE.Texture; texAmt?: number; texScale?: number } = {},
   ) => {
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uEnrTime = timeUniform;
@@ -250,6 +250,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       shader.uniforms.uDetailScale = { value: o.detailScale ?? 26 };
       shader.uniforms.uStriation = { value: o.striation ?? 0 };
       shader.uniforms.uBump = { value: o.bump ?? 0 };
+      shader.uniforms.uFolds = { value: o.folds ?? 0 };
       shader.uniforms.uTex = { value: o.tex ?? neutralTex };
       shader.uniforms.uTexAmt = { value: o.texAmt ?? 0 };
       shader.uniforms.uTexScale = { value: o.texScale ?? 1 };
@@ -263,7 +264,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
         varying vec3 vEnrWPos; varying vec3 vEnrWNrm;
         uniform float uEnrTime; uniform float uRim; uniform vec3 uRimColor;
         uniform float uDetail; uniform float uDetailScale; uniform float uStriation;
-        uniform float uBump;
+        uniform float uBump; uniform float uFolds;
         uniform sampler2D uTex; uniform float uTexAmt; uniform float uTexScale;
         float enrFres = 0.0;
         float gTexL = 0.5;
@@ -278,6 +279,9 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
                       mix( mix(n001,n101,f.x), mix(n011,n111,f.x), f.y ), f.z );
         }
         float enrFbm( vec3 p ){ float a = 0.5, s = 0.0; for ( int i = 0; i < 4; i++ ){ s += a * enrNoise( p ); p *= 2.03; a *= 0.5; } return s; }
+        // Ridged, domain-warped noise → the convoluted gyri/sulci of a cortex.
+        float enrRidged( vec3 p ){ float a = 0.5, s = 0.0; for ( int i = 0; i < 4; i++ ){ float n = enrNoise( p ); n = 1.0 - abs( 2.0 * n - 1.0 ); s += a * n * n; p *= 2.04; a *= 0.5; } return s; }
+        float enrFolds( vec3 p ){ vec3 q = vec3( enrFbm( p ), enrFbm( p + vec3( 5.2, 1.3, 2.7 ) ), enrFbm( p + vec3( 2.8, 4.1, 3.3 ) ) ); return enrRidged( p * 1.1 + q * 2.2 ); }
       `;
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', '#include <common>\n' + head)
@@ -290,7 +294,10 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
           }
           if ( uBump > 0.0 ) {
             float bScale = uDetailScale * (uStriation > 0.5 ? 1.0 : 1.4);
-            float hC = mix( enrFbm( vEnrWPos * bScale ), gTexL, clamp( uTexAmt, 0.0, 0.7 ) );
+            float baseH = enrFbm( vEnrWPos * bScale );
+            // Brain: replace the lumpy fbm with deep ridged cortical folds.
+            if ( uFolds > 0.0 ) baseH = mix( baseH, enrFolds( vEnrWPos * uDetailScale * 0.5 ), uFolds );
+            float hC = mix( baseH, gTexL, clamp( uTexAmt, 0.0, 0.7 ) );
             vec3 sigX = dFdx( vEnrWPos );
             vec3 sigY = dFdy( vEnrWPos );
             vec3 Nb = normalize( vEnrWNrm );
@@ -310,6 +317,11 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
             diffuseColor.rgb *= ( 1.0 - uDetail * 0.45 ) + uDetail * ( 0.55 + 0.9 * enrTex );
             totalEmissiveRadiance *= ( 1.0 - uDetail * 0.3 ) + uDetail * ( 0.6 + 0.8 * enrTex );
             diffuseColor.rgb *= ( 1.0 - uTexAmt * 0.4 ) + uTexAmt * ( 0.45 + 1.0 * gTexL );
+            // Brain: darken the sulci (fold valleys) so the gyri read as real tissue.
+            if ( uFolds > 0.0 ) {
+              float enrFold = enrFolds( vEnrWPos * uDetailScale * 0.5 );
+              diffuseColor.rgb *= ( 1.0 - uFolds * 0.5 ) + uFolds * ( 0.5 + 0.7 * enrFold );
+            }
             if ( uRim > 0.0 ) {
               vec3 enrV = normalize( cameraPosition - vEnrWPos );
               enrFres = pow( 1.0 - max( dot( normalize( vEnrWNrm ), enrV ), 0.0 ), 3.0 );
@@ -333,7 +345,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   // ── Shared materials — one per system, not per-mesh (keeps GPU state tiny) ──
   const SYS_TINT: Record<string, number> = {
     skeleton: 0xece3cf, muscles: 0xa83244, nerves: 0xf2e08a,
-    heart: 0xd83a4e, lungs: 0xd79bb0, brain: 0xc9b5d6, body: 0xe9c39a,
+    heart: 0xd83a4e, lungs: 0xd79bb0, brain: 0xd8b5a6, body: 0xe9c39a,
     liver: 0x9d503f, kidneys: 0xa45b73, spleen: 0x7d3a52, pancreas: 0xd8a85a, intestines: 0xd88961,
   };
   const ORGAN_KEYS = new Set(['heart', 'lungs', 'brain', 'liver', 'kidneys', 'spleen', 'pancreas', 'intestines']);
@@ -372,6 +384,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     if (isSkin)                 enrich(mat, { rim: 0.9, detail: 0.32, detailScale: 34, striation: 0.35, bump: 0.25 });
     else if (isBone)            enrich(mat, { rim: 0.5, detail: 0.5, detailScale: 50, bump: 1.1, tex: grainTex, texAmt: 0.5, texScale: 1.8 });
     else if (key === 'muscles') enrich(mat, { detail: 0.7, detailScale: 36, striation: 1.0, bump: 0.95, tex: muscleTex, texAmt: 0.6, texScale: 1.2 });
+    else if (key === 'brain')   enrich(mat, { detail: 0.45, detailScale: 64, bump: 1.15, folds: 1.0, tex: grainTex, texAmt: 0.22, texScale: 2.2 });
     else if (isOrgan)           enrich(mat, { detail: 0.5, detailScale: 46, bump: 0.85, tex: grainTex, texAmt: 0.4, texScale: 1.7 });
     else                        enrich(mat, { detail: 0.4, detailScale: 32, bump: 0.55, tex: grainTex, texAmt: 0.35, texScale: 1.3 });
     sharedMats[key] = mat;
@@ -452,7 +465,22 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       obj.userData.anatomyName = entry.label;
       anatomyTargets.push(obj);
     });
-    organsGroup.add(root);
+    // Optional per-organ correction (scale/offset about the organ's own centre),
+    // applied in local space before the shared fit — used to lift the brain into
+    // the cranium without moving the viscera.
+    const adj = entry.adjust;
+    if (adj) {
+      const c = new THREE.Box3().setFromObject(root).getCenter(new THREE.Vector3());
+      root.position.sub(c);
+      const pivot = new THREE.Group();
+      pivot.add(root);
+      pivot.position.copy(c);
+      if (adj.scale) pivot.scale.setScalar(adj.scale);
+      if (adj.offset) pivot.position.add(new THREE.Vector3(...adj.offset));
+      organsGroup.add(pivot);
+    } else {
+      organsGroup.add(root);
+    }
   };
 
   let organsRequested = false;
