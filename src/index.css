@@ -132,6 +132,40 @@ body {
 @keyframes cutscene-in { from { opacity:0; transform:translateY(16px) scale(.98); } to { opacity:1; transform:none; } }
 @media (prefers-reduced-motion: reduce) { .playback-stars,.playback-orbit,.cutscene-title { animation:none; } }
 
+/* ── Earth Ecology Explorer: city-dive cinematic ──────────────────────────── */
+/* A slow cinematic push-in on the city hero, like descending from orbit. */
+.eco-dive-breathe { animation: eco-dive-breathe 30s ease-in-out infinite alternate; will-change: transform; }
+@keyframes eco-dive-breathe { 0% { transform: scale(1.06); } 100% { transform: scale(1.18); } }
+
+/* Drifting high-altitude haze over the scene, in atlas cyan/navy. */
+.eco-dive-clouds {
+  background-image:
+    radial-gradient(closest-side, rgba(63, 182, 255, 0.10), transparent 70%),
+    radial-gradient(closest-side, rgba(79, 227, 200, 0.08), transparent 70%);
+  background-size: 620px 360px, 480px 300px;
+  background-repeat: repeat;
+  animation: eco-dive-clouds 120s linear infinite;
+}
+@keyframes eco-dive-clouds { from { background-position: 0 0, 0 0; } to { background-position: 1200px 0, -900px 0; } }
+
+/* Soft entrance for the dive overlay and its panels. */
+.eco-dive-enter { animation: eco-dive-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes eco-dive-enter { from { opacity: 0; transform: scale(1.02); } to { opacity: 1; transform: none; } }
+.eco-rise { animation: eco-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes eco-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+/* Swipeable bottom card rail — branded thin scrollbar, hidden until hover. */
+.eco-rail { scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.eco-rail > * { scroll-snap-align: start; }
+.eco-rail::-webkit-scrollbar { height: 6px; }
+.eco-rail::-webkit-scrollbar-track { background: transparent; }
+.eco-rail::-webkit-scrollbar-thumb { background: rgba(39, 196, 217, 0.25); border-radius: 9999px; }
+.eco-rail:hover::-webkit-scrollbar-thumb { background: rgba(39, 196, 217, 0.5); }
+
+@media (prefers-reduced-motion: reduce) {
+  .eco-dive-breathe, .eco-dive-clouds, .eco-dive-enter, .eco-rise { animation: none; }
+}
+
 /* Quiet graph-paper field for the full Tree of Life workspace. */
 .life-tree-grid {
   background-color: #050b15;

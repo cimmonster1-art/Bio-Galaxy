@@ -62,7 +62,19 @@ export type DataSourceId =
   | 'hpa'
   | 'ncbi'
   | 'pubchem'
-  | 'alphafold';
+  | 'alphafold'
+  // ── Earth-systems, ecology, and biodiversity sources (Ecosystem scale) ──
+  | 'gbif'
+  | 'iucn'
+  | 'worldclim'
+  | 'ebird'
+  | 'naturalearth'
+  | 'osm'
+  | 'nasa'
+  | 'unep'
+  | 'ala'
+  | 'wikidata'
+  | 'wikipedia';
 
 export interface DataSource {
   id: DataSourceId;
@@ -89,6 +101,7 @@ export interface BioObject {
     | 'galaxy'
     | 'biome'
     | 'ecosystem'
+    | 'place'
     | 'clade'
     | 'taxon'
     | 'organism'

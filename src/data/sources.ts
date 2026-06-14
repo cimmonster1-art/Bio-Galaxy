@@ -73,6 +73,107 @@ export const DATA_SOURCES: Record<DataSourceId, DataSource> = {
       'AI-predicted 3D protein structures with per-residue confidence, complementing experimental PDB models.',
     homepage: 'https://alphafold.ebi.ac.uk',
   },
+
+  // ── Earth-systems, ecology, and biodiversity sources ──────────────────────
+  gbif: {
+    id: 'gbif',
+    name: 'GBIF',
+    short: 'GBIF',
+    domain: 'Species occurrence records',
+    description:
+      'Global Biodiversity Information Facility: georeferenced occurrence records aggregated from museums, surveys, and citizen science.',
+    homepage: 'https://www.gbif.org',
+  },
+  iucn: {
+    id: 'iucn',
+    name: 'IUCN Red List',
+    short: 'IUCN',
+    domain: 'Extinction-risk assessment',
+    description:
+      'The IUCN Red List of Threatened Species: global conservation status, population trends, and threat assessments.',
+    homepage: 'https://www.iucnredlist.org',
+  },
+  worldclim: {
+    id: 'worldclim',
+    name: 'WorldClim',
+    short: 'WorldClim',
+    domain: 'Global climate surfaces',
+    description:
+      'High-resolution gridded climate normals — temperature, precipitation, and bioclimatic variables — used for the climate profiles.',
+    homepage: 'https://www.worldclim.org',
+  },
+  ebird: {
+    id: 'ebird',
+    name: 'eBird',
+    short: 'eBird',
+    domain: 'Bird observation records',
+    description:
+      'Cornell Lab of Ornithology citizen-science bird observations: regional checklists, hotspots, and abundance.',
+    homepage: 'https://ebird.org',
+  },
+  naturalearth: {
+    id: 'naturalearth',
+    name: 'Natural Earth',
+    short: 'Natural Earth',
+    domain: 'Public-domain map data',
+    description:
+      'Public-domain vector and raster map data for physical and cultural geography, ecoregions, and coastlines.',
+    homepage: 'https://www.naturalearthdata.com',
+  },
+  osm: {
+    id: 'osm',
+    name: 'OpenStreetMap',
+    short: 'OSM',
+    domain: 'Open geographic data',
+    description:
+      'Collaboratively mapped open geographic data: protected areas, land use, water bodies, and place geometry.',
+    homepage: 'https://www.openstreetmap.org',
+  },
+  nasa: {
+    id: 'nasa',
+    name: 'NASA EarthData',
+    short: 'NASA',
+    domain: 'Earth observation',
+    description:
+      'NASA Earth-observing missions: vegetation, land cover, carbon, surface temperature, and Blue Marble imagery.',
+    homepage: 'https://www.earthdata.nasa.gov',
+  },
+  unep: {
+    id: 'unep',
+    name: 'UNEP-WCMC',
+    short: 'UNEP-WCMC',
+    domain: 'Protected areas',
+    description:
+      'World Database on Protected Areas and Protected Planet: the global registry of conservation areas.',
+    homepage: 'https://www.protectedplanet.net',
+  },
+  ala: {
+    id: 'ala',
+    name: 'Atlas of Living Australia',
+    short: 'ALA',
+    domain: 'Australian biodiversity',
+    description:
+      'Aggregated occurrence, taxonomy, and conservation records for Australian species and ecosystems.',
+    homepage: 'https://www.ala.org.au',
+  },
+  wikidata: {
+    id: 'wikidata',
+    name: 'Wikidata',
+    short: 'Wikidata',
+    domain: 'Structured knowledge',
+    description:
+      'A free, structured knowledge base linking places, taxa, and geographic entities with cross-database identifiers.',
+    homepage: 'https://www.wikidata.org',
+  },
+  wikipedia: {
+    id: 'wikipedia',
+    name: 'Wikipedia',
+    short: 'Wikipedia',
+    domain: 'Encyclopedic reference',
+    description:
+      'Live encyclopedic summaries and Wikimedia Commons imagery for places, biomes, and species.',
+    homepage: 'https://en.wikipedia.org',
+  },
 };
 
 export const DATA_SOURCE_ORDER: DataSourceId[] = [
@@ -84,6 +185,18 @@ export const DATA_SOURCE_ORDER: DataSourceId[] = [
   'ensembl',
   'hpa',
   'ncbi',
+  // Ecology / Earth-systems sources, ordered for the Ecosystem-scale views.
+  'gbif',
+  'iucn',
+  'worldclim',
+  'ebird',
+  'nasa',
+  'unep',
+  'naturalearth',
+  'osm',
+  'ala',
+  'wikidata',
+  'wikipedia',
 ];
 
 export function getSource(id: DataSourceId): DataSource {
