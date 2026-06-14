@@ -3,6 +3,7 @@ import { Router } from 'express';
 const ALLOWED_HOSTS = new Set([
   'rest.uniprot.org', 'reactome.org', 'data.rcsb.org', 'files.rcsb.org',
   'rest.ensembl.org', 'www.proteinatlas.org', 'eutils.ncbi.nlm.nih.gov',
+  'pubchem.ncbi.nlm.nih.gov', 'alphafold.ebi.ac.uk', 'en.wikipedia.org',
 ]);
 const FRESH_MS = 5 * 60_000;
 const STALE_MS = 60 * 60_000;

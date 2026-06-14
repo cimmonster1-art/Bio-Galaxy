@@ -60,7 +60,9 @@ export type DataSourceId =
   | 'rcsb'
   | 'ensembl'
   | 'hpa'
-  | 'ncbi';
+  | 'ncbi'
+  | 'pubchem'
+  | 'alphafold';
 
 export interface DataSource {
   id: DataSourceId;
@@ -117,6 +119,16 @@ export interface BioObject {
   pdbId?: string;
   /** Reactome pathway stable id when relevant. */
   reactomeId?: string;
+  /** PubChem compound id when this object maps to a small molecule. */
+  pubchemCid?: number;
+  /** Chemical element symbol when this object maps to an atom. */
+  element?: string;
+  /**
+   * UniProt accession whose AlphaFold predicted structure represents this
+   * object. Usually the same value as `accession`; kept separate so a record
+   * can advertise a predicted model independently of an experimental one.
+   */
+  alphafoldId?: string;
 }
 
 /** Minimal payload stamped onto Three.js mesh userData for raycasting. */

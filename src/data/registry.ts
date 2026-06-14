@@ -137,10 +137,11 @@ export const BIO_OBJECTS: Record<string, BioObject> = {
       'One of the most conserved machines across life.',
     ],
     source: 'uniprot',
-    crossRefs: ['rcsb', 'reactome'],
+    crossRefs: ['rcsb', 'alphafold', 'reactome'],
     accession: 'P25705',
     pdbId: '5ARA',
     reactomeId: 'R-HSA-163210',
+    alphafoldId: 'P25705',
   },
   cytochrome_c: {
     id: 'cytochrome_c',
@@ -155,10 +156,11 @@ export const BIO_OBJECTS: Record<string, BioObject> = {
       'A classic model protein in structural biology.',
     ],
     source: 'uniprot',
-    crossRefs: ['rcsb', 'reactome'],
+    crossRefs: ['rcsb', 'alphafold', 'reactome'],
     accession: 'P99999',
     pdbId: '1HRC',
     reactomeId: 'R-HSA-111457',
+    alphafoldId: 'P99999',
   },
 };
 

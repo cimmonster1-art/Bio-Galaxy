@@ -55,12 +55,32 @@ export const DATA_SOURCES: Record<DataSourceId, DataSource> = {
     description: 'Taxonomy identifiers and links to the primary literature.',
     homepage: 'https://www.ncbi.nlm.nih.gov',
   },
+  pubchem: {
+    id: 'pubchem',
+    name: 'PubChem',
+    short: 'PubChem',
+    domain: 'Chemistry of molecules and atoms',
+    description:
+      'Chemical identity for compounds and elements: formulas, weights, SMILES, InChI, and periodic-table data.',
+    homepage: 'https://pubchem.ncbi.nlm.nih.gov',
+  },
+  alphafold: {
+    id: 'alphafold',
+    name: 'AlphaFold DB',
+    short: 'AlphaFold',
+    domain: 'Predicted protein structure',
+    description:
+      'AI-predicted 3D protein structures with per-residue confidence, complementing experimental PDB models.',
+    homepage: 'https://alphafold.ebi.ac.uk',
+  },
 };
 
 export const DATA_SOURCE_ORDER: DataSourceId[] = [
   'uniprot',
   'reactome',
   'rcsb',
+  'alphafold',
+  'pubchem',
   'ensembl',
   'hpa',
   'ncbi',

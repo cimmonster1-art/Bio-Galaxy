@@ -7,6 +7,9 @@ import { StructureSection } from './detail/StructureSection';
 import { MitochondrialProteins } from './detail/MitochondrialProteins';
 import { PathwaySection } from './detail/PathwaySection';
 import { TaxonomySection } from './detail/TaxonomySection';
+import { PubChemSection } from './detail/PubChemSection';
+import { ElementSection } from './detail/ElementSection';
+import { AlphaFoldSection } from './detail/AlphaFoldSection';
 
 interface Props {
   selected: BioObject | null;
@@ -80,6 +83,12 @@ export const DetailPanel: React.FC<Props> = ({ selected }) => {
           </div>
         )}
 
+        {selected.alphafoldId && (
+          <div className="border-t border-white/10 pt-3">
+            <AlphaFoldSection accession={selected.alphafoldId} />
+          </div>
+        )}
+
         {selected.reactomeId && (
           <div className="border-t border-white/10 pt-3">
             <PathwaySection reactomeId={selected.reactomeId} />
@@ -89,6 +98,18 @@ export const DetailPanel: React.FC<Props> = ({ selected }) => {
         {selected.pdbId && (
           <div className="border-t border-white/10 pt-3">
             <StructureSection pdbId={selected.pdbId} />
+          </div>
+        )}
+
+        {selected.pubchemCid !== undefined && (
+          <div className="border-t border-white/10 pt-3">
+            <PubChemSection cid={selected.pubchemCid} />
+          </div>
+        )}
+
+        {selected.element && (
+          <div className="border-t border-white/10 pt-3">
+            <ElementSection symbol={selected.element} />
           </div>
         )}
       </div>
