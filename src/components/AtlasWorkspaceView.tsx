@@ -14,6 +14,7 @@ import { AnatomyModelsPanel } from './panels/AnatomyModelsPanel';
 import { ContextPanel } from './panels/ContextPanel';
 import { DataSourcesPanel } from './panels/DataSourcesPanel';
 import { DetailPanel } from './panels/DetailPanel';
+import { PhysicsPanel } from './panels/PhysicsPanel';
 import { RelatedRail } from './panels/RelatedRail';
 import { ScaleNavigatorPanel } from './panels/ScaleNavigatorPanel';
 import { SceneControls } from './panels/SceneControls';
@@ -30,7 +31,7 @@ export const AtlasWorkspaceView: React.FC<{ atlas: AtlasController }> = ({ atlas
     <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto scroll-thin border-r border-white/10 p-3 lg:flex">
       <ScaleNavigatorPanel scale={atlas.scale} onScaleChange={atlas.setScale} />
       {atlas.anatomyScale && <AnatomyModelsPanel activeId={atlas.activeModelId} status={atlas.modelStatus} onLoad={atlas.loadModelEntry} />}
-      <ContextPanel scale={atlas.scale} selected={atlas.selected} /><DataSourcesPanel active={atlas.activeSources} />
+      <ContextPanel scale={atlas.scale} selected={atlas.selected} /><PhysicsPanel selected={atlas.selected} /><DataSourcesPanel active={atlas.activeSources} />
     </aside>
     <main className="relative min-w-0 flex-1 depth-field" role="application" aria-label="Bio Galaxy 3D atlas. Use the search, scale ladder, or phylogeny panel to navigate.">
       <SceneErrorBoundary resetKey={atlas.coreAnatomyScale && !atlas.workspace ? 'organism' : atlas.scale}>

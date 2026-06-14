@@ -110,4 +110,82 @@ export const SCIENCE_OBJECTS: Record<string, BioObject> = {
       'Links glucose chemistry to the work of living cells.',
     ], source: 'pubchem', pubchemCid: 5957, crossRefs: ['reactome'], provenanceNote: 'Chemical identity from PubChem (CID 5957).',
   },
+
+  // ── Biology: brain → neurotransmitter (nervous chain into chemistry) ─────────
+  'region:cerebral_cortex': {
+    id: 'region:cerebral_cortex', name: 'Cerebral cortex', scale: Scale.Organ, kind: 'organ',
+    summary: 'The folded outer sheet of the brain where perception, thought, and voluntary action are organised.',
+    size: '~2–4 mm thick', facts: [
+      'Densely packed with billions of neurons in six layers.',
+      'Its folds (gyri and sulci) pack more surface into the skull.',
+      'Different regions specialise for sensation, movement, and cognition.',
+    ], source: 'hpa', crossRefs: ['ncbi'],
+  },
+  'cell:neuron': {
+    id: 'cell:neuron', name: 'Neuron', scale: Scale.Cell, kind: 'cell',
+    summary: 'The signalling cell of the nervous system: dendrites gather input, the axon fires an electrical impulse to its synapses.',
+    size: 'axons up to ~1 m', facts: [
+      'Transmits information as electrochemical action potentials.',
+      'Communicates with other cells across synapses.',
+      'Connects into circuits that underlie all neural function.',
+    ], source: 'hpa', crossRefs: ['ensembl', 'uniprot', 'ncbi'],
+  },
+  'organelle:synapse': {
+    id: 'organelle:synapse', name: 'Synapse', scale: Scale.Organelle, kind: 'organelle',
+    summary: 'The junction where one neuron signals the next, releasing neurotransmitter molecules across a tiny cleft.',
+    size: '~20 nm cleft', facts: [
+      'Electrical signals are converted to chemical messengers here.',
+      'Vesicles release neurotransmitter on the arrival of an impulse.',
+      'Synaptic strength changes with use — the basis of learning.',
+    ], source: 'reactome', crossRefs: ['uniprot'],
+  },
+  'mol_acetylcholine': {
+    id: 'mol_acetylcholine', name: 'Acetylcholine', scale: Scale.Molecule, kind: 'molecule',
+    summary: 'A neurotransmitter carrying signals across synapses and at the neuromuscular junction — chemistry doing the work of thought and movement.',
+    size: '~0.7 nm', facts: [
+      'Released at the neuromuscular junction to trigger contraction.',
+      'Broken down by acetylcholinesterase to end the signal.',
+      'A carbon-based molecule bridging chemistry and neuroscience.',
+    ], source: 'pubchem', pubchemCid: 187, provenanceNote: 'Chemical identity from PubChem (CID 187).',
+  },
+
+  // ── Biology: lungs → alveolus → oxygen (respiratory rung) ────────────────────
+  'region:alveolus': {
+    id: 'region:alveolus', name: 'Alveolus', scale: Scale.Organ, kind: 'organ',
+    summary: 'A microscopic air sac in the lung where oxygen crosses into the blood and carbon dioxide leaves it.',
+    size: '~0.2 mm diameter', facts: [
+      'Hundreds of millions provide a huge surface for gas exchange.',
+      'Wrapped in capillaries one cell-wall away from the air.',
+      'Lined with surfactant that keeps the sac from collapsing.',
+    ], source: 'hpa', crossRefs: ['ncbi'],
+  },
+  'mol_oxygen': {
+    id: 'mol_oxygen', name: 'Oxygen (O₂)', scale: Scale.Molecule, kind: 'molecule',
+    summary: 'The diatomic molecule cells use as the final electron acceptor in respiration — the reason we breathe.',
+    size: '~0.3 nm', facts: [
+      'Carried by haemoglobin from the alveoli to every tissue.',
+      'Accepts electrons at the end of the respiratory chain, forming water.',
+      'Produced on Earth by photosynthesis.',
+    ], source: 'pubchem', pubchemCid: 977, provenanceNote: 'Chemical identity from PubChem (CID 977).',
+  },
+
+  // ── Chemistry breadth: an aromatic ring and an amino acid ────────────────────
+  'mol_benzene': {
+    id: 'mol_benzene', name: 'Benzene', scale: Scale.Molecule, kind: 'molecule',
+    summary: 'A ring of six carbons with delocalised electrons — the archetype of aromatic chemistry.',
+    size: '~0.5 nm', facts: [
+      'Six carbons in a planar ring with shared π electrons.',
+      'Unusually stable thanks to electron delocalisation.',
+      'The scaffold of countless aromatic compounds.',
+    ], source: 'pubchem', pubchemCid: 241, provenanceNote: 'Chemical identity from PubChem (CID 241).',
+  },
+  'mol_glycine': {
+    id: 'mol_glycine', name: 'Glycine', scale: Scale.Molecule, kind: 'molecule',
+    summary: 'The simplest amino acid — a building block that links chemistry to proteins like actin.',
+    size: '~0.5 nm', facts: [
+      'The smallest of the twenty standard amino acids.',
+      'Amino acids chain together to build every protein.',
+      'Also acts as a neurotransmitter in the spinal cord.',
+    ], source: 'pubchem', pubchemCid: 750, crossRefs: ['uniprot'], provenanceNote: 'Chemical identity from PubChem (CID 750).',
+  },
 };
