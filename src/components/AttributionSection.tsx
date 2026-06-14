@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowRight, Boxes, Database, Orbit, Sparkles } from 'lucide-react';
+import { ArrowRight, Boxes, Database, Leaf, Orbit, Sparkles } from 'lucide-react';
 import { ATTRIBUTION_COUNT, ATTRIBUTION_GROUPS, AttributionStatus } from '../data/attributions';
 
 const STATUS_LABEL: Record<AttributionStatus, string> = {
@@ -9,10 +9,11 @@ const STATUS_LABEL: Record<AttributionStatus, string> = {
   foundation: 'Foundation',
 };
 
-const GROUP_ICON = [Database, Orbit, Boxes, Sparkles];
+const GROUP_ICON = [Database, Orbit, Boxes, Leaf, Sparkles];
 
 export const AttributionSection = React.forwardRef<HTMLElement>(function AttributionSection(_, ref) {
-  const [expanded, setExpanded] = useState(false);
+  // Show every source and reference by default; the toggle only collapses it.
+  const [expanded, setExpanded] = useState(true);
   const groups = expanded ? ATTRIBUTION_GROUPS : ATTRIBUTION_GROUPS.slice(0, 2);
 
   return (

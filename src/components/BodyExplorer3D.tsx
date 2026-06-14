@@ -222,15 +222,28 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     camera.position.copy(controls.target).add(offset.multiplyScalar(next / dist));
   };
 
-  // ── Scale-aware framing + organ focus ───────────────────────────────────────
-  // Moving along the scale ladder reframes the whole body; selecting an organ /
-  // system eases the orbit pivot onto that structure and dollies in to frame it.
+  // ── Scale-aware framing, organ focus, and structure isolation ───────────────
+  // The Organism scale shows the whole specimen — body surface, skeleton, and
+  // viscera together. Descending to the Organ System or Organ scale ISOLATES the
+  // chosen structure: everything else is hidden so the organ floats alone, framed
+  // tight, highly shaded, and grounded by its own cast shadow.
   const BODY_CENTER = new THREE.Vector3(0, 0.15, 0);
   // Resting dolly distance per anatomy scale (Organism → OrganSystem → Organ).
-  const SCALE_DIST: Record<number, number> = { 13: 4.6, 14: 3.4, 15: 2.4 };
+  const SCALE_DIST: Record<number, number> = {
+    [Scale.Organism]: 4.6,
+    [Scale.OrganSystem]: 3.0,
+    [Scale.Organ]: 2.0,
+  };
+  // When no structure is selected, isolate something representative.
+  const DEFAULT_ISO: Record<number, string> = {
+    [Scale.OrganSystem]: 'skeleton',
+    [Scale.Organ]: 'heart',
+  };
   const focusCenter = BODY_CENTER.clone();
   let focusKey: string | null = null;
-  let desiredScaleDist = 3.3;
+  let curScale: number = Scale.Organism;
+  let isolationKey: string | null = null;
+  let desiredScaleDist = 4.6;
 
   /** Distance needed to frame a bounding sphere of the given radius. */
   const fitDistance = (radius: number) => {
@@ -240,14 +253,27 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     return clampZoom(Math.max(vDist, hDist) * 1.5 + 0.2);
   };
 
-  /** Recompute the orbit pivot + dolly: organ box if a focus key resolves,
-   *  otherwise the resting whole-body framing for the current scale. */
+  /** Show the whole specimen, or — in isolation mode — only the meshes whose
+   *  anatomy key matches the isolated structure. */
+  const applyVisibility = () => {
+    modelGroup.visible = true;
+    skeletonGroup.visible = true;
+    organsGroup.visible = true;
+    for (const m of anatomyTargets) {
+      m.visible = isolationKey === null || m.userData.anatomyKey === isolationKey;
+    }
+    shadowCatcher.visible = isolationKey !== null;
+  };
+
+  /** Recompute the orbit pivot + dolly. In isolation mode (or with an explicit
+   *  selection) frame the structure's bounding box; otherwise frame the body. */
   const recomputeFocus = () => {
-    if (focusKey) {
+    const frameKey = isolationKey ?? focusKey;
+    if (frameKey) {
       const box = new THREE.Box3();
       let found = false;
       for (const m of anatomyTargets) {
-        if (m.userData.anatomyKey !== focusKey || !worldVisible(m)) continue;
+        if (m.userData.anatomyKey !== frameKey || m.visible === false) continue;
         box.expandByObject(m);
         found = true;
       }
@@ -256,6 +282,8 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
         const sphere = box.getBoundingSphere(new THREE.Sphere(center));
         focusCenter.copy(center);
         zoomTarget = fitDistance(sphere.radius);
+        // Park the shadow-catcher just under the isolated structure.
+        shadowCatcher.position.set(center.x, box.min.y - sphere.radius * 0.35, center.z);
         return;
       }
       // Meshes not loaded yet — keep the body framing; ingest retriggers this.
@@ -264,16 +292,26 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     zoomTarget = desiredScaleDist;
   };
 
-  const setScale = (scale: number) => {
-    desiredScaleDist = SCALE_DIST[scale] ?? 3.3;
-    focusKey = null;
+  /** Recompute which structures are visible and how they are framed, from the
+   *  current scale + selection. */
+  const updateMode = () => {
+    const organScale = curScale === Scale.Organ || curScale === Scale.OrganSystem;
+    isolationKey = organScale ? (focusKey ?? DEFAULT_ISO[curScale] ?? 'heart') : null;
+    if (organScale) { loadSkeleton(); loadOrgans(); }
+    applyVisibility();
     recomputeFocus();
+  };
+
+  const setScale = (scale: number) => {
+    curScale = scale;
+    desiredScaleDist = SCALE_DIST[scale] ?? 4.6;
+    updateMode();
   };
   const setFocus = (key: string | null) => {
     focusKey = key;
     // The skeleton/organs load lazily; make sure the structure is on its way.
     loadSkeleton(); loadOrgans();
-    recomputeFocus();
+    updateMode();
   };
 
   // ── Cinematic light rig ─────────────────────────────────────────────────────
@@ -300,6 +338,18 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
 
   const fillLight = new THREE.DirectionalLight(0x4070ff, 0.35); fillLight.position.set(2, 1, 1.5); scene.add(fillLight);
   const rimLight = new THREE.DirectionalLight(0x8a5cff, 0.7); rimLight.position.set(0, 0.6, -3.2); scene.add(rimLight);
+
+  // Soft contact-shadow catcher: in organ-isolation mode the lone structure
+  // casts a real grounding shadow onto this invisible plane instead of floating
+  // in the void. It lives in world space so it stays level as the specimen turns.
+  const shadowCatcher = new THREE.Mesh(
+    new THREE.PlaneGeometry(10, 10),
+    new THREE.ShadowMaterial({ opacity: 0.38 }),
+  );
+  shadowCatcher.rotation.x = -Math.PI / 2;
+  shadowCatcher.receiveShadow = true;
+  shadowCatcher.visible = false;
+  scene.add(shadowCatcher);
 
   // ── Deep-space backdrop — the SAME procedural nebula + starfield the rest of
   //    Bio Galaxy renders, so the organism tab's sky matches every other scale ──
@@ -522,7 +572,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       modelGroup.add(root);
       breathers.push({ obj: root, base: root.scale.clone() });
     }
-    if (focusKey) recomputeFocus();
+    applyVisibility(); recomputeFocus();
   };
 
   gltfLoader.load(ANATOMY_BODY_URL, (g) => ingest(g.scene, 'body'), undefined,
@@ -565,7 +615,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     } else {
       organsGroup.add(root);
     }
-    if (focusKey) recomputeFocus();
+    applyVisibility(); recomputeFocus();
   };
 
   let organsRequested = false;
@@ -700,9 +750,11 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   resizeObs.observe(canvas);
 
   // The skeleton and internal organs are always part of the specimen now — no
-  // toggles. Reveal (and lazily load) both the moment the scene comes up.
-  setLayerVisible('skeletal', true);
-  setLayerVisible('organs', true);
+  // toggles. Load both up front, then let updateMode decide what is visible for
+  // the current scale (full body at Organism, isolated structure below it).
+  loadSkeleton();
+  loadOrgans();
+  updateMode();
 
   return {
     loadSkeleton,
@@ -725,6 +777,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       composer?.dispose();
       detailTextures.forEach((t) => t.dispose());
       Object.values(sharedMats).forEach((m) => m.dispose());
+      shadowCatcher.material.dispose();
       scene.traverse((o) => {
         if (o instanceof THREE.Mesh || o instanceof THREE.Points) o.geometry?.dispose();
       });

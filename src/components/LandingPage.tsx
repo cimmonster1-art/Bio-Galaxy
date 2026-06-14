@@ -7,7 +7,7 @@ import { AttributionSection } from './AttributionSection';
 
 interface Props { onOpenAtlas: () => void; }
 const CREDIBILITY = DATA_SOURCE_ORDER.map((id) => getSource(id).name);
-const SCALE_STOPS = ['Cosmos', 'Solar system', 'Tree of Life', 'Anatomy', 'Cell', 'Protein', 'Atom'];
+const SCALE_STOPS = ['Cosmos', 'Solar system', 'Biome', 'Ecosystem', 'Anatomy', 'Cell', 'Atom'];
 
 /** Landing page with a live scene, concise product detail, and full provenance. */
 export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {
@@ -27,7 +27,7 @@ export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {
         <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-64px)] max-w-4xl flex-col items-center justify-center px-4 pb-24 pt-8 text-center sm:min-h-[calc(100vh-78px)] sm:px-6 sm:pb-20 sm:pt-0">
           <span className="meta-label mb-4 rounded-full border border-white/10 bg-[#02040a]/50 px-3 py-1 backdrop-blur-md">Open science · live 3D · source cited</span>
           <h1 className="max-w-3xl text-[2.35rem] font-semibold leading-[1.08] tracking-tight sm:text-6xl">One continuous atlas,<br/><span className="text-cyan-200">from cosmos to atom.</span></h1>
-          <p className="mt-4 max-w-2xl text-[13px] sm:mt-5 sm:text-[15px] leading-relaxed text-slate-300/80">Explore the cosmic web, Earth, the Tree of Life, anatomy, cells, pathways, proteins, and molecular structures in a source-aware spatial interface.</p>
+          <p className="mt-4 max-w-2xl text-[13px] sm:mt-5 sm:text-[15px] leading-relaxed text-slate-300/80">Travel a single physical journey through reality — the cosmic web, Earth, living biomes and ecosystems, anatomy, cells, pathways, proteins, and molecular structures — in a source-aware spatial interface.</p>
           <div className="mt-7 grid w-full max-w-xs grid-cols-1 gap-2.5 sm:mt-8 sm:flex sm:w-auto sm:max-w-none sm:flex-wrap sm:items-center sm:justify-center sm:gap-3">
             <button onClick={onOpenAtlas} className="group inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-cyan-400 px-5 py-2.5 text-[13px] font-semibold text-[#02040a] transition hover:bg-cyan-300">Open Atlas <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></button>
             <button onClick={() => sourcesRef.current?.scrollIntoView({ behavior: 'smooth' })} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-white/15 bg-[#02040a]/40 px-5 py-2.5 text-[13px] font-medium text-slate-200 backdrop-blur-md transition hover:border-cyan-500/40 hover:text-cyan-200"><Database className="h-4 w-4" /> View Sources</button>
