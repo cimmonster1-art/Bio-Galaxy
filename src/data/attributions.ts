@@ -32,6 +32,9 @@ export const ATTRIBUTION_GROUPS: AttributionGroup[] = [
       { name: 'Ensembl', institution: 'EMBL-EBI and Wellcome Sanger Institute', role: 'Genes, transcripts, and genomic coordinates', url: 'https://www.ensembl.org', status: 'live' },
       { name: 'Human Protein Atlas', institution: 'KTH Royal Institute of Technology', role: 'Tissue and single-cell protein expression', url: 'https://www.proteinatlas.org', status: 'live' },
       { name: 'NCBI Taxonomy and E-utilities', institution: 'NIH National Library of Medicine', role: 'Taxonomy identifiers, lineage, and literature links', url: 'https://www.ncbi.nlm.nih.gov', status: 'live' },
+      { name: 'PubChem', institution: 'NIH National Library of Medicine', role: 'Molecule chemistry and periodic-table data at the molecule and atom scales', url: 'https://pubchem.ncbi.nlm.nih.gov', status: 'live' },
+      { name: 'AlphaFold Protein Structure Database', institution: 'Google DeepMind and EMBL-EBI', role: 'AI-predicted protein structures at the protein-complex scale', url: 'https://alphafold.ebi.ac.uk', status: 'live' },
+      { name: 'Wikipedia (REST API)', institution: 'Wikimedia Foundation', role: 'Live encyclopedic extracts synthesized into the context sidebar', url: 'https://www.wikipedia.org', status: 'live' },
     ],
   },
   {

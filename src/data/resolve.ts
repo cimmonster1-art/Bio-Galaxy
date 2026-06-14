@@ -171,9 +171,10 @@ const cosmicStructures: Record<string, BioObject> = {
   galaxy: { id: 'galaxy', name: 'Spiral Galaxy', scale: Scale.Galaxy, kind: 'galaxy', summary: 'A spiral galaxy of hundreds of billions of stars with a bright core and winding arms.', size: '~100,000 light-years across', facts: ['A dense bulge surrounds the central core.', 'Spiral arms are sites of active star formation.'], provenanceNote: 'Procedural galaxy visualization.' },
 };
 
-// A representative atom, clickable at the deepest scale.
+// A representative atom (carbon), clickable at the deepest scale. Its live
+// periodic-table data is pulled from PubChem.
 const atomObjects: Record<string, BioObject> = {
-  atom_carbon: { id: 'atom_carbon', name: 'Atom', scale: Scale.Atom, kind: 'atom', summary: 'A dense nucleus of protons and neutrons surrounded by orbiting electrons.', size: '~100 pm', facts: ['Nearly all the mass sits in the tiny nucleus.', 'Electrons occupy quantized orbital shells.'], provenanceNote: 'Schematic atomic model rendered procedurally.' },
+  atom_carbon: { id: 'atom_carbon', name: 'Carbon atom', scale: Scale.Atom, kind: 'atom', summary: 'A dense nucleus of protons and neutrons surrounded by orbiting electrons — carbon, the scaffold of organic life.', size: '~140 pm (covalent radius)', facts: ['Nearly all the mass sits in the tiny nucleus.', 'Electrons occupy quantized orbital shells.', 'Four valence electrons let carbon form the backbone of every biomolecule.'], element: 'C', source: 'pubchem', provenanceNote: 'Schematic atomic model; element data from PubChem.' },
 };
 
 // Tissue: one immersive specimen (skeletal muscle) and its substructures.
@@ -187,14 +188,16 @@ const tissueObjects: Record<string, BioObject> = {
   'tissue:ecm': tissue('ecm', 'Extracellular matrix', 'The collagen-rich scaffold of connective tissue surrounding the fibres.', ['Mostly collagen and elastin fibres.', 'Transmits force and holds the tissue together.']),
 };
 
-// Molecule-scale icons of the chemistry of life.
-function molecule(id: string, name: string, summary: string, facts: string[]): BioObject {
-  return { id, name, scale: Scale.Molecule, kind: 'molecule', summary, size: 'molecular scale (~1–10 nm)', facts, provenanceNote: 'Schematic molecular model rendered procedurally.' };
+// Molecule-scale chemistry of life. Where a record maps cleanly to a single
+// PubChem compound it carries a real CID so the detail panel resolves live
+// chemical identity; polymers (DNA, the bilayer) stay procedurally provenanced.
+function molecule(id: string, name: string, summary: string, facts: string[], extra: Partial<BioObject> = {}): BioObject {
+  return { id, name, scale: Scale.Molecule, kind: 'molecule', summary, size: 'molecular scale (~1–10 nm)', facts, provenanceNote: 'Schematic molecular model rendered procedurally.', ...extra };
 }
 const moleculeObjects: Record<string, BioObject> = {
-  dna_helix: molecule('dna_helix', 'DNA double helix', 'Two sugar-phosphate strands wound around base pairs that store the genome.', ['Base pairs: A–T and G–C.', 'Antiparallel strands twist into a right-handed helix.']),
+  dna_helix: molecule('dna_helix', 'DNA double helix', 'Two sugar-phosphate strands wound around base pairs that store the genome.', ['Base pairs: A–T and G–C.', 'Antiparallel strands twist into a right-handed helix.'], { crossRefs: ['ncbi', 'ensembl'] }),
   lipid_membrane: molecule('lipid_membrane', 'Lipid bilayer', 'A double sheet of phospholipids forming every cellular membrane.', ['Hydrophilic heads face water; hydrophobic tails face inward.', 'Self-assembles and is selectively permeable.']),
-  water_cluster: molecule('water_cluster', 'Water cluster', 'A handful of hydrogen-bonded water molecules, the solvent of life.', ['Bent H–O–H geometry near 104.5°.', 'Hydrogen bonding gives water its unusual properties.']),
+  water_cluster: molecule('water_cluster', 'Water cluster', 'A handful of hydrogen-bonded water molecules, the solvent of life.', ['Bent H–O–H geometry near 104.5°.', 'Hydrogen bonding gives water its unusual properties.'], { pubchemCid: 962, source: 'pubchem', provenanceNote: 'Schematic model; chemical identity from PubChem (CID 962).' }),
 };
 
 export function resolveObject(id: string): BioObject | undefined {
