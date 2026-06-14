@@ -162,10 +162,31 @@ for (const o of ECO_ORGANISMS) {
   ecosystemObjects[`organism:${o.id}`] = { id: `organism:${o.id}`, name: o.name, scale: Scale.Organism, kind: 'organism', summary: o.summary, size: 'organism scale', facts: ['Selecting it descends to the organism scale.', 'A node in the ecosystem interaction network.'], provenanceNote: ECO_NOTE };
 }
 
+// Histology specimens shown at the tissue scale.
+function tissue(id: string, name: string, summary: string, facts: string[]): BioObject {
+  return { id: `tissue:${id}`, name, scale: Scale.Tissue, kind: 'tissue', summary, size: 'tissue scale (~0.1–1 mm)', facts, source: 'hpa', crossRefs: ['ensembl', 'uniprot'] };
+}
+const tissueObjects: Record<string, BioObject> = {
+  'tissue:muscle': tissue('muscle', 'Skeletal muscle', 'Bundled striated muscle fibres whose banded sarcomeres drive contraction.', ['Striations are repeating actin–myosin sarcomeres.', 'Multinucleate fibres fused from myoblasts.']),
+  'tissue:neuron': tissue('neuron', 'Neural tissue', 'A web of neurons with branching dendrites and connecting axons.', ['Dendrites receive signals; axons transmit them.', 'Synapses link one neuron to the next.']),
+  'tissue:alveoli': tissue('alveoli', 'Alveolar tissue', 'Clustered air sacs where oxygen and carbon dioxide cross thin walls.', ['Vast surface area for gas exchange.', 'Wrapped in dense pulmonary capillaries.']),
+  'tissue:skin': tissue('skin', 'Skin layers', 'The stacked epidermis, dermis, and hypodermis that protect the body.', ['Epidermis renews continuously from its base.', 'Dermis carries vessels, nerves, and glands.']),
+};
+
+// Molecule-scale icons of the chemistry of life.
+function molecule(id: string, name: string, summary: string, facts: string[]): BioObject {
+  return { id, name, scale: Scale.Molecule, kind: 'molecule', summary, size: 'molecular scale (~1–10 nm)', facts, provenanceNote: 'Schematic molecular model rendered procedurally.' };
+}
+const moleculeObjects: Record<string, BioObject> = {
+  dna_helix: molecule('dna_helix', 'DNA double helix', 'Two sugar-phosphate strands wound around base pairs that store the genome.', ['Base pairs: A–T and G–C.', 'Antiparallel strands twist into a right-handed helix.']),
+  lipid_membrane: molecule('lipid_membrane', 'Lipid bilayer', 'A double sheet of phospholipids forming every cellular membrane.', ['Hydrophilic heads face water; hydrophobic tails face inward.', 'Self-assembles and is selectively permeable.']),
+  water_cluster: molecule('water_cluster', 'Water cluster', 'A handful of hydrogen-bonded water molecules, the solvent of life.', ['Bent H–O–H geometry near 104.5°.', 'Hydrogen bonding gives water its unusual properties.']),
+};
+
 export function resolveObject(id: string): BioObject | undefined {
   const tissueMatch = /^tissue:cell:(\d+)$/.exec(id);
   if (tissueMatch) return tissueCellObject(Number(tissueMatch[1]));
-  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? cosmicObjects[id] ?? biomeObjects[id] ?? ecosystemObjects[id];
+  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? cosmicObjects[id] ?? biomeObjects[id] ?? ecosystemObjects[id] ?? tissueObjects[id] ?? moleculeObjects[id];
 }
 
 /** Complete locally indexed corpus used by search and the read-only copilot. */
@@ -177,6 +198,8 @@ export function allResolvedObjects(): BioObject[] {
     ...Object.values(cosmicObjects),
     ...Object.values(biomeObjects),
     ...Object.values(ecosystemObjects),
+    ...Object.values(tissueObjects),
+    ...Object.values(moleculeObjects),
   ];
 }
 
