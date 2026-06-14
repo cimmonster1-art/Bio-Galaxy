@@ -18,6 +18,8 @@ export class AnatomyModelLayer implements SceneLayer {
   private readonly systemGroups = new Map<string, THREE.Group>();
   private readonly pickables: THREE.Object3D[] = [];
   private readonly animated: { object: THREE.Object3D; base: number; speed: number }[] = [];
+  private heartGroup: THREE.Group | null = null;
+  private readonly heartMats: THREE.MeshStandardMaterial[] = [];
   private loaded: THREE.Object3D | null = null;
   private mixer: THREE.AnimationMixer | null = null;
   private actions: THREE.AnimationAction[] = [];
@@ -160,8 +162,7 @@ export class AnatomyModelLayer implements SceneLayer {
   }
   private buildCardiovascular(): void {
     const g = this.system('system:cardiovascular');
-    const h = this.organ('organ:heart', g, new THREE.SphereGeometry(1.2, 32, 26), [-.8, 4.7, 1.7], '#ff4058', [.85, 1.2, .75]);
-    this.animated.push({ object: h, base: 1, speed: 4.6 });
+    this.buildHeart(g, [-.8, 4.7, 1.7]);
     // Aorta and major arteries as glowing red tubes; venous return in blue.
     const artery = (pts: THREE.Vector3[]) => this.vessel('system:cardiovascular', g, pts, '#ff5066', .13);
     const vein = (pts: THREE.Vector3[]) => this.vessel('system:cardiovascular', g, pts, '#4f78d6', .11);
@@ -173,6 +174,76 @@ export class AnatomyModelLayer implements SceneLayer {
     vein([new THREE.Vector3(-2, -13, .2), new THREE.Vector3(-1.4, -6, .6), new THREE.Vector3(-.4, 4.4, 1.2)]);
     vein([new THREE.Vector3(2, -13, .2), new THREE.Vector3(1.4, -6, .6), new THREE.Vector3(-.4, 4.4, 1.2)]);
   }
+  /**
+   * An anatomical heart in place of the old smooth blob: a conical ventricular
+   * mass tapering to the apex, the two atria above, the aortic arch and pulmonary
+   * trunk rising from the base, and coronary arteries crowning the surface. Every
+   * part picks as organ:heart; the whole group beats and its myocardium glows
+   * with each contraction (driven in update()).
+   */
+  private buildHeart(g: THREE.Group, at: [number, number, number]): void {
+    const heart = new THREE.Group();
+    heart.position.set(...at);
+    heart.rotation.z = 0.32; // apex points down and to the subject's left
+    heart.userData.pick = { id: 'organ:heart', scale: Scale.Organ };
+
+    const myo = (color: string, emissive = 0.16) => {
+      const m = new THREE.MeshPhysicalMaterial({
+        color, roughness: .4, clearcoat: .7, clearcoatRoughness: .3,
+        sheen: .7, sheenColor: new THREE.Color(color),
+        transparent: true, opacity: .94,
+        emissive: new THREE.Color(color).multiplyScalar(emissive), emissiveIntensity: .4,
+      });
+      this.heartMats.push(m);
+      return m;
+    };
+    const add = (geo: THREE.BufferGeometry, mat: THREE.Material, pos: [number, number, number], scale: [number, number, number] = [1, 1, 1]) => {
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(...pos); mesh.scale.set(...scale);
+      mesh.userData.pick = heart.userData.pick;
+      heart.add(mesh);
+      return mesh;
+    };
+
+    const muscle = myo('#c1303f');
+    // Ventricular mass: two overlapping rounded cones forming the bulk, meeting
+    // at a pointed apex below.
+    add(new THREE.SphereGeometry(1.15, 32, 26), muscle, [-.25, .2, 0], [1, 1.15, .95]);
+    add(new THREE.SphereGeometry(1.0, 32, 26), muscle, [.55, .15, .1], [.95, 1.1, .9]);
+    add(new THREE.ConeGeometry(1.1, 1.7, 28), muscle, [0, -1.25, .02], [1, 1, .9]);
+    // Atria: softer, slightly bluish chambers seated on top.
+    const atria = myo('#a83a4e');
+    add(new THREE.SphereGeometry(.62, 24, 18), atria, [-.7, 1.15, .05], [1, .8, .9]);
+    add(new THREE.SphereGeometry(.58, 24, 18), atria, [.7, 1.1, .1], [1, .8, .9]);
+
+    // Great vessels rising from the base.
+    const vesselMat = (color: string) => {
+      const m = new THREE.MeshStandardMaterial({ color, emissive: new THREE.Color(color), emissiveIntensity: .4, roughness: .5, metalness: .05, transparent: true, opacity: .9 });
+      this.heartMats.push(m);
+      return m;
+    };
+    const tube = (pts: THREE.Vector3[], r: number, mat: THREE.Material) => {
+      const geo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, r, 12, false);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.userData.pick = heart.userData.pick;
+      heart.add(mesh);
+    };
+    // Aortic arch.
+    tube([new THREE.Vector3(.1, 1.2, 0), new THREE.Vector3(.2, 2.4, -.1), new THREE.Vector3(-.2, 3.1, -.2), new THREE.Vector3(-1.1, 2.9, -.3)], .26, vesselMat('#ff5066'));
+    // Pulmonary trunk.
+    tube([new THREE.Vector3(-.4, 1.1, .4), new THREE.Vector3(-.2, 2.2, .5), new THREE.Vector3(.5, 2.7, .5)], .24, vesselMat('#5a86e6'));
+    // Superior vena cava.
+    tube([new THREE.Vector3(.8, 1.2, -.1), new THREE.Vector3(1.0, 2.4, -.1)], .2, vesselMat('#4f78d6'));
+    // Coronary arteries crowning the ventricles.
+    const coronary = vesselMat('#ff7a66');
+    tube([new THREE.Vector3(-.1, 1.0, .9), new THREE.Vector3(-.7, .1, .8), new THREE.Vector3(-.5, -.9, .5)], .07, coronary);
+    tube([new THREE.Vector3(.1, 1.0, .85), new THREE.Vector3(.7, .2, .75), new THREE.Vector3(.4, -.8, .5)], .07, coronary);
+
+    g.add(heart);
+    this.pickables.push(heart);
+    this.heartGroup = heart;
+  }
+
   private buildRespiratory(): void { const g=this.system('system:respiratory'); this.organ('organ:lungs',g,new THREE.SphereGeometry(1.8,32,26),[-2,5,.4],'#79d6df',[.85,1.55,.6]); this.organ('organ:lungs',g,new THREE.SphereGeometry(1.8,32,26),[2,5,.4],'#79d6df',[.85,1.55,.6]); this.vessel('system:respiratory',g,[new THREE.Vector3(0,10.5,.4),new THREE.Vector3(0,7.5,.4),new THREE.Vector3(0,6.2,.4)],'#78dce8',.34); this.vessel('system:respiratory',g,[new THREE.Vector3(0,6.4,.4),new THREE.Vector3(-1.2,5.6,.4),new THREE.Vector3(-2,5,.4)],'#78dce8',.16); this.vessel('system:respiratory',g,[new THREE.Vector3(0,6.4,.4),new THREE.Vector3(1.2,5.6,.4),new THREE.Vector3(2,5,.4)],'#78dce8',.16); }
   private buildDigestive(): void { const g=this.system('system:digestive'); this.organ('organ:liver',g,new THREE.SphereGeometry(1.8,32,24),[1.5,1.7,1.5],'#9d503f',[1.6,.65,.75]); this.organ('organ:stomach',g,new THREE.SphereGeometry(1.25,28,22),[-1.25,.4,1.7],'#e59b69',[1,.8,.72]); this.organ('organ:pancreas',g,new THREE.CapsuleGeometry(.32,1.6,8,14),[.2,.1,1.4],'#d8a85a',[1,1,1]).rotation.z=.5; this.organ('organ:spleen',g,new THREE.SphereGeometry(.7,24,18),[-2.4,1.1,1],'#7d3a52',[1,1.3,.7]); const gut=this.organ('organ:intestines',g,new THREE.TorusKnotGeometry(1.45,.3,128,12,2,3),[0,-2.6,1.3],'#d88961',[1.5,1.7,.55]); gut.rotation.x=.25; }
   private buildUrinary(): void { const g=this.system('system:urinary'); this.organ('organ:kidneys',g,new THREE.SphereGeometry(.75,28,20),[-1.65,-.2,.2],'#a45b73',[.7,1.35,.55]); this.organ('organ:kidneys',g,new THREE.SphereGeometry(.75,28,20),[1.65,-.2,.2],'#a45b73',[.7,1.35,.55]); this.organ('organ:bladder',g,new THREE.SphereGeometry(.8,24,18),[0,-6.5,1],'#c9a24a',[1,.85,.85]); this.vessel('system:urinary',g,[new THREE.Vector3(-1.65,-.6,.2),new THREE.Vector3(-.8,-3.5,.6),new THREE.Vector3(0,-6,1)],'#caa657',.06); this.vessel('system:urinary',g,[new THREE.Vector3(1.65,-.6,.2),new THREE.Vector3(.8,-3.5,.6),new THREE.Vector3(0,-6,1)],'#caa657',.06); }
@@ -202,7 +273,7 @@ export class AnatomyModelLayer implements SceneLayer {
   setSelected(id: string | null): void { this.selectedId = id?.startsWith('organ:') || id?.startsWith('system:') ? id : null; }
   setCinematicProgress(progress: number | null): void { this.cinematicProgress = progress; }
   onScaleChange(scale: Scale,intensity:number):void{this.currentScale=scale;this.intensity=intensity;this.root.visible=intensity>.01;}
-  update(dt:number,elapsed:number):void{ const cinematic=this.cinematicProgress!==null; for(const action of this.actions)action.paused=!cinematic; if(this.mixer)this.mixer.update(dt); this.updateAnatomyVisibility(); const systemOpacity=this.currentScale===Scale.Organism?0:.9; for(const group of this.systemGroups.values())group.traverse(o=>{const m=(o as THREE.Mesh).material as THREE.Material|undefined;if(m&&'opacity'in m)fadeMaterial(m,systemOpacity*this.intensity,dt);}); for(const a of this.animated){const s=a.base+Math.sin(elapsed*a.speed)*.07;a.object.scale.multiplyScalar(s/a.object.scale.x);} this.atlas.rotation.y=cinematic?elapsed*.35:Math.sin(elapsed*.12)*.1; if(this.loaded){this.loaded.visible=true;this.loaded.traverse(o=>{const m=(o as THREE.Mesh).material;if(!m)return;for(const mat of (Array.isArray(m)?m:[m])){mat.opacity=this.currentScale===Scale.Organism?.78:.1; if('emissiveIntensity'in mat)(mat as THREE.MeshStandardMaterial).emissiveIntensity=cinematic?.55:.22;}});} }
+  update(dt:number,elapsed:number):void{ const cinematic=this.cinematicProgress!==null; for(const action of this.actions)action.paused=!cinematic; if(this.mixer)this.mixer.update(dt); this.updateAnatomyVisibility(); const systemOpacity=this.currentScale===Scale.Organism?0:.9; for(const group of this.systemGroups.values())group.traverse(o=>{const m=(o as THREE.Mesh).material as THREE.Material|undefined;if(m&&'opacity'in m)fadeMaterial(m,systemOpacity*this.intensity,dt);}); for(const a of this.animated){const s=a.base+Math.sin(elapsed*a.speed)*.07;a.object.scale.multiplyScalar(s/a.object.scale.x);} if(this.heartGroup){const beat=heartbeatEnvelope(elapsed*1.15);this.heartGroup.scale.setScalar(1+beat*0.09);for(const m of this.heartMats)m.emissiveIntensity=0.3+beat*1.0;} this.atlas.rotation.y=cinematic?elapsed*.35:Math.sin(elapsed*.12)*.1; if(this.loaded){this.loaded.visible=true;this.loaded.traverse(o=>{const m=(o as THREE.Mesh).material;if(!m)return;for(const mat of (Array.isArray(m)?m:[m])){mat.opacity=this.currentScale===Scale.Organism?.78:.1; if('emissiveIntensity'in mat)(mat as THREE.MeshStandardMaterial).emissiveIntensity=cinematic?.55:.22;}});} }
   private updateAnatomyVisibility(): void {
     const organismView = this.currentScale === Scale.Organism;
     for (const [id, group] of this.systemGroups) {
@@ -348,6 +419,14 @@ function buildHumanFigure(parent: THREE.Object3D, mat: THREE.Material): void {
     heel.position.set(sx * 0.18, -1.205, -0.028);
     parent.add(heel);
   }
+}
+
+/** A double-thump (lub-dub) heartbeat envelope over a 0..1 cycle, returning 0..1. */
+function heartbeatEnvelope(t: number): number {
+  const p = t - Math.floor(t);
+  const lub = Math.exp(-Math.pow((p - 0.12) / 0.055, 2));
+  const dub = 0.6 * Math.exp(-Math.pow((p - 0.34) / 0.055, 2));
+  return Math.min(1, lub + dub);
 }
 
 function formatFromUrl(url:string):ModelFormat{const l=url.toLowerCase();return l.endsWith('.glb')?'glb':l.endsWith('.fbx')?'fbx':'gltf';}

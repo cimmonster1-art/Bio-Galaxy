@@ -545,6 +545,9 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
 
   const anatomyTargets: THREE.Mesh[] = [];
   const breathers: Array<{ obj: THREE.Object3D; base: THREE.Vector3 }> = [];
+  // The real heart GLB, captured so it can beat (lub-dub) and flush with each
+  // contraction in the immersive organ view.
+  let heartOrgan: { obj: THREE.Object3D; base: THREE.Vector3; mats: THREE.MeshStandardMaterial[] } | null = null;
   let glbBodyRoot: THREE.Object3D | null = null;
 
   // Normalize a loaded model into a consistent body-space frame so the body and
@@ -621,6 +624,18 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       organsGroup.add(pivot);
     } else {
       organsGroup.add(root);
+    }
+    // Capture the heart so it can beat in the render loop.
+    if (entry.anatomyKey === 'heart') {
+      const container = (root.parent && root.parent !== organsGroup) ? root.parent : root;
+      const mats: THREE.MeshStandardMaterial[] = [];
+      container.traverse((o) => {
+        const m = (o as THREE.Mesh).material;
+        for (const mm of Array.isArray(m) ? m : m ? [m] : []) {
+          if ('emissiveIntensity' in mm) mats.push(mm as THREE.MeshStandardMaterial);
+        }
+      });
+      heartOrgan = { obj: container, base: container.scale.clone(), mats };
     }
     applyVisibility(); recomputeFocus();
   };
@@ -719,6 +734,16 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       floatGroup.rotation.z = Math.sin(timeUniform.value * 0.32) * 0.012;
       const breath = 1 + Math.sin(timeUniform.value * 0.9) * 0.012;
       for (const b of breathers) b.obj.scale.set(b.base.x, b.base.y * breath, b.base.z);
+
+      // The heart beats with a double-thump and flushes brighter as it contracts.
+      if (heartOrgan) {
+        const t = timeUniform.value * 1.15;
+        const p = t - Math.floor(t);
+        const beat = Math.min(1, Math.exp(-Math.pow((p - 0.12) / 0.055, 2)) + 0.6 * Math.exp(-Math.pow((p - 0.34) / 0.055, 2)));
+        const sc = 1 + beat * 0.05;
+        heartOrgan.obj.scale.set(heartOrgan.base.x * sc, heartOrgan.base.y * sc, heartOrgan.base.z * sc);
+        for (const m of heartOrgan.mats) m.emissiveIntensity = 0.4 + beat * 0.9;
+      }
 
       if (composer && renderPass) {
         try {
