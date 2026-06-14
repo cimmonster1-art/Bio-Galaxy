@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Scale } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
+import { createGlowTexture } from '../textures/proceduralTextures';
 
 /**
  * Molecular scales: protein complex, molecule, and atom. Renders a procedural
@@ -67,6 +68,15 @@ export class ProteinStructureLayer implements SceneLayer {
   private readonly atomScale = new THREE.Group();
   private intensity = 0;
   private currentScale: Scale = Scale.ProteinComplex;
+
+  // Atom-scale subgraph: a glowing nucleon cluster, luminous orbital shells, and
+  // electrons that race along them. Tracked here so they can be faded and
+  // animated independently of the ball-and-stick molecular assembly.
+  private readonly nucleus = new THREE.Group();
+  private readonly atomFadeables: (THREE.Material & { opacity: number })[] = [];
+  private readonly atomShells: { ring: THREE.Group; spin: number }[] = [];
+  private readonly atomElectrons: { pivot: THREE.Group; speed: number }[] = [];
+  private readonly atomTextures: THREE.Texture[] = [];
 
   constructor() {
     this.root.name = 'ProteinStructureLayer';
@@ -157,37 +167,137 @@ export class ProteinStructureLayer implements SceneLayer {
     this.root.add(this.bonds);
   }
 
+  /**
+   * Build a luminous, physically shaded atom: a packed nucleus of protons and
+   * neutrons wrapped in a soft glow, three inclined orbital shells drawn as
+   * glowing tubes, and electrons orbiting along them with their own halos. Every
+   * material starts fully transparent and is faded in with the Atom scale.
+   */
   private buildAtomScale(): void {
-    const nucleus = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1.4, 2),
-      new THREE.MeshBasicMaterial({ color: '#ef6b5b', transparent: true, opacity: 0 }),
-    );
-    this.atomScale.add(nucleus);
+    const glowTex = createGlowTexture(256);
+    this.atomTextures.push(glowTex);
 
-    // Electron shells as thin rings of points.
+    // --- Nucleus: a tight fibonacci-packed cluster of nucleons. ----------------
+    const nucleonGeo = new THREE.IcosahedronGeometry(0.62, 2);
+    const protonMat = new THREE.MeshStandardMaterial({
+      color: '#ff5a4d',
+      emissive: '#7a1206',
+      emissiveIntensity: 0.65,
+      roughness: 0.32,
+      metalness: 0.18,
+      transparent: true,
+      opacity: 0,
+    });
+    const neutronMat = new THREE.MeshStandardMaterial({
+      color: '#aebfd0',
+      emissive: '#1a2838',
+      emissiveIntensity: 0.4,
+      roughness: 0.42,
+      metalness: 0.22,
+      transparent: true,
+      opacity: 0,
+    });
+    this.atomFadeables.push(protonMat, neutronMat);
+
+    const NUCLEONS = 18;
+    const packR = 1.35;
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    for (let i = 0; i < NUCLEONS; i++) {
+      // Fibonacci sphere for an even shell, pulled inward for a clustered core.
+      const y = 1 - (i / (NUCLEONS - 1)) * 2;
+      const rad = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = golden * i;
+      const shrink = 0.45 + 0.55 * Math.cbrt(i / NUCLEONS);
+      const nucleon = new THREE.Mesh(nucleonGeo, i % 2 === 0 ? protonMat : neutronMat);
+      nucleon.position.set(Math.cos(theta) * rad * packR * shrink, y * packR * shrink, Math.sin(theta) * rad * packR * shrink);
+      nucleon.scale.setScalar(0.85 + (i % 3) * 0.12);
+      this.nucleus.add(nucleon);
+    }
+
+    // Warm glow sprite hugging the nucleus so it reads as energetic, not a ball.
+    const nucleusGlowMat = new THREE.SpriteMaterial({
+      map: glowTex,
+      color: '#ff8a5b',
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const nucleusGlow = new THREE.Sprite(nucleusGlowMat);
+    nucleusGlow.scale.setScalar(7.5);
+    this.nucleus.add(nucleusGlow);
+    nucleusGlowMat.userData.fadeWeight = 0.85;
+    this.atomFadeables.push(nucleusGlowMat);
+    this.atomScale.add(this.nucleus);
+
+    // --- Electron shells: glowing inclined orbital rings + orbiting electrons. -
+    const shellGeo = (r: number): THREE.TorusGeometry => new THREE.TorusGeometry(r, 0.045, 12, 160);
+    const tilts: [number, number][] = [
+      [0.0, 0.0],
+      [1.15, 0.5],
+      [-0.7, 1.25],
+    ];
+    const electronCounts = [2, 3, 3];
     for (let s = 0; s < 3; s++) {
-      const r = 4 + s * 2.5;
-      const count = 24 + s * 12;
-      const positions = new Float32Array(count * 3);
-      for (let i = 0; i < count; i++) {
-        const a = (i / count) * Math.PI * 2;
-        positions.set([Math.cos(a) * r, Math.sin(a) * r, 0], i * 3);
-      }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      const ring = new THREE.Points(
-        geo,
-        new THREE.PointsMaterial({
-          color: '#5b8def',
-          size: 0.4,
+      const r = 4.2 + s * 2.6;
+      const ring = new THREE.Group();
+      ring.rotation.x = tilts[s][0];
+      ring.rotation.y = tilts[s][1];
+
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: '#7fb0ff',
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const ringMesh = new THREE.Mesh(shellGeo(r), ringMat);
+      ring.add(ringMesh);
+      ringMat.userData.fadeWeight = 0.55;
+      this.atomFadeables.push(ringMat);
+
+      // Electrons spaced around the ring, each a bright emissive bead + halo.
+      const count = electronCounts[s];
+      for (let e = 0; e < count; e++) {
+        const pivot = new THREE.Group();
+        pivot.rotation.z = (e / count) * Math.PI * 2;
+        const electronMat = new THREE.MeshStandardMaterial({
+          color: '#dceaff',
+          emissive: '#4f86ff',
+          emissiveIntensity: 1.6,
+          roughness: 0.25,
+          metalness: 0,
           transparent: true,
           opacity: 0,
-        }),
-      );
-      ring.rotation.x = s * 0.7;
-      ring.rotation.y = s * 0.4;
+        });
+        const electron = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 24), electronMat);
+        electron.position.x = r;
+        this.atomFadeables.push(electronMat);
+
+        const haloMat = new THREE.SpriteMaterial({
+          map: glowTex,
+          color: '#9cc4ff',
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        });
+        const halo = new THREE.Sprite(haloMat);
+        halo.scale.setScalar(2.4);
+        electron.add(halo);
+        haloMat.userData.fadeWeight = 0.9;
+        this.atomFadeables.push(haloMat);
+
+        pivot.add(electron);
+        ring.add(pivot);
+        // Inner shells sweep faster, echoing tighter orbits.
+        this.atomElectrons.push({ pivot, speed: 1.8 - s * 0.45 + e * 0.05 });
+      }
+
       this.atomScale.add(ring);
+      this.atomShells.push({ ring, spin: (s % 2 === 0 ? 1 : -1) * (0.12 + s * 0.04) });
     }
+
     this.atomScale.visible = false;
   }
 
@@ -207,13 +317,19 @@ export class ProteinStructureLayer implements SceneLayer {
     if (this.atoms) this.atoms.rotation.y = elapsed * 0.25;
     if (this.bonds) this.bonds.rotation.y = elapsed * 0.25;
 
-    // Atom scale fade + electron orbit.
+    // Atom scale: fade every nucleus/shell/electron material toward the target,
+    // honoring each material's own opacity cap, then animate the living atom.
     const atomTarget = this.currentScale === Scale.Atom ? this.intensity : 0;
-    this.atomScale.children.forEach((child) => {
-      const m = (child as THREE.Mesh).material as THREE.Material & { opacity: number };
-      if (m && 'opacity' in m) fadeMaterial(m, atomTarget, dt);
-    });
-    this.atomScale.rotation.z = elapsed * 0.4;
+    for (const m of this.atomFadeables) {
+      const weight = (m.userData?.fadeWeight as number | undefined) ?? 1;
+      fadeMaterial(m, atomTarget * weight, dt);
+    }
+
+    // Nucleus tumbles slowly; shells precess; electrons race along their orbits.
+    this.nucleus.rotation.y = elapsed * 0.35;
+    this.nucleus.rotation.x = Math.sin(elapsed * 0.4) * 0.25;
+    for (const shell of this.atomShells) shell.ring.rotation.z += shell.spin * dt;
+    for (const el of this.atomElectrons) el.pivot.rotation.z += el.speed * dt;
   }
 
   getPickables(): THREE.Object3D[] {
@@ -222,6 +338,7 @@ export class ProteinStructureLayer implements SceneLayer {
 
   dispose(): void {
     this.atomGeo.dispose();
+    for (const tex of this.atomTextures) tex.dispose();
     disposeObject(this.root);
   }
 }

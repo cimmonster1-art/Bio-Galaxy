@@ -29,6 +29,230 @@ export function createGlowTexture(size = 128): THREE.Texture {
 }
 
 /**
+ * Lens-flare cross used behind the Sun: a hot white core fading to the given
+ * tint, with two long and two short diffraction spikes. Additive-blended by the
+ * caller. Ported to match Astro-insight's flagship sky exactly.
+ */
+export function createLensFlareTexture(r: number, g: number, b: number): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    const cx = 128;
+    const cy = 128;
+    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
+    core.addColorStop(0, 'rgba(255,255,255,1)');
+    core.addColorStop(0.2, `rgba(${r},${g},${b},0.95)`);
+    core.addColorStop(0.6, `rgba(${r},${g},${b},0.25)`);
+    core.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = core;
+    ctx.fillRect(0, 0, 256, 256);
+    const drawSpike = (angle: number, len: number, width: number): void => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(angle);
+      const grad = ctx.createLinearGradient(-len, 0, len, 0);
+      grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+      grad.addColorStop(0.45, `rgba(${r},${g},${b},0.7)`);
+      grad.addColorStop(0.5, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.55, `rgba(${r},${g},${b},0.7)`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(-len, -width / 2, len * 2, width);
+      ctx.restore();
+    };
+    drawSpike(0, 120, 4);
+    drawSpike(Math.PI / 2, 120, 4);
+    drawSpike(Math.PI / 4, 80, 2);
+    drawSpike(-Math.PI / 4, 80, 2);
+  }
+  const texture = new THREE.CanvasTexture(c);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
+ * A single upward flame loop for solar prominences arcing off the Sun's limb:
+ * bright orange at the base fading up into hot wisps. Additive sprite texture,
+ * ported to match Astro-insight's flagship sky exactly.
+ */
+export function createProminenceTexture(): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  if (g) {
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, 128, 128);
+    g.globalCompositeOperation = 'lighter';
+    const grad = g.createLinearGradient(64, 110, 64, 20);
+    grad.addColorStop(0, 'rgba(255,200,120,0.95)');
+    grad.addColorStop(0.25, 'rgba(255,140,50,0.85)');
+    grad.addColorStop(0.55, 'rgba(240,80,20,0.55)');
+    grad.addColorStop(1, 'rgba(160,30,10,0)');
+    g.fillStyle = grad;
+    for (let i = 0; i < 14; i++) {
+      const y = 110 - i * 6;
+      const w = 18 - i * 0.9 + Math.sin(i * 1.3) * 3;
+      const x = 64 + Math.sin(i * 0.7) * 4;
+      g.beginPath();
+      g.ellipse(x, y, w, 7, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+    for (let i = 0; i < 30; i++) {
+      const ny = 110 - Math.random() * 90;
+      const nx = 64 + (Math.random() - 0.5) * 18;
+      const nr = 1 + Math.random() * 3;
+      g.fillStyle = `rgba(255,${(140 + Math.random() * 80) | 0},${(40 + Math.random() * 60) | 0},${0.3 + Math.random() * 0.5})`;
+      g.beginPath();
+      g.arc(nx, ny, nr, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  const texture = new THREE.CanvasTexture(c);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
+ * Photoreal SDO-style Sun photosphere: a deep red-orange base with a bright
+ * magma filament network, dark active-region patches, and hot equatorial plage.
+ * Ported from Astro-insight so the Solar System scale matches its flagship sky.
+ */
+export function createAstroSunTexture(): THREE.Texture {
+  const W = 2048;
+  const H = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const g = canvas.getContext('2d');
+  if (!g) return createGlowTexture();
+
+  // Deep red-orange base, darker at the poles like SDO 304 imagery.
+  const base = g.createLinearGradient(0, 0, 0, H);
+  base.addColorStop(0.0, '#3a0a02');
+  base.addColorStop(0.18, '#7a1a04');
+  base.addColorStop(0.4, '#b8300a');
+  base.addColorStop(0.5, '#d04010');
+  base.addColorStop(0.6, '#b8300a');
+  base.addColorStop(0.82, '#7a1a04');
+  base.addColorStop(1.0, '#3a0a02');
+  g.fillStyle = base;
+  g.fillRect(0, 0, W, H);
+
+  // Multi-octave value-noise field for the filament network.
+  const noiseW = 256;
+  const noiseH = 128;
+  const noiseGrid = new Float32Array(noiseW * noiseH);
+  for (let i = 0; i < noiseGrid.length; i++) noiseGrid[i] = Math.random();
+  const sampleSmooth = (nx: number, ny: number): number => {
+    const fx = ((((nx % 1) + 1) % 1)) * noiseW;
+    const fy = Math.max(0, Math.min(1, ny)) * (noiseH - 1);
+    const x0 = Math.floor(fx);
+    const y0 = Math.floor(fy);
+    const x1 = (x0 + 1) % noiseW;
+    const y1 = Math.min(noiseH - 1, y0 + 1);
+    const tx = fx - x0;
+    const ty = fy - y0;
+    const a = noiseGrid[y0 * noiseW + x0];
+    const b = noiseGrid[y0 * noiseW + x1];
+    const cc = noiseGrid[y1 * noiseW + x0];
+    const d = noiseGrid[y1 * noiseW + x1];
+    return a * (1 - tx) * (1 - ty) + b * tx * (1 - ty) + cc * (1 - tx) * ty + d * tx * ty;
+  };
+  const fbmS = (u: number, v: number): number => {
+    let sum = 0;
+    let amp = 0.5;
+    let freq = 1;
+    for (let o = 0; o < 5; o++) {
+      sum += sampleSmooth(u * freq, v * freq) * amp;
+      amp *= 0.55;
+      freq *= 2.05;
+    }
+    return sum;
+  };
+
+  const img = g.getImageData(0, 0, W, H);
+  const data = img.data;
+  for (let y = 0; y < H; y++) {
+    const v = y / H;
+    const eq = 1 - Math.pow(Math.abs(v - 0.5) * 2, 1.6);
+    for (let x = 0; x < W; x++) {
+      const u = x / W;
+      const n = fbmS(u * 6, v * 3);
+      const filament = Math.pow(Math.max(0, n - 0.42) * 1.7, 1.8);
+      const dark = Math.pow(Math.max(0, 0.48 - n) * 1.6, 1.6);
+      const idx = (y * W + x) * 4;
+      const rr = data[idx];
+      const gC = data[idx + 1];
+      const bb = data[idx + 2];
+      const hi = filament * (180 + 60 * eq);
+      const hiG = filament * (90 + 40 * eq);
+      const hiB = filament * 18;
+      const lo = dark * 110;
+      data[idx] = Math.max(0, Math.min(255, rr + hi - lo));
+      data[idx + 1] = Math.max(0, Math.min(255, gC + hiG - lo * 0.7));
+      data[idx + 2] = Math.max(0, Math.min(255, bb + hiB - lo * 0.4));
+    }
+  }
+  g.putImageData(img, 0, 0);
+
+  // Higher-frequency speckle for crispness.
+  g.globalCompositeOperation = 'screen';
+  for (let i = 0; i < 22000; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * H;
+    const r = Math.random() * 1.6 + 0.4;
+    const hot = Math.random();
+    if (hot > 0.92) g.fillStyle = 'rgba(255,180,90,0.55)';
+    else if (hot > 0.62) g.fillStyle = 'rgba(255,120,40,0.25)';
+    else g.fillStyle = 'rgba(120,30,8,0.18)';
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  }
+  // Dark active-region patches.
+  g.globalCompositeOperation = 'multiply';
+  for (let i = 0; i < 18; i++) {
+    const x = Math.random() * W;
+    const y = 180 + Math.random() * 660;
+    const r = 26 + Math.random() * 80;
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, 'rgba(40,8,0,0.85)');
+    grad.addColorStop(0.7, 'rgba(90,20,5,0.45)');
+    grad.addColorStop(1, 'rgba(120,40,10,0)');
+    g.fillStyle = grad;
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  }
+  // Bright plage along the equatorial band.
+  g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 24; i++) {
+    const x = Math.random() * W;
+    const y = 320 + Math.random() * 380;
+    const r = 40 + Math.random() * 120;
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, 'rgba(255,160,70,0.40)');
+    grad.addColorStop(0.6, 'rgba(220,90,30,0.18)');
+    grad.addColorStop(1, 'rgba(220,90,30,0)');
+    g.fillStyle = grad;
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.globalCompositeOperation = 'source-over';
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
  * Mottled organic surface texture built from layered value noise. Suitable as a
  * subtle roughness or color map on tissue and organelle materials.
  */
