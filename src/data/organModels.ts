@@ -77,8 +77,13 @@ export const ORGAN_MODELS: OrganModel[] = [
  *   - pelvic floor (y -0.039) → body y ≈ 0.03 (above the groin)
  *   - half-width ≈ 0.20, half-depth ≈ 0.17 — both within the torso shell
  *   body = HUBMAP * scale + position
+ *
+ * The x term is a deliberate balance nudge (not pure geometric centring): the
+ * cluster's bbox centre is ~x0, but its visible *mass* leans to the body's right
+ * (viewer-left) because the liver is the largest abdominal organ and no stomach
+ * model exists to fill the left-upper abdomen. +x recentres it on the midline.
  */
 export const ORGAN_FIT = {
   scale: 1.45,
-  position: [-0.007, 0.091, -0.045] as [number, number, number],
+  position: [0.05, 0.091, -0.045] as [number, number, number],
 };
