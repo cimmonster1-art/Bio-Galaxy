@@ -158,15 +158,53 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   const camera = new THREE.PerspectiveCamera(52, w / h, 0.05, 40);
   camera.position.set(0, 0, 3.3);
 
+  const ZOOM_MIN = 0.25, ZOOM_MAX = 9;
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.09;
-  controls.zoomSpeed = 1.5;
-  controls.minDistance = 0.25;
-  controls.maxDistance = 9;
+  // OrbitControls applies wheel/pinch dolly instantly (it isn't damped), which
+  // reads as steppy. We disable its zoom and ease the camera toward a target
+  // distance every frame instead, for smooth, continuous zooming.
+  controls.enableZoom = false;
+  controls.minDistance = ZOOM_MIN;
+  controls.maxDistance = ZOOM_MAX;
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.4;
   controls.update();
+
+  // ── Smooth, continuous zoom ─────────────────────────────────────────────────
+  // Wheel and pinch nudge a target distance; the render loop eases the actual
+  // camera distance toward it with frame-rate-independent damping.
+  let zoomTarget = camera.position.distanceTo(controls.target);
+  const clampZoom = (d: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, d));
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const px = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 100 : e.deltaY;
+    zoomTarget = clampZoom(zoomTarget * Math.exp(px * 0.0012));
+  };
+  let pinchPrev = 0;
+  const onTouchPinch = (e: TouchEvent) => {
+    if (e.touches.length !== 2) { pinchPrev = 0; return; }
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.hypot(dx, dy);
+    if (pinchPrev > 0 && dist > 0) zoomTarget = clampZoom(zoomTarget * (pinchPrev / dist));
+    pinchPrev = dist;
+  };
+  const onTouchPinchEnd = () => { pinchPrev = 0; };
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+  canvas.addEventListener('touchmove', onTouchPinch, { passive: true });
+  canvas.addEventListener('touchend', onTouchPinchEnd);
+
+  /** Ease the camera distance toward zoomTarget; run before controls.update(). */
+  const applyZoom = (dt: number) => {
+    const offset = camera.position.clone().sub(controls.target);
+    const dist = offset.length();
+    if (dist < 1e-5) return;
+    const k = 1 - Math.exp(-dt * 9);
+    const next = dist + (zoomTarget - dist) * k;
+    camera.position.copy(controls.target).add(offset.multiplyScalar(next / dist));
+  };
 
   // Three-point light rig — sculpts the bump-mapped relief.
   scene.add(new THREE.AmbientLight(0x140a32, 0.42));
@@ -470,6 +508,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       const dt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
       timeUniform.value += dt;
+      applyZoom(dt);
       controls.update();
 
       // Drift the shared nebula exactly as the main galaxy scene does.
@@ -530,6 +569,9 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       canvas.removeEventListener('click', handleClick);
       canvas.removeEventListener('touchend', handleClick as EventListener);
       canvas.removeEventListener('pointermove', handleMove);
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('touchmove', onTouchPinch);
+      canvas.removeEventListener('touchend', onTouchPinchEnd);
       controls.dispose();
       composer?.dispose();
       detailTextures.forEach((t) => t.dispose());
