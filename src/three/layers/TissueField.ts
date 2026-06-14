@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Scale } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
+import { createMuscleTexture } from '../textures/proceduralTextures';
 
 /**
  * The tissue scale, rebuilt as ONE place: you are inside skeletal muscle. Giant
@@ -52,6 +53,7 @@ export class TissueField implements SceneLayer {
   readonly activeScales = [Scale.Tissue];
 
   private readonly stripes: THREE.Texture;
+  private readonly muscle: THREE.Texture;
   private readonly fadeables: (THREE.Material & { opacity: number })[] = [];
   private readonly flowMats: THREE.ShaderMaterial[] = [];
   private readonly fibres: { mesh: THREE.Mesh; phase: number }[] = [];
@@ -65,17 +67,31 @@ export class TissueField implements SceneLayer {
     this.root.name = 'TissueField';
     this.root.visible = false;
     this.stripes = striationTexture();
+    this.muscle = createMuscleTexture(512);
+    this.muscle.repeat.set(1, 6);
 
-    // ── Extracellular matrix: an enveloping shell that becomes the sky ────────
+    // ── Extracellular matrix: a huge, deep enveloping volume that becomes the
+    // environment itself — not a contained "ball". Radius is far larger than the
+    // fibre run so the camera is always inside it, reading as endless deep tissue
+    // rather than a sphere you can see the edge of. Kept dim so the lit fibres
+    // dominate. A fainter inner collagen haze adds atmospheric depth.
     const ecmMat = this.track(new THREE.MeshStandardMaterial({
-      color: 0x4a1820, emissive: 0x1a0608, emissiveIntensity: 0.5,
-      roughness: 1, metalness: 0, side: THREE.BackSide,
+      color: 0x3a1016, emissive: 0x10040a, emissiveIntensity: 0.35,
+      roughness: 1, metalness: 0, side: THREE.BackSide, fog: false,
     }));
-    const ecm = new THREE.Mesh(new THREE.SphereGeometry(80, 32, 24), ecmMat);
+    const ecm = new THREE.Mesh(new THREE.SphereGeometry(320, 32, 24), ecmMat);
     ecm.frustumCulled = false;
     ecm.userData.pick = { id: 'tissue:ecm', scale: Scale.Tissue };
     this.root.add(ecm);
     this.pickables.push(ecm);
+
+    const hazeMat = this.track(new THREE.MeshBasicMaterial({
+      color: 0x5a1822, transparent: true, opacity: 0, side: THREE.BackSide,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    const haze = new THREE.Mesh(new THREE.SphereGeometry(150, 24, 18), hazeMat);
+    haze.frustumCulled = false;
+    this.root.add(haze);
 
     // Collagen fibres of the matrix, drifting through the deep background.
     const collagenMat = this.track(new THREE.LineBasicMaterial({
@@ -91,22 +107,31 @@ export class TissueField implements SceneLayer {
     cgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cpts), 3));
     this.root.add(new THREE.LineSegments(cgeo, collagenMat));
 
-    // ── The muscle fibres: a fascicle of giant striated cylinders along Z ─────
-    const fibreGeo = new THREE.CylinderGeometry(3, 3, 150, 28, 1);
+    // ── The muscle fibres: a dense fascicle of giant striated cylinders that run
+    // the length of the view and past the camera in every direction, so you are
+    // submerged among them rather than looking at a few rods in a jar. ─────────
+    const fibreGeo = new THREE.CylinderGeometry(5, 5, 320, 32, 1);
     fibreGeo.rotateX(Math.PI / 2); // lie along Z; UV.y runs along the length
-    // Hex-ish packing across the X/Y plane so the camera sits among the fibres.
-    const packing: [number, number, number][] = [
-      [0, 0, 1.0], [8, 2, 0.85], [-8, -1, 0.9], [4, 8, 0.8], [-5, 8, 0.7],
-      [9, -7, 0.75], [-10, -8, 0.8], [0, 12, 0.6], [-14, 3, 0.65], [14, 5, 0.7],
-    ];
+    // Hex-packed grid of fibres filling the X/Y plane around the camera.
+    const packing: [number, number, number][] = [];
+    const STEP = 13;
+    for (let gx = -3; gx <= 3; gx++) {
+      for (let gy = -3; gy <= 3; gy++) {
+        const x = gx * STEP + (gy % 2) * STEP * 0.5 + (Math.random() - 0.5) * 3;
+        const y = gy * STEP * 0.9 + (Math.random() - 0.5) * 3;
+        if (Math.hypot(x, y) < 4) continue; // leave a small channel at the centre
+        packing.push([x, y, 0.7 + Math.random() * 0.6]);
+      }
+    }
     for (const [x, y, s] of packing) {
       const mat = this.track(new THREE.MeshStandardMaterial({
-        color: 0xb0414e, emissive: 0x40121a, emissiveIntensity: 0.5,
-        emissiveMap: this.stripes, bumpMap: this.stripes, bumpScale: 0.22,
-        roughness: 0.55, metalness: 0.0,
+        color: 0xa83a47, emissive: 0x300d14, emissiveIntensity: 0.45,
+        map: this.muscle, bumpMap: this.muscle, bumpScale: 0.6,
+        emissiveMap: this.stripes,
+        roughness: 0.62, metalness: 0.0,
       }));
       const fibre = new THREE.Mesh(fibreGeo, mat);
-      fibre.position.set(x, y, (Math.random() - 0.5) * 20);
+      fibre.position.set(x, y, (Math.random() - 0.5) * 30);
       fibre.scale.set(s, s, 1);
       fibre.castShadow = true; fibre.receiveShadow = true;
       fibre.userData.s = s;
@@ -233,6 +258,7 @@ export class TissueField implements SceneLayer {
 
   dispose(): void {
     this.stripes.dispose();
+    this.muscle.dispose();
     disposeObject(this.root);
   }
 }

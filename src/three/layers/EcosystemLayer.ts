@@ -1,8 +1,29 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Scale, PickTag } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
 import { loadGlb, fitModel, WILDLIFE_MODELS } from '../core/glbLoader';
+import { createFoliageTexture, createGroundTexture, createBumpTexture } from '../textures/proceduralTextures';
+
+/** A bushy clump of leaf blobs, shared with the biome look. */
+function bushyCrown(radius: number): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 5; i++) {
+    const r = radius * (0.5 + Math.random() * 0.45);
+    const sphere = new THREE.IcosahedronGeometry(r, 2);
+    sphere.translate((Math.random() - 0.5) * radius, radius * (0.3 + Math.random() * 0.7), (Math.random() - 0.5) * radius);
+    parts.push(sphere);
+  }
+  const merged = mergeGeometries(parts, false) ?? parts[0];
+  merged.computeVertexNormals();
+  for (const part of parts) if (part !== merged) part.dispose();
+  return merged;
+}
+
+// Ground sits just below the lowest (soil) stratum so the whole web rests on a
+// real meadow floor rather than floating in the void.
+const GROUND_Y = -19;
 
 /**
  * Ecosystem — a functioning food web, not a systems diagram. Species sit in
@@ -94,32 +115,80 @@ export class EcosystemLayer implements SceneLayer {
   readonly activeScales = [Scale.Ecosystem];
 
   private intensity = 0;
+  private skyMat: THREE.ShaderMaterial | null = null;
   private readonly nodeGroups: { group: THREE.Group; node: EcoNode; baseY: number }[] = [];
   private readonly edgeMats: THREE.ShaderMaterial[] = [];
   private readonly fadeables: (THREE.Material & { opacity: number })[] = [];
+  private readonly pickables: THREE.Object3D[] = [];
   private readonly loadedRoots: THREE.Object3D[] = [];
   private readonly index = new Map<string, THREE.Vector3>();
+
+  private readonly foliageTex = createFoliageTexture('#3f9d4a', 256);
+  private readonly foliageBump = createBumpTexture(256, 0.12);
+  private readonly groundTex = createGroundTexture('#447f3c', '#3a2c1c', 512);
+  private readonly groundBump = createBumpTexture(512, 0.05);
+  private readonly textures: THREE.Texture[] = [this.foliageTex, this.foliageBump, this.groundTex, this.groundBump];
 
   constructor() {
     this.root.name = 'EcosystemLayer';
     this.root.visible = false;
+    this.groundTex.repeat.set(10, 10);
+    this.groundBump.repeat.set(14, 14);
 
     for (const n of NODES) this.index.set(n.id, new THREE.Vector3(...n.pos));
 
-    // Faint trophic-level guide planes so the vertical strata read clearly.
-    for (const [y, c] of [[12, 0xff6a5a], [3, 0x39d6e6], [-6, 0x3f9d54], [-15, 0x6a5440]] as const) {
-      const mat = this.track(new THREE.MeshBasicMaterial({
-        color: c, transparent: true, opacity: 0, side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending, depthWrite: false,
-      }), 0.05);
-      const disc = new THREE.Mesh(new THREE.CircleGeometry(26, 48), mat);
-      disc.rotation.x = -Math.PI / 2;
-      disc.position.y = y;
-      this.root.add(disc);
-    }
-
+    this.buildEnvironment();
     this.buildEdges();
     this.buildNodes();
+  }
+
+  /** A grassy meadow floor, a soft sky gradient, and scattered grass tufts so the
+   *  food web sits inside a real clearing instead of floating in a starfield. */
+  private buildEnvironment(): void {
+    // Sky dome — warm horizon to deep blue, occluding the galaxy backdrop.
+    const skyMat = new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false, transparent: true,
+      uniforms: { uOpacity: { value: 0 } },
+      vertexShader: `varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      fragmentShader: `precision highp float; uniform float uOpacity; varying vec3 vD;
+        void main(){ float h = clamp(vD.y*0.5+0.5,0.0,1.0);
+          vec3 col = mix(vec3(0.42,0.5,0.32), mix(vec3(0.3,0.45,0.6), vec3(0.05,0.1,0.2), h), pow(h,0.6));
+          gl_FragColor = vec4(col, uOpacity); }`,
+    });
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 24, 18), skyMat);
+    sky.frustumCulled = false;
+    this.root.add(sky);
+    this.fadeables.push(skyMat as unknown as THREE.Material & { opacity: number });
+    this.skyMat = skyMat;
+
+    // Grassy ground plane.
+    const groundMat = this.track(new THREE.MeshStandardMaterial({
+      color: 0x4a7d3a, roughness: 0.98, metalness: 0, map: this.groundTex,
+      bumpMap: this.groundBump, bumpScale: 0.5,
+    }), 1);
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(120, 64), groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = GROUND_Y;
+    ground.receiveShadow = true;
+    ground.userData.pick = { id: 'ecosystem:soil', scale: Scale.Ecosystem };
+    this.root.add(ground);
+    this.pickables.push(ground);
+
+    // Grass tufts carpeting the clearing.
+    const blade = new THREE.ConeGeometry(0.12, 1.6, 3);
+    blade.translate(0, 0.8, 0);
+    const grassMat = this.track(new THREE.MeshStandardMaterial({ color: 0x4f9a3e, roughness: 0.95 }), 1);
+    const grass = new THREE.InstancedMesh(blade, grassMat, 2400);
+    const m = new THREE.Matrix4(); const q = new THREE.Quaternion(); const s = new THREE.Vector3(); const p = new THREE.Vector3();
+    for (let i = 0; i < 2400; i++) {
+      const a = Math.random() * Math.PI * 2; const r = 4 + Math.random() * 110;
+      p.set(Math.cos(a) * r, GROUND_Y, Math.sin(a) * r);
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
+      const sc = 0.6 + Math.random() * 1.1; s.set(sc, sc * (0.7 + Math.random()), sc);
+      m.compose(p, q, s); grass.setMatrixAt(i, m);
+    }
+    grass.instanceMatrix.needsUpdate = true;
+    this.root.add(grass);
   }
 
   private track<T extends THREE.Material & { opacity: number }>(mat: T, _w?: number): T {
@@ -220,19 +289,21 @@ export class EcosystemLayer implements SceneLayer {
     const g = new THREE.Group();
     const s = node.biomass;
     const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.18 * s, 0.3 * s, 2.2 * s, 8),
-      this.track(new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.9 })),
+      new THREE.CylinderGeometry(0.18 * s, 0.32 * s, 2.6 * s, 8),
+      this.track(new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.95 })),
     );
     trunk.position.y = -node.biomass * 0.6;
     g.add(trunk);
-    for (let i = 0; i < 3; i++) {
-      const leaf = new THREE.Mesh(
-        new THREE.IcosahedronGeometry((1.4 - i * 0.3) * s, 1),
-        this.track(new THREE.MeshStandardMaterial({ color: node.color, roughness: 0.8, flatShading: true })),
-      );
-      leaf.position.y = (0.4 + i * 0.9) * s;
-      g.add(leaf);
-    }
+    // A bushy leaf-textured crown instead of stacked faceted balls.
+    const crown = new THREE.Mesh(
+      bushyCrown(1.5 * s),
+      this.track(new THREE.MeshStandardMaterial({
+        color: node.color, roughness: 0.9, map: this.foliageTex, bumpMap: this.foliageBump, bumpScale: 0.3,
+      })),
+    );
+    crown.position.y = 0.6 * s;
+    crown.castShadow = true;
+    g.add(crown);
     return g;
   }
 
@@ -326,6 +397,7 @@ export class EcosystemLayer implements SceneLayer {
       mat.uniforms.uOpacity.value += (this.intensity - mat.uniforms.uOpacity.value) * Math.min(1, dt * 6);
     }
     for (const mat of this.fadeables) fadeMaterial(mat, this.intensity, dt);
+    if (this.skyMat) this.skyMat.uniforms.uOpacity.value = (this.skyMat as unknown as { opacity: number }).opacity;
     this.nodeGroups.forEach((n, i) => {
       n.group.rotation.y += dt * 0.25;
       n.group.position.y = n.baseY + Math.sin(elapsed * 0.7 + i) * 0.35;
@@ -333,7 +405,7 @@ export class EcosystemLayer implements SceneLayer {
   }
 
   getPickables(): THREE.Object3D[] {
-    return this.intensity > 0.3 ? this.nodeGroups.map((n) => n.group) : [];
+    return this.intensity > 0.3 ? [...this.nodeGroups.map((n) => n.group), ...this.pickables] : [];
   }
 
   static tagFor(id: string): PickTag | null {
@@ -345,6 +417,7 @@ export class EcosystemLayer implements SceneLayer {
 
   dispose(): void {
     for (const r of this.loadedRoots) disposeObject(r);
+    for (const t of this.textures) t.dispose();
     disposeObject(this.root);
   }
 }

@@ -473,8 +473,9 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   // ── Shared materials — one per system, not per-mesh (keeps GPU state tiny) ──
   const SYS_TINT: Record<string, number> = {
     skeleton: 0xece3cf, muscles: 0xa83244, nerves: 0xf2e08a,
-    heart: 0xd83a4e, lungs: 0xd79bb0, brain: 0xd8b5a6, body: 0xe9c39a,
-    liver: 0x9d503f, kidneys: 0xa45b73, spleen: 0x7d3a52, pancreas: 0xd8a85a, intestines: 0xd88961,
+    // Deep myocardial red, not bubblegum pink, so the heart reads as real muscle.
+    heart: 0x8e222c, lungs: 0xc77f93, brain: 0xcea99a, body: 0xe9c39a,
+    liver: 0x7e3e30, kidneys: 0x944f63, spleen: 0x6e2f44, pancreas: 0xc7944c, intestines: 0xc2784f,
   };
   const ORGAN_KEYS = new Set(['heart', 'lungs', 'brain', 'liver', 'kidneys', 'spleen', 'pancreas', 'intestines']);
   const sharedMats: Record<string, THREE.MeshStandardMaterial> = {};
@@ -491,12 +492,15 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     // the environment reflections (not a flat glow) define their form.
     const mat: THREE.MeshStandardMaterial = isOrgan
       ? new THREE.MeshPhysicalMaterial({
-          color: tint, emissive: tint, emissiveIntensity: 0.12,
-          metalness: 0.0, roughness: 0.4,
-          clearcoat: 0.72, clearcoatRoughness: 0.38,
-          sheen: 0.55, sheenColor: new THREE.Color(tint), sheenRoughness: 0.6,
-          transparent: true, opacity: 0.96, depthWrite: true,
-          envMapIntensity: 1.25, side: THREE.FrontSide,
+          // Damp, fleshy — a faint moist sheen, not a plastic gloss. Higher
+          // roughness + lower clearcoat/emissive let the fibre relief and
+          // shadows define the form instead of a flat highlight.
+          color: tint, emissive: tint, emissiveIntensity: 0.05,
+          metalness: 0.0, roughness: 0.62,
+          clearcoat: 0.3, clearcoatRoughness: 0.55,
+          sheen: 0.5, sheenColor: new THREE.Color(tint).lerp(new THREE.Color(0xff8a8a), 0.3), sheenRoughness: 0.7,
+          transparent: true, opacity: 0.97, depthWrite: true,
+          envMapIntensity: 1.0, side: THREE.FrontSide,
         })
       : new THREE.MeshStandardMaterial({
           color: tint, emissive: tint,
@@ -513,7 +517,10 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     else if (isBone)            enrich(mat, { rim: 0.5, detail: 0.5, detailScale: 50, bump: 1.1, tex: grainTex, texAmt: 0.5, texScale: 1.8 });
     else if (key === 'muscles') enrich(mat, { detail: 0.7, detailScale: 36, striation: 1.0, bump: 0.95, tex: muscleTex, texAmt: 0.6, texScale: 1.2 });
     else if (key === 'brain')   enrich(mat, { detail: 0.45, detailScale: 64, bump: 1.15, folds: 1.0, tex: grainTex, texAmt: 0.22, texScale: 2.2 });
-    else if (isOrgan)           enrich(mat, { detail: 0.5, detailScale: 46, bump: 0.85, tex: grainTex, texAmt: 0.4, texScale: 1.7 });
+    // Heart: pronounced myocardial fibre relief tiled tightly across the small
+    // organ so it reads as wound muscle, not a smooth balloon.
+    else if (key === 'heart')   enrich(mat, { detail: 0.6, detailScale: 40, striation: 0.5, bump: 1.7, tex: muscleTex, texAmt: 0.8, texScale: 7 });
+    else if (isOrgan)           enrich(mat, { detail: 0.55, detailScale: 48, bump: 1.0, tex: grainTex, texAmt: 0.5, texScale: 5 });
     else                        enrich(mat, { detail: 0.4, detailScale: 32, bump: 0.55, tex: grainTex, texAmt: 0.35, texScale: 1.3 });
     sharedMats[key] = mat;
     return mat;
