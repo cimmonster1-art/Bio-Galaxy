@@ -69,6 +69,17 @@ export class ProteinStructureLayer implements SceneLayer {
   private intensity = 0;
   private currentScale: Scale = Scale.ProteinComplex;
 
+  // Molecule scale: a small, crystal-clear ball-and-stick water cluster — visibly
+  // distinct from the protein complex's sprawling instanced helix. Real cylinder
+  // bonds and a clearcoat sheen make it read as a handful of discrete molecules.
+  private readonly molecule = new THREE.Group();
+  private readonly molAtomGeo = new THREE.IcosahedronGeometry(0.5, 3);
+  private readonly molBondGeo = new THREE.CylinderGeometry(0.13, 0.13, 1, 18);
+  private molAtoms: THREE.InstancedMesh | null = null;
+  private molBonds: THREE.InstancedMesh | null = null;
+  private readonly molAtomMat: THREE.MeshPhysicalMaterial;
+  private readonly molBondMat: THREE.MeshStandardMaterial;
+
   // Atom-scale subgraph: a glowing nucleon cluster, luminous orbital shells, and
   // electrons that race along them. Tracked here so they can be faded and
   // animated independently of the ball-and-stick molecular assembly.
@@ -95,9 +106,85 @@ export class ProteinStructureLayer implements SceneLayer {
       opacity: 0,
     });
 
+    // Glassy, wet-looking spheres for the molecule's atoms; bright pearlescent
+    // sticks for its bonds. Both fade in only at the Molecule scale.
+    this.molAtomMat = new THREE.MeshPhysicalMaterial({
+      roughness: 0.16,
+      metalness: 0.0,
+      clearcoat: 0.9,
+      clearcoatRoughness: 0.22,
+      envMapIntensity: 1.1,
+      transparent: true,
+      opacity: 0,
+      vertexColors: true,
+    });
+    this.molBondMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#e3ebf2'),
+      emissive: new THREE.Color('#34434f'),
+      emissiveIntensity: 0.3,
+      roughness: 0.45,
+      metalness: 0.05,
+      transparent: true,
+      opacity: 0,
+    });
+
     this.loadStructure(generateAssembly());
+    this.buildMolecule();
     this.buildAtomScale();
+    this.root.add(this.molecule);
     this.root.add(this.atomScale);
+  }
+
+  /**
+   * Build the Molecule-scale subgraph: a loose cluster of water molecules drawn
+   * as instanced clearcoat spheres (red O, white H) joined by instanced cylinder
+   * bonds, each oriented and stretched to its O–H link.
+   */
+  private buildMolecule(): void {
+    const { atoms, bonds } = generateWaterCluster();
+    const positions = atoms.map((a) => a.position);
+
+    const mesh = new THREE.InstancedMesh(this.molAtomGeo, this.molAtomMat, positions.length);
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(positions.length * 3), 3);
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+    atoms.forEach((a, i) => {
+      dummy.position.copy(a.position);
+      dummy.scale.setScalar((elementRadius(a.element) * 0.62) / 0.5);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      color.set(elementColor(a.element));
+      mesh.setColorAt(i, color);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.userData.pick = { id: 'water_cluster', scale: Scale.Molecule };
+    this.molAtoms = mesh;
+    this.molecule.add(mesh);
+
+    const bondMesh = new THREE.InstancedMesh(this.molBondGeo, this.molBondMat, bonds.length);
+    const up = new THREE.Vector3(0, 1, 0);
+    const dir = new THREE.Vector3();
+    const mid = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    const scl = new THREE.Vector3();
+    const m4 = new THREE.Matrix4();
+    bonds.forEach(([i, j], b) => {
+      const pi = positions[i];
+      const pj = positions[j];
+      dir.subVectors(pj, pi);
+      const len = dir.length();
+      mid.addVectors(pi, pj).multiplyScalar(0.5);
+      quat.setFromUnitVectors(up, dir.normalize());
+      scl.set(1, len, 1);
+      m4.compose(mid, quat, scl);
+      bondMesh.setMatrixAt(b, m4);
+    });
+    bondMesh.instanceMatrix.needsUpdate = true;
+    this.molBonds = bondMesh;
+    this.molecule.add(bondMesh);
+
+    this.molecule.visible = false;
   }
 
   /** Rebuild from the procedural stand-in assembly (scene-unit coordinates). */
@@ -305,17 +392,27 @@ export class ProteinStructureLayer implements SceneLayer {
     this.intensity = intensity;
     this.currentScale = scale;
     this.root.visible = intensity > 0.01;
+    this.molecule.visible = intensity > 0.01;
     this.atomScale.visible = scale === Scale.Atom && intensity > 0.01;
   }
 
   update(dt: number, elapsed: number): void {
-    const molTarget = this.currentScale === Scale.Atom ? 0 : this.intensity;
-    this.atomMat.opacity += (molTarget - this.atomMat.opacity) * Math.min(1, dt * 6);
+    // Protein complex (instanced helix) shows only at the ProteinComplex scale…
+    const complexTarget = this.currentScale === Scale.ProteinComplex ? this.intensity : 0;
+    this.atomMat.opacity += (complexTarget - this.atomMat.opacity) * Math.min(1, dt * 6);
     this.atomMat.visible = this.atomMat.opacity > 0.01;
-    fadeMaterial(this.bondMat, molTarget * 0.6, dt);
+    fadeMaterial(this.bondMat, complexTarget * 0.6, dt);
+
+    // …while the water cluster shows only at the Molecule scale.
+    const molTarget = this.currentScale === Scale.Molecule ? this.intensity : 0;
+    this.molAtomMat.opacity += (molTarget - this.molAtomMat.opacity) * Math.min(1, dt * 6);
+    this.molAtomMat.visible = this.molAtomMat.opacity > 0.01;
+    fadeMaterial(this.molBondMat, molTarget * 0.85, dt);
 
     if (this.atoms) this.atoms.rotation.y = elapsed * 0.25;
     if (this.bonds) this.bonds.rotation.y = elapsed * 0.25;
+    this.molecule.rotation.y = elapsed * 0.3;
+    this.molecule.rotation.x = Math.sin(elapsed * 0.25) * 0.2;
 
     // Atom scale: fade every nucleus/shell/electron material toward the target,
     // honoring each material's own opacity cap, then animate the living atom.
@@ -333,11 +430,16 @@ export class ProteinStructureLayer implements SceneLayer {
   }
 
   getPickables(): THREE.Object3D[] {
-    return this.intensity > 0.3 && this.atoms ? [this.atoms] : [];
+    if (this.intensity <= 0.3) return [];
+    if (this.currentScale === Scale.Molecule && this.molAtoms) return [this.molAtoms];
+    if (this.currentScale === Scale.ProteinComplex && this.atoms) return [this.atoms];
+    return [];
   }
 
   dispose(): void {
     this.atomGeo.dispose();
+    this.molAtomGeo.dispose();
+    this.molBondGeo.dispose();
     for (const tex of this.atomTextures) tex.dispose();
     disposeObject(this.root);
   }
@@ -387,6 +489,42 @@ function buildBonds(positions: THREE.Vector3[], threshold: number): THREE.Buffer
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(segs), 3));
   return geo;
+}
+
+/**
+ * A loose cluster of water molecules with correct ~104.5° H–O–H geometry, each
+ * randomly oriented so the group reads as discrete molecules. Returns the atoms
+ * plus the explicit O–H bond pairs (indices into the atom list).
+ */
+function generateWaterCluster(): { atoms: AtomRecord[]; bonds: [number, number][] } {
+  const atoms: AtomRecord[] = [];
+  const bonds: [number, number][] = [];
+  const HOH = (104.5 * Math.PI) / 180;
+  const L = 1.5; // O–H bond length in scene units.
+  const centres = [
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(3.4, 1.1, -0.6),
+    new THREE.Vector3(-3.1, -0.8, 1.2),
+    new THREE.Vector3(0.6, -3.0, 1.8),
+    new THREE.Vector3(-1.4, 2.9, -2.2),
+    new THREE.Vector3(2.2, -2.0, -2.6),
+  ];
+  const half = HOH / 2;
+  for (const c of centres) {
+    const q = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI),
+    );
+    const oIndex = atoms.length;
+    atoms.push({ element: 'O', position: c.clone() });
+    for (const sign of [-1, 1]) {
+      const local = new THREE.Vector3(Math.sin(half) * sign, Math.cos(half), 0)
+        .multiplyScalar(L)
+        .applyQuaternion(q);
+      atoms.push({ element: 'H', position: c.clone().add(local) });
+      bonds.push([oIndex, atoms.length - 1]);
+    }
+  }
+  return { atoms, bonds };
 }
 
 /** Procedural stand-in assembly: a compact helical cluster of atoms. */
