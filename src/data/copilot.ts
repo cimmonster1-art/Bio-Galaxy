@@ -44,6 +44,13 @@ export function contextualQuestions(context: CopilotContext): string[] {
       `What invasive species threaten the ${object.name} region?`,
     ];
   }
+  if (object.kind === 'star') {
+    return [
+      `What kind of star is ${object.name}?`,
+      `Where is ${object.name} in the sky?`,
+      `Which catalogues record ${object.name}?`,
+    ];
+  }
   if (object.id.startsWith('organism:eco:')) {
     return [
       `What is the conservation status of ${object.name}?`,
