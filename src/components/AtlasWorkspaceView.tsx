@@ -14,6 +14,7 @@ import { AnatomyModelsPanel } from './panels/AnatomyModelsPanel';
 import { ContextPanel } from './panels/ContextPanel';
 import { DataSourcesPanel } from './panels/DataSourcesPanel';
 import { DetailPanel } from './panels/DetailPanel';
+import { RelatedRail } from './panels/RelatedRail';
 import { ScaleNavigatorPanel } from './panels/ScaleNavigatorPanel';
 import { SceneControls } from './panels/SceneControls';
 import { SceneErrorBoundary } from './errors/SceneErrorBoundary';
@@ -42,6 +43,9 @@ export const AtlasWorkspaceView: React.FC<{ atlas: AtlasController }> = ({ atlas
       {atlas.workspace === 'playback' && <EvolutionPlayback onSelectScale={atlas.setScale} onProgress={atlas.setCinematicProgress} onClose={() => atlas.setWorkspace(null)} />}
       {atlas.coreAnatomyScale && !atlas.workspace && <AnatomyExplorer scale={atlas.scale} selectedId={atlas.selected?.id} onSelect={atlas.navigateTo} onScaleChange={atlas.setScale} />}
       {diveCity && <CityDiveView city={diveCity} onNavigate={atlas.navigateTo} onClose={() => atlas.handleSelect(null)} />}
+      {/* Universal relationship rail: every selection opens onto the records
+          inside it. Hidden during full-screen workspaces and the city dive. */}
+      {!atlas.workspace && !diveCity && <RelatedRail selected={atlas.selected} onNavigate={atlas.navigateTo} />}
     </main>
     <aside className="hidden w-[min(33.333vw,26rem)] shrink-0 flex-col border-l border-white/10 bg-[#04070f] lg:flex"><WikipediaSidebar selected={atlas.selected} scale={atlas.scale} /><div className="min-h-0 flex-1"><DetailPanel selected={atlas.selected} /></div></aside>
   </div>
