@@ -13,13 +13,12 @@ import { DataSourcesPanel } from './panels/DataSourcesPanel';
 import { DetailPanel } from './panels/DetailPanel';
 import { ScaleNavigatorPanel } from './panels/ScaleNavigatorPanel';
 import { SceneControls } from './panels/SceneControls';
-import { TaxonomyNavigator } from './panels/TaxonomyNavigator';
 import { SceneErrorBoundary } from './errors/SceneErrorBoundary';
 
 export const AtlasWorkspaceView: React.FC<{ atlas: AtlasController }> = ({ atlas }) => <>
   <div className="flex min-h-0 flex-1">
     <aside className="hidden w-64 shrink-0 flex-col gap-3 overflow-y-auto scroll-thin border-r border-white/10 p-3 lg:flex">
-      <ScaleNavigatorPanel scale={atlas.scale} onScaleChange={atlas.setScale} /><TaxonomyNavigator selectedTaxonId={atlas.selectedTaxonId} onSelectTaxon={atlas.selectTaxon} />
+      <ScaleNavigatorPanel scale={atlas.scale} onScaleChange={atlas.setScale} />
       {atlas.anatomyScale && <AnatomyModelsPanel activeId={atlas.activeModelId} status={atlas.modelStatus} onLoad={atlas.loadModelEntry} />}
       <ContextPanel scale={atlas.scale} selected={atlas.selected} /><DataSourcesPanel active={atlas.activeSources} />
     </aside>
