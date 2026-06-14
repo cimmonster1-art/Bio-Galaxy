@@ -74,6 +74,35 @@ export const DATA_SOURCES: Record<DataSourceId, DataSource> = {
     homepage: 'https://alphafold.ebi.ac.uk',
   },
 
+  // ── Astronomy / star-catalogue sources ────────────────────────────────────
+  hyg: {
+    id: 'hyg',
+    name: 'HYG Database',
+    short: 'HYG',
+    domain: 'Stellar positions and properties',
+    description:
+      'The HYG stellar database (v4.1, CC BY-SA 4.0), merging the Hipparcos, Yale Bright Star, and Gliese catalogues: J2000 positions, apparent magnitudes, spectral classes, and distances. Drives the real stars rendered beyond the Oort Cloud.',
+    homepage: 'https://github.com/astronexus/HYG-Database',
+  },
+  hipparcos: {
+    id: 'hipparcos',
+    name: 'Hipparcos / Yale BSC',
+    short: 'Hipparcos',
+    domain: 'Bright-star astrometry',
+    description:
+      'ESA Hipparcos astrometry and the Yale Bright Star Catalogue: precise positions, proper motions, and photometry for the naked-eye and brightest stars in the catalogue.',
+    homepage: 'https://www.cosmos.esa.int/web/hipparcos',
+  },
+  simbad: {
+    id: 'simbad',
+    name: 'SIMBAD',
+    short: 'SIMBAD',
+    domain: 'Astronomical object reference',
+    description:
+      'CDS SIMBAD: cross-identifications, object types, measurements, and bibliography for stars and other celestial bodies, used to deep-link individual catalogue stars.',
+    homepage: 'https://simbad.u-strasbg.fr/simbad/',
+  },
+
   // ── Earth-systems, ecology, and biodiversity sources ──────────────────────
   gbif: {
     id: 'gbif',
@@ -185,6 +214,10 @@ export const DATA_SOURCE_ORDER: DataSourceId[] = [
   'ensembl',
   'hpa',
   'ncbi',
+  // Astronomy / star-catalogue sources, for the Cosmos and Galaxy scales.
+  'hyg',
+  'hipparcos',
+  'simbad',
   // Ecology / Earth-systems sources, ordered for the Ecosystem-scale views.
   'gbif',
   'iucn',

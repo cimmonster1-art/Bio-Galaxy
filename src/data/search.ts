@@ -3,6 +3,7 @@ import { SCALE_LEVELS } from './scales';
 import { searchTaxa } from './taxonomy';
 import { BIO_OBJECTS } from './registry';
 import { ECOLOGY_CITIES } from './ecology';
+import { BRIGHT_STAR_CATALOG } from './stars';
 
 export interface SearchResult {
   id: string;
@@ -63,6 +64,20 @@ export function searchAtlas(query: string, limit = 10): SearchResult[] {
       if (s.name.toLowerCase().includes(q) || s.scientific.toLowerCase().includes(q)) {
         results.push({ id: `organism:eco:${s.id}`, label: s.name, sublabel: `Species · ${city.name}`, scale: Scale.Organism });
       }
+    }
+  }
+
+  // Real catalogue stars are reachable from search and land at the Galaxy scale.
+  for (let i = 0; i < BRIGHT_STAR_CATALOG.length; i++) {
+    const star = BRIGHT_STAR_CATALOG[i];
+    if (star.name.toLowerCase().includes(q)) {
+      results.push({
+        id: `star:${i}`,
+        label: star.name,
+        sublabel: `Star · ${star.spectral.trim()} · mag ${star.mag.toFixed(2)}`,
+        scale: Scale.Galaxy,
+      });
+      if (results.length >= limit * 3) break;
     }
   }
 

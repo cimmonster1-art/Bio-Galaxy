@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { Scale } from '../../types';
+import { PickTag, Scale } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
 import { createGlowTexture } from '../textures/proceduralTextures';
+import { galaxySceneStars } from '../../data/stars';
 
 /**
  * The cosmic backdrop: a luminous core standing in for the Big Bang and
@@ -30,6 +31,13 @@ export class CosmosLayer implements SceneLayer {
   private readonly coreGlowMat: THREE.SpriteMaterial;
   private readonly dust: THREE.Points;
   private readonly dustMat: THREE.PointsMaterial;
+
+  // Real catalogue stars (HYG / Bright Star Catalogue) placed on the surrounding
+  // celestial shell, each individually pickable, beyond the Oort Cloud.
+  private readonly catalogStars: THREE.InstancedMesh;
+  private readonly catalogStarsMat: THREE.MeshBasicMaterial;
+  private readonly catalogGlow: THREE.Points;
+  private readonly catalogGlowMat: THREE.PointsMaterial;
 
   // Cosmic web: a particle field condensed into filaments and cluster knots, so
   // the large-scale structure reads as glowing cosmic matter — not a graph.
@@ -149,6 +157,57 @@ export class CosmosLayer implements SceneLayer {
     });
     this.dust = new THREE.Points(dustGeometry, this.dustMat);
     this.root.add(this.dust);
+
+    // ---- Real catalogue stars: the deep sky beyond the Oort Cloud -----------
+    // Borrowed from the Astro-Insight HYG / Bright Star Catalogue. Every star is
+    // placed by its real right ascension and declination onto a surrounding
+    // celestial shell, tinted by spectral colour, sized by apparent magnitude,
+    // and individually pickable through a per-instance pick tag.
+    const sceneStars = galaxySceneStars();
+    const starCount = sceneStars.length;
+    this.catalogStarsMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0 });
+    this.catalogStars = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.9, 0), this.catalogStarsMat, starCount);
+    this.catalogStars.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(starCount * 3), 3);
+    const starPickTags: PickTag[] = new Array(starCount);
+    const glowPositions = new Float32Array(starCount * 3);
+    const glowColors = new Float32Array(starCount * 3);
+    const starColor = new THREE.Color();
+    for (let i = 0; i < starCount; i++) {
+      const s = sceneStars[i];
+      // Brighter stars sit nearer the disk; fainter ones recede into the shell.
+      const radius = 120 + (1 - s.brightness) * 130 + (Math.random() - 0.5) * 14;
+      const x = s.dir[0] * radius;
+      const y = s.dir[1] * radius;
+      const z = s.dir[2] * radius;
+      dummy.position.set(x, y, z);
+      dummy.scale.setScalar(0.7 + s.brightness * 2.4);
+      dummy.updateMatrix();
+      this.catalogStars.setMatrixAt(i, dummy.matrix);
+      starColor.set(s.color);
+      this.catalogStars.setColorAt(i, starColor);
+      glowPositions[i * 3] = x;
+      glowPositions[i * 3 + 1] = y;
+      glowPositions[i * 3 + 2] = z;
+      glowColors[i * 3] = starColor.r;
+      glowColors[i * 3 + 1] = starColor.g;
+      glowColors[i * 3 + 2] = starColor.b;
+      starPickTags[i] = { id: s.id, scale: Scale.Galaxy };
+    }
+    this.catalogStars.instanceMatrix.needsUpdate = true;
+    this.catalogStars.userData.pickInstances = starPickTags;
+    this.root.add(this.catalogStars);
+
+    // Additive glow halo so even faint catalogue stars read as glints.
+    const glowGeo = new THREE.BufferGeometry();
+    glowGeo.setAttribute('position', new THREE.BufferAttribute(glowPositions, 3));
+    glowGeo.setAttribute('color', new THREE.BufferAttribute(glowColors, 3));
+    this.catalogGlowMat = new THREE.PointsMaterial({
+      map: this.glowTex, size: 5, sizeAttenuation: true, vertexColors: true,
+      transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    this.catalogGlow = new THREE.Points(glowGeo, this.catalogGlowMat);
+    this.catalogGlow.frustumCulled = false;
+    this.root.add(this.catalogGlow);
 
     // ---- Cosmic web: filaments and cluster knots as a particle field --------
     // Scatter cluster knots through a large volume, link each to its nearest
@@ -292,8 +351,15 @@ export class CosmosLayer implements SceneLayer {
     fadeMaterial(this.spiralMat, this.intensity * galaxyWeight, dt);
     fadeMaterial(this.dustMat, this.intensity * galaxyWeight * 0.78, dt);
     fadeMaterial(this.webMat, this.intensity * webWeight * 0.85, dt);
+    // Catalogue stars belong to the Galaxy scale; they recede at Cosmos scale so
+    // the large-scale web stays legible.
+    const starWeight = this.currentScale >= Scale.Galaxy ? 1 : 0.18;
+    fadeMaterial(this.catalogStarsMat, this.intensity * starWeight, dt);
+    fadeMaterial(this.catalogGlowMat, this.intensity * starWeight * 0.7, dt);
 
     this.spiral.rotation.y = elapsed * 0.02;
+    this.catalogStars.rotation.y = elapsed * 0.008;
+    this.catalogGlow.rotation.y = elapsed * 0.008;
     this.dust.rotation.y = elapsed * 0.014;
     this.field.rotation.y = elapsed * 0.004;
     this.web.rotation.y = elapsed * 0.006;
@@ -352,8 +418,11 @@ export class CosmosLayer implements SceneLayer {
 
   getPickables(): THREE.Object3D[] {
     if (this.intensity < 0.3) return [];
-    // Galaxy core/arms select the galaxy; the deep field selects the cosmos.
-    return this.currentScale >= Scale.Galaxy ? [this.core, this.spiral] : [this.field, this.core];
+    // At the Galaxy scale, individual catalogue stars are pickable in front of
+    // the core and arms; the deep field selects the cosmos from farther out.
+    return this.currentScale >= Scale.Galaxy
+      ? [this.catalogStars, this.core, this.spiral]
+      : [this.field, this.core];
   }
 
   dispose(): void {

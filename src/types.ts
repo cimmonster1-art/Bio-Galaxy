@@ -63,6 +63,10 @@ export type DataSourceId =
   | 'ncbi'
   | 'pubchem'
   | 'alphafold'
+  // ── Astronomy / star-catalogue sources (Cosmos and Galaxy scales) ──
+  | 'hyg'
+  | 'hipparcos'
+  | 'simbad'
   // ── Earth-systems, ecology, and biodiversity sources (Ecosystem scale) ──
   | 'gbif'
   | 'iucn'
