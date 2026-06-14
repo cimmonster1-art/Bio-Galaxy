@@ -54,7 +54,20 @@ export const ATTRIBUTION_GROUPS: AttributionGroup[] = [
       { name: 'CesiumMan', institution: 'Cesium', role: 'Open licensed rigged human model', url: 'https://github.com/KhronosGroup/glTF-Sample-Models/tree/master/2.0/CesiumMan', status: 'asset' },
       { name: 'three.js example models', institution: 'three.js contributors and mirada', role: 'Animated bird and horse models', url: 'https://github.com/mrdoob/three.js/tree/master/examples/models/gltf', status: 'asset' },
       { name: 'Z-Anatomy', institution: 'Z-Anatomy project', role: 'Open human body surface and skeleton GLBs (CC-BY-SA 4.0) in the Organism screen', url: 'https://github.com/Z-Anatomy/Models-of-human-anatomy', status: 'asset' },
-      { name: 'HRA CCF 3D Reference Object Library', institution: 'HuBMAP Consortium', role: 'Open organ GLB models (CC-BY 4.0) fitted inside the body in the Organism screen', url: 'https://github.com/hubmapconsortium/ccf-3d-reference-object-library', status: 'asset' },
+      { name: 'HRA CCF 3D Reference Object Library', institution: 'HuBMAP Consortium', role: 'Open organ GLB models (CC-BY 4.0) fitted inside the body in the Organism screen; isolated and re-lit at the Organ scale', url: 'https://github.com/hubmapconsortium/ccf-3d-reference-object-library', status: 'asset' },
+      { name: 'three.js detail textures', institution: 'three.js contributors (MIT)', role: 'Tissue grain and muscle-fibre maps driving the anatomy bump relief', url: 'https://github.com/mrdoob/three.js/tree/master/examples/textures', status: 'asset' },
+    ],
+  },
+  {
+    id: 'environments',
+    label: 'Living world and environments',
+    description: 'How the biome and ecosystem scales are built, and the open asset libraries they can draw on.',
+    entries: [
+      { name: 'Procedural biomes & ecosystems', institution: 'Bio Galaxy', role: 'Terrain, dynamic sky, volumetric god-rays, wind-animated vegetation, wildlife particles, and the ecological network are generated procedurally in-engine — no downloads', url: 'https://threejs.org', status: 'asset' },
+      { name: 'Poly Haven', institution: 'Poly Haven', role: 'CC0 HDRIs, PBR textures, and vegetation models compatible with the biome scenes', url: 'https://polyhaven.com', status: 'compatible' },
+      { name: 'Kenney Nature Kit', institution: 'Kenney', role: 'CC0 low-poly nature assets ready to drop into the biome loader', url: 'https://kenney.nl/assets/nature-kit', status: 'compatible' },
+      { name: 'OpenGameArt', institution: 'OpenGameArt contributors', role: 'Openly licensed vegetation and nature asset collections', url: 'https://opengameart.org', status: 'compatible' },
+      { name: 'Sketchfab (CC licensed)', institution: 'Sketchfab creators', role: 'Creative-Commons biome and organism models supported by the glTF loader', url: 'https://sketchfab.com', status: 'compatible' },
     ],
   },
   {
