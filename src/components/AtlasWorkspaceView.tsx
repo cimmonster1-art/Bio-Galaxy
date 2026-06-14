@@ -26,7 +26,7 @@ export const AtlasWorkspaceView: React.FC<{ atlas: AtlasController }> = ({ atlas
     <main className="relative min-w-0 flex-1 depth-field" role="application" aria-label="Bio Galaxy 3D atlas. Use the search, scale ladder, or phylogeny panel to navigate.">
       <SceneErrorBoundary resetKey={atlas.coreAnatomyScale && !atlas.workspace ? 'organism' : atlas.scale}>
         {atlas.coreAnatomyScale && !atlas.workspace
-          ? <BodyExplorer3D selectedId={atlas.selected?.id ?? null} onSelect={atlas.handleSelect} onHover={atlas.handleHover} />
+          ? <BodyExplorer3D scale={atlas.scale} selectedId={atlas.selected?.id ?? null} onSelect={atlas.handleSelect} onHover={atlas.handleHover} />
           : <BioGalaxyCanvas scale={atlas.scale} selectedId={atlas.selected?.id ?? null} focusTaxonId={atlas.focusTaxonId} structure={atlas.structure} organismModel={atlas.organismModel} cinematicProgress={atlas.workspace === 'playback' ? atlas.cinematicProgress : null} onHover={atlas.handleHover} onSelect={atlas.handleSelect} onScaleSettled={atlas.setScale} onModelResult={atlas.handleModelResult} />}
       </SceneErrorBoundary>
       <SceneControls scale={atlas.scale} hovered={atlas.hovered} onStep={atlas.stepScale} />
