@@ -35,6 +35,22 @@ export function contextualQuestions(context: CopilotContext): string[] {
       'Which scientific sources can explain this view?',
     ];
   }
+  // Cities at the Ecosystem scale are grounded as ecological places.
+  if (object.kind === 'place') {
+    return [
+      `Why is ${object.name} biodiverse?`,
+      `What endangered species live around ${object.name}?`,
+      `How does the ${object.name} ecosystem function?`,
+      `What invasive species threaten the ${object.name} region?`,
+    ];
+  }
+  if (object.id.startsWith('organism:eco:')) {
+    return [
+      `What is the conservation status of ${object.name}?`,
+      `What role does ${object.name} play in its ecosystem?`,
+      `Which databases record ${object.name}?`,
+    ];
+  }
   return [
     `Explain ${object.name} from structure to function`,
     `How does ${object.name} connect to nearby biological scales?`,

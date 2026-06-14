@@ -2,6 +2,7 @@ import { RANK_SCALE, Scale } from '../types';
 import { SCALE_LEVELS } from './scales';
 import { searchTaxa } from './taxonomy';
 import { BIO_OBJECTS } from './registry';
+import { ECOLOGY_CITIES } from './ecology';
 
 export interface SearchResult {
   id: string;
@@ -50,6 +51,19 @@ export function searchAtlas(query: string, limit = 10): SearchResult[] {
 
   for (const item of ANATOMY) {
     if (item.label.toLowerCase().includes(q)) results.push(item);
+  }
+
+  // Earth Ecology Explorer cities and their key species are entry points
+  // into life, reachable directly from search.
+  for (const city of ECOLOGY_CITIES) {
+    if (city.name.toLowerCase().includes(q) || city.country.toLowerCase().includes(q)) {
+      results.push({ id: `city:${city.id}`, label: city.name, sublabel: `Ecology · ${city.country}`, scale: Scale.Ecosystem });
+    }
+    for (const s of city.species) {
+      if (s.name.toLowerCase().includes(q) || s.scientific.toLowerCase().includes(q)) {
+        results.push({ id: `organism:eco:${s.id}`, label: s.name, sublabel: `Species · ${city.name}`, scale: Scale.Organism });
+      }
+    }
   }
 
   return results.slice(0, limit);

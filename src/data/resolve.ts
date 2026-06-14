@@ -1,6 +1,7 @@
 import { BioObject, RANK_SCALE, Scale, TaxonRank } from '../types';
 import { BIO_OBJECTS } from './registry';
 import { ANATOMY_OBJECTS } from './anatomy';
+import { ecologyObjects } from './ecology';
 import { TaxonNode, allTaxa, lineageOf } from './taxonomy';
 
 // Resolves a pick id coming from any scene layer into a full BioObject.
@@ -203,7 +204,7 @@ const moleculeObjects: Record<string, BioObject> = {
 export function resolveObject(id: string): BioObject | undefined {
   const tissueMatch = /^tissue:cell:(\d+)$/.exec(id);
   if (tissueMatch) return tissueCellObject(Number(tissueMatch[1]));
-  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? cosmicObjects[id] ?? cosmicStructures[id] ?? atomObjects[id] ?? biomeObjects[id] ?? ecosystemObjects[id] ?? tissueObjects[id] ?? moleculeObjects[id];
+  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? cosmicObjects[id] ?? cosmicStructures[id] ?? atomObjects[id] ?? biomeObjects[id] ?? ecosystemObjects[id] ?? ecologyObjects[id] ?? tissueObjects[id] ?? moleculeObjects[id];
 }
 
 /** Complete locally indexed corpus used by search and the read-only copilot. */
@@ -217,6 +218,7 @@ export function allResolvedObjects(): BioObject[] {
     ...Object.values(atomObjects),
     ...Object.values(biomeObjects),
     ...Object.values(ecosystemObjects),
+    ...Object.values(ecologyObjects),
     ...Object.values(tissueObjects),
     ...Object.values(moleculeObjects),
   ];
