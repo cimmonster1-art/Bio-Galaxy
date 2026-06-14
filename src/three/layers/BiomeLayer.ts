@@ -36,6 +36,45 @@ function bushyCrown(radius: number): THREE.BufferGeometry {
 }
 
 /**
+ * Soft, feathered light-shaft texture for the volumetric god-rays. It is
+ * brightest just below the sun source, eases to nothing along its length, and
+ * feathers to fully transparent at both edges — so a shaft reads as a dazzling
+ * beam of sunlight from any angle and never shows a hard cylinder rim.
+ */
+function createGodRayTexture(): THREE.Texture {
+  const w = 96;
+  const h = 320;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const img = ctx.createImageData(w, h);
+    const cx = (w - 1) / 2;
+    for (let y = 0; y < h; y++) {
+      const v = y / (h - 1);
+      // Along the shaft: bloom in just under the sun, then taper toward the floor.
+      const along = Math.pow(1 - v, 1.7) * (0.3 + 0.7 * Math.min(1, v * 7));
+      for (let x = 0; x < w; x++) {
+        // Across the shaft: a soft Gaussian core feathered to clear edges.
+        const dx = (x - cx) / (w * 0.3);
+        const a = Math.max(0, Math.min(1, along * Math.exp(-dx * dx)));
+        const i = (y * w + x) * 4;
+        img.data[i] = 255;
+        img.data[i + 1] = 247;
+        img.data[i + 2] = 222;
+        img.data[i + 3] = Math.round(a * 255);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
  * Biome — a living planetary environment you descend into from orbit. Built as a
  * layered ecosystem rather than a field of identical lollipop trees:
  *
@@ -90,6 +129,7 @@ export class BiomeLayer implements SceneLayer {
   private readonly ground: THREE.Mesh;
   private readonly hazeMat: THREE.MeshBasicMaterial;
   private readonly godRayMat: THREE.MeshBasicMaterial;
+  private readonly godRayGroup: THREE.Group;
   private readonly wildlifeMat: THREE.PointsMaterial;
   private readonly wildlife: THREE.Points;
   private readonly canopyFoliage: THREE.InstancedMesh;
@@ -165,13 +205,32 @@ export class BiomeLayer implements SceneLayer {
     this.root.add(haze);
     this.fadeables.push(this.hazeMat);
 
-    this.godRayMat = new THREE.MeshBasicMaterial({ color: 0xbff0ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-    const shaft = new THREE.CylinderGeometry(2, 40, 240, 24, 1, true);
-    const godRays = new THREE.Mesh(shaft, this.godRayMat);
-    godRays.position.copy(SUN.clone().multiplyScalar(70)).add(new THREE.Vector3(0, 30, 0));
-    godRays.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), SUN);
-    godRays.frustumCulled = false;
-    this.root.add(godRays);
+    // Volumetric god-rays: soft, feathered light shafts streaming down from the
+    // sun direction. Crossed billboards sharing one additive gradient texture
+    // read as a dazzling, hyperreal beam of sunlight from any angle — replacing
+    // the old hard-edged cylinder cone.
+    const godRayTex = createGodRayTexture();
+    this.textures.push(godRayTex);
+    this.godRayMat = new THREE.MeshBasicMaterial({
+      map: godRayTex, color: 0xfff3d6, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+    });
+    this.godRayGroup = new THREE.Group();
+    const shaftLen = 280;
+    const blades = 5;
+    for (let i = 0; i < blades; i++) {
+      const plane = new THREE.PlaneGeometry(96, shaftLen);
+      plane.translate(0, -shaftLen / 2, 0); // pivot at the top, the sun end
+      const blade = new THREE.Mesh(plane, this.godRayMat);
+      blade.rotation.y = (i / blades) * Math.PI; // cross the billboards around the shaft
+      blade.scale.x = 0.7 + (i % 2) * 0.5;        // vary widths so it never reads as a flat fan
+      blade.frustumCulled = false;
+      this.godRayGroup.add(blade);
+    }
+    this.godRayGroup.position.copy(SUN.clone().multiplyScalar(90)).add(new THREE.Vector3(0, 40, 0));
+    this.godRayGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), SUN);
+    this.godRayGroup.frustumCulled = false;
+    this.root.add(this.godRayGroup);
     this.fadeables.push(this.godRayMat);
 
     // ── Hierarchical vegetation ───────────────────────────────────────────────
@@ -440,7 +499,10 @@ export class BiomeLayer implements SceneLayer {
     this.skyMat.uniforms.uOpacity.value = this.skyMat.opacity;
     // Re-weight the atmospheric extras below full strength.
     this.hazeMat.opacity = Math.min(this.hazeMat.opacity, this.intensity * 0.35);
-    this.godRayMat.opacity = Math.min(this.godRayMat.opacity, this.intensity * 0.24);
+    // Hold the rays subtle, with a slow shimmer and drift so the beam dazzles
+    // gently rather than sitting as a static slab.
+    this.godRayMat.opacity = Math.min(this.godRayMat.opacity, this.intensity * (0.2 + 0.05 * Math.sin(elapsed * 0.6)));
+    this.godRayGroup.rotateY(dt * 0.05);
     this.markerMats.forEach((mat, i) => {
       const pulse = 0.5 + 0.5 * Math.sin(elapsed * 1.5 + i);
       mat.opacity = Math.min(mat.opacity, this.intensity * (0.35 + pulse * 0.45));
