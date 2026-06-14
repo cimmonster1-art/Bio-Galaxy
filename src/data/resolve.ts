@@ -2,6 +2,7 @@ import { BioObject, RANK_SCALE, Scale, TaxonRank } from '../types';
 import { BIO_OBJECTS } from './registry';
 import { ANATOMY_OBJECTS } from './anatomy';
 import { ecologyObjects } from './ecology';
+import { SCIENCE_OBJECTS } from './science';
 import { STAR_OBJECTS } from './stars';
 import { TaxonNode, allTaxa, lineageOf } from './taxonomy';
 
@@ -205,7 +206,7 @@ const moleculeObjects: Record<string, BioObject> = {
 export function resolveObject(id: string): BioObject | undefined {
   const tissueMatch = /^tissue:cell:(\d+)$/.exec(id);
   if (tissueMatch) return tissueCellObject(Number(tissueMatch[1]));
-  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? cosmicObjects[id] ?? cosmicStructures[id] ?? STAR_OBJECTS[id] ?? atomObjects[id] ?? biomeObjects[id] ?? ecosystemObjects[id] ?? ecologyObjects[id] ?? tissueObjects[id] ?? moleculeObjects[id];
+  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? SCIENCE_OBJECTS[id] ?? cosmicObjects[id] ?? cosmicStructures[id] ?? STAR_OBJECTS[id] ?? atomObjects[id] ?? biomeObjects[id] ?? ecosystemObjects[id] ?? ecologyObjects[id] ?? tissueObjects[id] ?? moleculeObjects[id];
 }
 
 /** Complete locally indexed corpus used by search and the read-only copilot. */
@@ -214,6 +215,7 @@ export function allResolvedObjects(): BioObject[] {
     ...Object.values(BIO_OBJECTS),
     ...Object.values(taxonObjects),
     ...Object.values(ANATOMY_OBJECTS),
+    ...Object.values(SCIENCE_OBJECTS),
     ...Object.values(cosmicObjects),
     ...Object.values(cosmicStructures),
     ...Object.values(STAR_OBJECTS),
