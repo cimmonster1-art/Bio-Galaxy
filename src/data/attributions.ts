@@ -42,6 +42,9 @@ export const ATTRIBUTION_GROUPS: AttributionGroup[] = [
     label: 'Astronomy and planetary context',
     description: 'Sources and reference systems behind the atlas cosmic scales.',
     entries: [
+      { name: 'HYG Database (v4.1)', institution: 'David Nash / AstroNexus', role: 'Real star positions, magnitudes, and spectral classes powering the catalogue stars beyond the Oort Cloud at the Galaxy scale (CC BY-SA 4.0)', url: 'https://github.com/astronexus/HYG-Database', status: 'asset' },
+      { name: 'Hipparcos & Yale Bright Star Catalogue', institution: 'ESA / Yale University Observatory', role: 'Astrometry and photometry underlying the HYG bright-star set', url: 'https://www.cosmos.esa.int/web/hipparcos', status: 'asset' },
+      { name: 'SIMBAD', institution: 'CDS, Université de Strasbourg', role: 'Astronomical object reference for cross-identifying individual catalogue stars', url: 'https://simbad.u-strasbg.fr/simbad/', status: 'compatible' },
       { name: 'NASA Visible Earth', institution: 'NASA', role: 'Blue Marble Earth imagery', url: 'https://visibleearth.nasa.gov', status: 'asset' },
       { name: 'Planet Pixel Emporium', institution: 'James Hastings-Trew', role: 'Open planetary texture maps via threex.planets', url: 'https://planetpixelemporium.com', status: 'asset' },
       { name: 'Swiss Ephemeris', institution: 'Astrodienst AG', role: 'Open astronomy reference ecosystem; ready for precise ephemeris adapters', url: 'https://www.astro.com/swisseph/', status: 'compatible' },
