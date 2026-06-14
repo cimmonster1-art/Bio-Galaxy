@@ -14,18 +14,21 @@ interface Group {
   to: Scale;
 }
 
-// The ladder is long, so it is grouped into navigable regimes.
+// The ladder is long, so it is grouped into navigable regimes along the single
+// continuous physical journey from the cosmos to the atom.
 const GROUPS: Group[] = [
   { label: 'Cosmos', from: Scale.Cosmos, to: Scale.Planet },
-  { label: 'Phylogeny', from: Scale.TreeOfLife, to: Scale.Species },
+  { label: 'Living World', from: Scale.Biome, to: Scale.Ecosystem },
   { label: 'Anatomy', from: Scale.Organism, to: Scale.Tissue },
   { label: 'Cellular', from: Scale.Cell, to: Scale.Organelle },
   { label: 'Molecular', from: Scale.ProteinComplex, to: Scale.Atom },
 ];
 
 /**
- * The scale ladder, grouped into phylogeny, anatomy, cellular, and molecular
- * regimes. Selecting a level commits the camera to that biological scale.
+ * The scale ladder, grouped into cosmic, living-world, anatomy, cellular, and
+ * molecular regimes. Selecting a level commits the camera to that physical
+ * scale. Taxonomy is intentionally absent here — it lives in the secondary
+ * Evolution / Classification mode.
  */
 export const ScaleNavigatorPanel: React.FC<Props> = ({ scale, onScaleChange }) => (
   <Panel eyebrow="Navigate" title="Scale Ladder">

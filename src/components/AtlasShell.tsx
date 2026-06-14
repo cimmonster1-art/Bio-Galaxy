@@ -13,7 +13,6 @@ import { ContextPanel } from './panels/ContextPanel';
 import { DataSourcesPanel } from './panels/DataSourcesPanel';
 import { DetailPanel } from './panels/DetailPanel';
 import { ScaleNavigatorPanel } from './panels/ScaleNavigatorPanel';
-import { TaxonomyNavigator } from './panels/TaxonomyNavigator';
 
 /** Composes the atlas regions while useAtlasController owns shared behavior. */
 export const AtlasShell: React.FC<{ onExit: () => void }> = ({ onExit }) => {
@@ -24,7 +23,7 @@ export const AtlasShell: React.FC<{ onExit: () => void }> = ({ onExit }) => {
       <div className="atlas-header-tools flex min-w-0 flex-1 items-center justify-center gap-2"><GlobalSearch onSelect={atlas.navigateTo} /><AtlasTopNav active={atlas.workspace} onChange={atlas.setWorkspace} /></div>
     </header>
     {atlas.workspace === 'life' ? <LifeCladeExplorer selectedTaxonId={atlas.selectedTaxonId} onSelect={atlas.selectTaxon} onClose={() => atlas.setWorkspace(null)} /> : <AtlasWorkspaceView atlas={atlas} />}
-    {!atlas.workspace && <MobileAtlasDock active={atlas.mobilePanel} onChange={atlas.setMobilePanel} selectionName={atlas.selected?.name} navigate={<><ScaleNavigatorPanel scale={atlas.scale} onScaleChange={atlas.setScale} /><TaxonomyNavigator selectedTaxonId={atlas.selectedTaxonId} onSelectTaxon={atlas.selectTaxon} />{atlas.anatomyScale && <AnatomyModelsPanel activeId={atlas.activeModelId} status={atlas.modelStatus} onLoad={atlas.loadModelEntry} />}</>} inspect={<><WikipediaSidebar selected={atlas.selected} scale={atlas.scale} /><div className="min-h-[22rem] overflow-hidden rounded-lg border border-white/10 bg-[#04070f]"><DetailPanel selected={atlas.selected} /></div><ContextPanel scale={atlas.scale} selected={atlas.selected} /><DataSourcesPanel active={atlas.activeSources} /></>} />}
+    {!atlas.workspace && <MobileAtlasDock active={atlas.mobilePanel} onChange={atlas.setMobilePanel} selectionName={atlas.selected?.name} navigate={<><ScaleNavigatorPanel scale={atlas.scale} onScaleChange={atlas.setScale} />{atlas.anatomyScale && <AnatomyModelsPanel activeId={atlas.activeModelId} status={atlas.modelStatus} onLoad={atlas.loadModelEntry} />}</>} inspect={<><WikipediaSidebar selected={atlas.selected} scale={atlas.scale} /><div className="min-h-[22rem] overflow-hidden rounded-lg border border-white/10 bg-[#04070f]"><DetailPanel selected={atlas.selected} /></div><ContextPanel scale={atlas.scale} selected={atlas.selected} /><DataSourcesPanel active={atlas.activeSources} /></>} />}
     <AtlasCopilot scale={atlas.scale} selected={atlas.selected} hovered={atlas.hovered} />
   </div>;
 };

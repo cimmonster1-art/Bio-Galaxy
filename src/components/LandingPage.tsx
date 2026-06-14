@@ -50,7 +50,7 @@ export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {
       </section>
 
       <section className="border-y border-white/[0.08] bg-white/[0.015]"><div className="mx-auto grid max-w-6xl gap-px px-4 py-6 sm:px-6 sm:py-8 md:grid-cols-3">
-        <Feature icon={Layers3} label="22 connected scales" text="A single camera path links astronomical, organismal, cellular, and molecular views." />
+        <Feature icon={Layers3} label="One continuous journey" text="A single camera path travels through reality from the cosmos to the atom — biome, ecosystem, organism, cell, and molecule." />
         <Feature icon={Database} label="Source-aware objects" text="Selections surface live taxonomy, pathway, expression, genomic, and structural context." />
         <Feature icon={Server} label="Fast same-origin data gateway" text="Public, key-free APIs are normalized in typed clients and accelerated by server-side caching." />
       </div></section>

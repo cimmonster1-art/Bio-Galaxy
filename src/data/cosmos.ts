@@ -225,7 +225,7 @@ export const COSMIC_TIMELINE: CosmicEra[] = [
   { scale: Scale.Galaxy, label: 'Milky Way', time: '13.6 Gya', span: 'Galactic assembly', detail: 'The Milky Way grows through mergers and sustained star formation, building its halo, disk, and spiral structure.', milestones: ['Old halo stars form', 'Disk and spiral arms assemble', 'Heavy elements enrich later stars'] },
   { scale: Scale.SolarSystem, label: 'Solar System', time: '4.6 Gya', span: 'About 100 million years', detail: 'A molecular cloud collapses. The Sun forms at its center while dust and rock accrete into planets and moons.', milestones: ['Solar nebula collapses', 'Sun begins fusion', 'Planets accrete from the disk'] },
   { scale: Scale.Planet, label: 'Early Earth', time: '4.54 Gya', span: 'First 700 million years', detail: 'Earth differentiates into core, mantle, and crust. Cooling permits a persistent atmosphere and liquid-water oceans.', milestones: ['Moon-forming impact', 'Crust and oceans stabilize', 'Atmosphere evolves'] },
-  { scale: Scale.TreeOfLife, label: 'Life diversifies', time: '3.8 Gya', span: 'Billions of years', detail: 'Cellular life changes Earth and branches into the lineages represented in the Tree of Life.', milestones: ['Early microbial life', 'Oxygenic photosynthesis', 'Eukaryotes and multicellular life'] },
+  { scale: Scale.Biome, label: 'Life diversifies', time: '3.8 Gya', span: 'Billions of years', detail: 'Cellular life changes Earth and branches into the living biomes and ecosystems that cover the planet.', milestones: ['Early microbial life', 'Oxygenic photosynthesis', 'Eukaryotes and multicellular life'] },
 ];
 
 export function eraForScale(scale: Scale): CosmicEra | undefined {

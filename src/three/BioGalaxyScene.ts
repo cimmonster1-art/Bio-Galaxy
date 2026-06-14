@@ -11,6 +11,8 @@ import { createNebulaBackground } from './shaders/nebula';
 import { CosmosLayer } from './layers/CosmosLayer';
 import { SolarSystemLayer } from './layers/SolarSystemLayer';
 import { EarthLayer } from './layers/EarthLayer';
+import { BiomeLayer } from './layers/BiomeLayer';
+import { EcosystemLayer } from './layers/EcosystemLayer';
 import { TreeOfLifeLayer } from './layers/TreeOfLifeLayer';
 import { AnatomyModelLayer, ModelProvenance } from './layers/AnatomyModelLayer';
 import { TissueField } from './layers/TissueField';
@@ -48,6 +50,7 @@ export class BioGalaxyScene {
   private readonly layers: SceneLayer[];
   private readonly cosmos: CosmosLayer;
   private readonly solarSystem: SolarSystemLayer;
+  private readonly biome: BiomeLayer;
   private readonly tree: TreeOfLifeLayer;
   private readonly anatomy: AnatomyModelLayer;
   private readonly cell: CellScene;
@@ -76,7 +79,11 @@ export class BioGalaxyScene {
     this.renderer.setSize(width, height);
     this.renderer.setClearColor(0x02040a, 1);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.1;
+    // Soft contact shadows ground the biome's vegetation and the anatomy without
+    // the hard edges that would break the atmospheric look.
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
 
     this.scene.fog = new THREE.FogExp2(0x02040a, 0.0011);
@@ -99,6 +106,7 @@ export class BioGalaxyScene {
 
     this.cosmos = new CosmosLayer();
     this.solarSystem = new SolarSystemLayer();
+    this.biome = new BiomeLayer();
     this.tree = new TreeOfLifeLayer();
     this.anatomy = new AnatomyModelLayer();
     this.cell = new CellScene();
@@ -107,6 +115,8 @@ export class BioGalaxyScene {
       this.cosmos,
       this.solarSystem,
       new EarthLayer(),
+      this.biome,
+      new EcosystemLayer(),
       this.tree,
       this.anatomy,
       new TissueField(),
@@ -152,6 +162,7 @@ export class BioGalaxyScene {
     this.cell.setSelected(id);
     this.anatomy.setSelected(id);
     this.solarSystem.setSelected(id);
+    if (id && id.startsWith('biome:')) this.biome.setVariant(id.replace(/^biome:/, ''));
     this.start();
   }
 

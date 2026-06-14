@@ -30,9 +30,18 @@ export function useAtlasController() {
 
   const applySelection = useCallback((object: BioObject) => {
     setSelected(object);
-    if (object.id.startsWith('taxon:')) setFocusTaxonId(object.id);
-    if (object.id.startsWith('organism:')) setFocusTaxonId(`taxon:${stripTaxon(object.id)}`);
-    setScale(object.id.startsWith('organism:') ? Scale.Organism : object.scale);
+    // Taxonomy lives in the secondary classification mode: focus the lineage but
+    // never move the physical camera off its current scale.
+    if (object.id.startsWith('taxon:')) {
+      setFocusTaxonId(object.id);
+      return;
+    }
+    if (object.id.startsWith('organism:')) {
+      setFocusTaxonId(`taxon:${stripTaxon(object.id)}`);
+      setScale(Scale.Organism);
+      return;
+    }
+    setScale(object.scale);
   }, []);
   const navigateTo = useCallback((id: string) => { const object = resolveObject(id); if (object) applySelection(object); }, [applySelection]);
   const selectTaxon = useCallback((id: string) => navigateTo(`taxon:${id}`), [navigateTo]);

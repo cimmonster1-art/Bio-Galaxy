@@ -12,10 +12,24 @@ export class SceneLightingRig {
   constructor(scene: THREE.Scene) {
     this.group.name = 'LightingRig';
 
-    this.group.add(new THREE.AmbientLight(0x4a6a85, 0.58));
+    this.group.add(new THREE.AmbientLight(0x4a6a85, 0.48));
 
-    const key = new THREE.DirectionalLight(0xbfe9ff, 1.35);
-    key.position.set(20, 30, 40);
+    // Sky/ground hemisphere bounce gives organic surfaces — vegetation, skin,
+    // membranes — soft natural fill that the flat ambient alone cannot.
+    this.group.add(new THREE.HemisphereLight(0xbfe9ff, 0x14241c, 0.55));
+
+    const key = new THREE.DirectionalLight(0xbfe9ff, 1.4);
+    key.position.set(34, 48, 26);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.near = 1;
+    key.shadow.camera.far = 320;
+    key.shadow.camera.left = -170;
+    key.shadow.camera.right = 170;
+    key.shadow.camera.top = 170;
+    key.shadow.camera.bottom = -170;
+    key.shadow.bias = -0.0004;
+    key.shadow.radius = 4;
     this.group.add(key);
 
     const warm = new THREE.DirectionalLight(0xffd9a0, 0.35);

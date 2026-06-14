@@ -121,10 +121,51 @@ const cosmicObjects: Record<string, BioObject> = {
 };
 
 
+// Living-world records for the physical spine between Earth and the organism:
+// the biome environments and the ecosystem network nodes. These are procedural
+// scenes rather than database entries, so they carry a plain provenance note.
+const BIOME_NOTE = 'Procedural biome environment rendered from CC0-style primitives and shaders.';
+const ECO_NOTE = 'Schematic ecological network illustrating relationships between organisms.';
+
+function biome(id: string, name: string, summary: string, facts: string[]): BioObject {
+  return { id: `biome:${id}`, name, scale: Scale.Biome, kind: 'biome', summary, size: 'biome scale (~10–100 km)', facts, provenanceNote: BIOME_NOTE };
+}
+
+const biomeObjects: Record<string, BioObject> = {
+  'biome:rainforest': biome('rainforest', 'Tropical Rainforest', 'A warm, wet, layered forest holding the greatest terrestrial biodiversity on Earth.', ['Dense canopy, understory, and forest floor strata.', 'Drives a large share of terrestrial photosynthesis.']),
+  'biome:reef': biome('reef', 'Coral Reef', 'A shallow marine biome built by colonial corals, often called the rainforest of the sea.', ['Coral animals host photosynthetic algae.', 'Supports roughly a quarter of marine species.']),
+  'biome:tundra': biome('tundra', 'Arctic Tundra', 'A cold, treeless biome where low temperatures and permafrost shape life.', ['Short growing season with low shrubs and lichens.', 'Carbon-rich permafrost soils.']),
+  'biome:savanna': biome('savanna', 'Savanna', 'A grassland with scattered trees, shaped by seasonal rains and fire.', ['Grazing herds and their predators.', 'Maintained by drought and periodic fire.']),
+  'biome:temperate': biome('temperate', 'Temperate Forest', 'A seasonal forest of broadleaf and conifer trees in mid-latitudes.', ['Marked spring, summer, autumn, and winter cycles.', 'Deep leaf-litter soils.']),
+  'biome:desert': biome('desert', 'Desert', 'An arid biome where scarce water selects for extreme adaptation.', ['Wide day-to-night temperature swings.', 'Specialized water-storing and nocturnal life.']),
+};
+
+const ECO_STRUCTURES: { id: string; name: string; summary: string }[] = [
+  { id: 'sun', name: 'Solar energy', summary: 'The energy input driving primary production across the ecosystem.' },
+  { id: 'canopy', name: 'Canopy producers', summary: 'Photosynthetic plants forming the productive base of the food web.' },
+  { id: 'flowering', name: 'Flowering plants', summary: 'Producers that exchange nectar for pollination services.' },
+  { id: 'decomposer', name: 'Decomposers', summary: 'Fungi and microbes returning nutrients from dead matter to the soil.' },
+  { id: 'soil', name: 'Soil & nutrients', summary: 'The nutrient reservoir cycling matter back into living producers.' },
+];
+const ECO_ORGANISMS: { id: string; name: string; summary: string }[] = [
+  { id: 'pollinator', name: 'Pollinator', summary: 'An animal that carries pollen between flowers as it feeds.' },
+  { id: 'herbivore', name: 'Herbivore', summary: 'A primary consumer feeding on producers.' },
+  { id: 'predator', name: 'Predator', summary: 'A consumer that hunts other animals, regulating the network.' },
+  { id: 'migratory', name: 'Migratory animal', summary: 'A consumer that moves between habitats along migration routes.' },
+];
+
+const ecosystemObjects: Record<string, BioObject> = {};
+for (const s of ECO_STRUCTURES) {
+  ecosystemObjects[`ecosystem:${s.id}`] = { id: `ecosystem:${s.id}`, name: s.name, scale: Scale.Ecosystem, kind: 'ecosystem', summary: s.summary, size: 'ecosystem component', facts: ['Part of a functioning ecological network.', 'Connected by energy, nutrient, and pollination flows.'], provenanceNote: ECO_NOTE };
+}
+for (const o of ECO_ORGANISMS) {
+  ecosystemObjects[`organism:${o.id}`] = { id: `organism:${o.id}`, name: o.name, scale: Scale.Organism, kind: 'organism', summary: o.summary, size: 'organism scale', facts: ['Selecting it descends to the organism scale.', 'A node in the ecosystem interaction network.'], provenanceNote: ECO_NOTE };
+}
+
 export function resolveObject(id: string): BioObject | undefined {
   const tissueMatch = /^tissue:cell:(\d+)$/.exec(id);
   if (tissueMatch) return tissueCellObject(Number(tissueMatch[1]));
-  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? cosmicObjects[id];
+  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? cosmicObjects[id] ?? biomeObjects[id] ?? ecosystemObjects[id];
 }
 
 /** Complete locally indexed corpus used by search and the read-only copilot. */
@@ -134,6 +175,8 @@ export function allResolvedObjects(): BioObject[] {
     ...Object.values(taxonObjects),
     ...Object.values(ANATOMY_OBJECTS),
     ...Object.values(cosmicObjects),
+    ...Object.values(biomeObjects),
+    ...Object.values(ecosystemObjects),
   ];
 }
 

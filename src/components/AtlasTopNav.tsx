@@ -1,14 +1,16 @@
 import React from 'react';
-import { Clock3, Film, Network, X } from 'lucide-react';
+import { Clock3, Film, GitBranch, X } from 'lucide-react';
 
 export type AtlasWorkspace = 'eras' | 'playback' | 'life' | null;
 
 interface Props { active: AtlasWorkspace; onChange: (workspace: AtlasWorkspace) => void; }
 
+// 'life' opens the secondary Evolution / Classification mode (the clade graph),
+// kept off the primary physical scale path.
 const ITEMS = [
   { id: 'eras' as const, label: 'Eras', icon: Clock3 },
   { id: 'playback' as const, label: 'Timeline playback', icon: Film },
-  { id: 'life' as const, label: 'Tree of Life', icon: Network },
+  { id: 'life' as const, label: 'Evolution', icon: GitBranch },
 ];
 
 export const AtlasTopNav: React.FC<Props> = ({ active, onChange }) => (

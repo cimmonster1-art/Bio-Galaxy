@@ -1,33 +1,44 @@
 // Core domain types for the Bio Galaxy spatial atlas.
 
 /**
- * Continuous biological scale ladder, from the Tree of Life down to a single
- * atom. The index doubles as the position along the zoom axis, so the navigator
- * can ease between adjacent values and layers can index it directly.
+ * Continuous *physical* scale ladder — the primary atlas spine. It is one
+ * uninterrupted dive through reality, from the observable cosmos down to a
+ * single atom, with no relationship views breaking immersion. The index doubles
+ * as the position along the zoom axis, so the navigator eases between adjacent
+ * values and layers index it directly.
+ *
+ * Taxonomy (Tree of Life → Species) is deliberately appended *after* the
+ * physical spine, beyond LAST_SCALE. It is reachable only through the secondary
+ * "Evolution / Classification" mode, never by zooming, so the primary journey
+ * stays a continuous travel through scale rather than a jump into a graph.
  */
 export enum Scale {
+  // ── Primary physical spine (contiguous, walked by the navigator) ──
   Cosmos = 0,
   Galaxy = 1,
   SolarSystem = 2,
   Planet = 3,
-  TreeOfLife = 4,
-  Domain = 5,
-  Kingdom = 6,
-  Phylum = 7,
-  Class = 8,
-  Order = 9,
-  Family = 10,
-  Genus = 11,
-  Species = 12,
-  Organism = 13,
-  OrganSystem = 14,
-  Organ = 15,
-  Tissue = 16,
-  Cell = 17,
-  Organelle = 18,
-  ProteinComplex = 19,
-  Molecule = 20,
-  Atom = 21,
+  Biome = 4,
+  Ecosystem = 5,
+  Organism = 6,
+  OrganSystem = 7,
+  Organ = 8,
+  Tissue = 9,
+  Cell = 10,
+  Organelle = 11,
+  ProteinComplex = 12,
+  Molecule = 13,
+  Atom = 14,
+  // ── Secondary taxonomy lane (off the physical spine) ──
+  TreeOfLife = 15,
+  Domain = 16,
+  Kingdom = 17,
+  Phylum = 18,
+  Class = 19,
+  Order = 20,
+  Family = 21,
+  Genus = 22,
+  Species = 23,
 }
 
 export interface ScaleLevel {
@@ -72,6 +83,8 @@ export interface BioObject {
   kind:
     | 'star'
     | 'planet'
+    | 'biome'
+    | 'ecosystem'
     | 'clade'
     | 'taxon'
     | 'organism'

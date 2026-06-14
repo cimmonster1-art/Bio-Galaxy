@@ -13,10 +13,24 @@ import { clampScale, getScaleLevel } from '../data/scales';
 // The curve eases the descent so each step reads as a continuous dive rather
 // than a jump between pages.
 const SCALE_DISTANCE: Record<Scale, number> = {
+  // Physical spine — a smoothly tightening descent from orbit to the atom.
   [Scale.Cosmos]: 620,
   [Scale.Galaxy]: 380,
   [Scale.SolarSystem]: 220,
-  [Scale.Planet]: 90,
+  [Scale.Planet]: 95,
+  [Scale.Biome]: 62,
+  [Scale.Ecosystem]: 50,
+  [Scale.Organism]: 44,
+  [Scale.OrganSystem]: 38,
+  [Scale.Organ]: 30,
+  [Scale.Tissue]: 24,
+  [Scale.Cell]: 44,
+  [Scale.Organelle]: 18,
+  [Scale.ProteinComplex]: 24,
+  [Scale.Molecule]: 15,
+  [Scale.Atom]: 20,
+  // Secondary taxonomy lane — only used when the classification mode parks the
+  // camera on a clade; never traversed by a normal zoom.
   [Scale.TreeOfLife]: 150,
   [Scale.Domain]: 132,
   [Scale.Kingdom]: 116,
@@ -26,15 +40,6 @@ const SCALE_DISTANCE: Record<Scale, number> = {
   [Scale.Family]: 70,
   [Scale.Genus]: 60,
   [Scale.Species]: 52,
-  [Scale.Organism]: 46,
-  [Scale.OrganSystem]: 38,
-  [Scale.Organ]: 30,
-  [Scale.Tissue]: 24,
-  [Scale.Cell]: 44,
-  [Scale.Organelle]: 18,
-  [Scale.ProteinComplex]: 24,
-  [Scale.Molecule]: 15,
-  [Scale.Atom]: 20,
 };
 
 export class ScaleNavigator {

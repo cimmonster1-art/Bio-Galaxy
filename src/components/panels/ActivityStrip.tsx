@@ -12,10 +12,12 @@ interface Props {
 
 /** The active scene layer for a given scale, for the layer readout. */
 function activeLayer(scale: Scale): string {
+  if (scale >= Scale.TreeOfLife) return 'Classification';
   if (scale <= Scale.Galaxy) return 'Cosmos';
   if (scale === Scale.SolarSystem) return 'Solar System';
   if (scale === Scale.Planet) return 'Earth';
-  if (scale <= Scale.Species) return 'Tree of Life';
+  if (scale === Scale.Biome) return 'Biome';
+  if (scale === Scale.Ecosystem) return 'Ecosystem';
   if (scale <= Scale.Organ) return 'Anatomy';
   if (scale === Scale.Tissue) return 'Tissue';
   if (scale <= Scale.Organelle) return 'Cell';
