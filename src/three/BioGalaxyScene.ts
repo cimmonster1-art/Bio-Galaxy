@@ -47,6 +47,7 @@ export class BioGalaxyScene {
 
   private readonly layers: SceneLayer[];
   private readonly cosmos: CosmosLayer;
+  private readonly solarSystem: SolarSystemLayer;
   private readonly tree: TreeOfLifeLayer;
   private readonly anatomy: AnatomyModelLayer;
   private readonly cell: CellScene;
@@ -97,13 +98,14 @@ export class BioGalaxyScene {
     this.raycaster = new SelectionRaycaster(this.renderer.domElement);
 
     this.cosmos = new CosmosLayer();
+    this.solarSystem = new SolarSystemLayer();
     this.tree = new TreeOfLifeLayer();
     this.anatomy = new AnatomyModelLayer();
     this.cell = new CellScene();
     this.protein = new ProteinStructureLayer();
     this.layers = [
       this.cosmos,
-      new SolarSystemLayer(),
+      this.solarSystem,
       new EarthLayer(),
       this.tree,
       this.anatomy,
@@ -149,6 +151,7 @@ export class BioGalaxyScene {
   setSelected(id: string | null): void {
     this.cell.setSelected(id);
     this.anatomy.setSelected(id);
+    this.solarSystem.setSelected(id);
     this.start();
   }
 

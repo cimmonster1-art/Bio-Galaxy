@@ -70,6 +70,11 @@ export class SolarSystemLayer implements SceneLayer {
   private readonly coronaShells: { mesh: THREE.Mesh; base: number; speed: number; phase: number; amp: number }[] = [];
   private readonly prominences: THREE.Sprite[] = [];
 
+  // Body labels stay hidden so the crowded inner system reads cleanly; only the
+  // selected body names itself, just like clicking a planet in the atlas.
+  private readonly labels: { id: string; material: THREE.SpriteMaterial }[] = [];
+  private selectedId: string | null = null;
+
   constructor() {
     this.root.name = 'SolarSystemLayer';
     this.root.visible = false;
@@ -174,8 +179,9 @@ export class SolarSystemLayer implements SceneLayer {
 
     const sunLabel = createSpriteLabel('Sun', '#ffd9a0');
     sunLabel.position.set(0, SUN.radius + 3, 0);
+    sunLabel.material.opacity = 0;
     this.root.add(sunLabel);
-    this.fadeables.push(sunLabel.material);
+    this.labels.push({ id: 'planet:sun', material: sunLabel.material });
 
     this.sunLight = new THREE.PointLight(0xfff4e0, 0, 0, 0.5);
     this.root.add(this.sunLight);
@@ -335,8 +341,9 @@ export class SolarSystemLayer implements SceneLayer {
 
     const label = createSpriteLabel(data.name, '#cfe8ff');
     label.position.set(orbit, data.radius + 2, 0);
+    label.material.opacity = 0;
     pivot.add(label);
-    this.fadeables.push(label.material);
+    this.labels.push({ id: `planet:${data.id}`, material: label.material });
 
     const moons: { pivot: THREE.Group; speed: number }[] = [];
     for (const moon of data.moons ?? []) {
@@ -370,6 +377,11 @@ export class SolarSystemLayer implements SceneLayer {
     this.root.visible = intensity > 0.01;
   }
 
+  /** Reveal only the selected body's label; hide every other name. */
+  setSelected(id: string | null): void {
+    this.selectedId = id;
+  }
+
   update(dt: number, elapsed: number): void {
     this.sunLight.intensity = 2.6 * this.intensity;
     for (const f of this.fadeables) {
@@ -389,6 +401,11 @@ export class SolarSystemLayer implements SceneLayer {
       const flicker = 0.7 + Math.sin(elapsed * (0.5 + (i % 5) * 0.13) + i) * 0.22;
       mat.opacity = this.intensity * 0.9 * flicker;
     });
+    // Labels: only the selected body names itself, fading in once it's picked.
+    for (const label of this.labels) {
+      const target = label.id === this.selectedId ? this.intensity : 0;
+      fadeMaterial(label.material, target, dt, 10);
+    }
     if (this.intensity < 0.02) return;
     this.belt.rotation.y += dt * 0.02;
     for (const body of this.bodies) {
