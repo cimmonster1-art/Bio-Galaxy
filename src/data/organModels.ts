@@ -60,12 +60,19 @@ export const ORGAN_MODELS: OrganModel[] = [
 
 /**
  * Fixed affine map from the HuBMAP reference frame (metres, Y-up) into the body
- * explorer's normalized body frame (head-top ≈ 1.55, feet ≈ -1.25). Calibrated
- * from the library's measured organ envelope — brain crown and pelvic floor — so
- * the cluster lands inside the torso/skull regardless of which subset loads.
+ * explorer's normalized body frame (head-top ≈ 1.55, feet ≈ -1.25).
+ *
+ * The library's measured organ envelope is x[-0.133, 0.143] y[-0.039, 0.903]
+ * z[-0.092, 0.139]. True anatomical scale (~1.6) fills the body cavity right up
+ * to the thin translucent skin, so organs poke through it. We deliberately keep
+ * the cluster ~14% under anatomical scale and tuck it slightly posterior so the
+ * whole viscera + brain sits comfortably *inside* the torso and skull:
+ *   - brain crown (y 0.903) → body y ≈ 1.40 (inside the cranium)
+ *   - pelvic floor (y -0.039) → body y ≈ 0.03 (above the groin)
+ *   - half-width ≈ 0.20, half-depth ≈ 0.17 — both within the torso shell
  *   body = HUBMAP * scale + position
  */
 export const ORGAN_FIT = {
-  scale: 1.68,
-  position: [0, -0.0668, -0.027] as [number, number, number],
+  scale: 1.45,
+  position: [-0.007, 0.091, -0.045] as [number, number, number],
 };
