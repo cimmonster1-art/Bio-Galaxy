@@ -17,3 +17,20 @@ Processing: FBX → glTF (Facebook FBX2glTF) → meshopt-compressed (EXT_meshopt
 
 Attribution is displayed in-app (Chakra Atlas) per the CC-BY-SA license. Any
 redistribution of these assets must retain this attribution and the share-alike terms.
+
+
+Internal organ models (loaded on demand, not bundled)
+=====================================================
+
+The Organism screen fits real open-source organ meshes inside the body surface.
+They are streamed directly from GitHub at runtime (see src/data/organModels.ts),
+not committed here.
+
+Source:   HuBMAP / Human Reference Atlas — CCF 3D Reference Object Library
+          https://github.com/hubmapconsortium/ccf-3d-reference-object-library
+          (VH_Male/v1.2 GLBs: heart, lungs, brain, liver, kidneys, spleen,
+           pancreas, small + large intestine)
+License:  CC-BY 4.0  (https://creativecommons.org/licenses/by/4.0/)
+Note:     All organs share one anatomical coordinate frame, so a single affine
+          map registers them inside the Z-Anatomy body. In-app attribution is
+          shown in the Organism screen and the Attributions panel.

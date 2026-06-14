@@ -6,8 +6,10 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { Bone, Layers, Loader as LoaderIcon } from 'lucide-react';
+import { Bone, HeartPulse, Layers, Loader as LoaderIcon } from 'lucide-react';
 import { Scale, PickTag } from '../types';
+import { createNebulaBackground } from '../three/shaders/nebula';
+import { ORGAN_MODELS, ORGAN_FIT } from '../data/organModels';
 
 /**
  * Organism screen — Astro-insight's 3D body explorer, ported to Bio Galaxy as a
@@ -19,6 +21,12 @@ import { Scale, PickTag } from '../types';
  * route into Bio Galaxy's detail panel. Surface detail textures (MIT, from the
  * three.js examples) drive real bump relief. Provenance lives in
  * public/models/ATTRIBUTION.txt and public/textures/anatomy/CREDITS.md.
+ *
+ * Internal organs are real open-source GLB models from the HuBMAP / Human
+ * Reference Atlas CCF 3D Reference Object Library (CC-BY 4.0, hosted on GitHub),
+ * loaded on demand and registered *inside* the body surface — see
+ * src/data/organModels.ts. The deep-space backdrop is the SAME procedural nebula
+ * + starfield the rest of Bio Galaxy uses, so the sky never changes between tabs.
  */
 
 // Bundled meshopt-compressed anatomy GLBs, served from the app origin.
@@ -26,8 +34,8 @@ const ANATOMY_BODY_URL = '/models/anatomy-body.glb';
 const ANATOMY_SKELETON_URL = '/models/anatomy-skeleton.glb';
 
 /** Toggleable anatomical layers. The body surface is always the base; the heavy
- *  skeleton loads lazily the first time it is revealed. */
-type LayerKey = 'body' | 'skeletal';
+ *  skeleton and organ models load lazily the first time they are revealed. */
+type LayerKey = 'body' | 'skeletal' | 'organs';
 
 /**
  * Map a Z-Anatomy mesh name → our coarse anatomy key, used to tint the mesh and
@@ -70,6 +78,8 @@ const KEY_TO_RECORD: Record<string, { id: string; scale: Scale }> = {
   stomach: { id: 'organ:stomach', scale: Scale.Organ },
   intestines: { id: 'organ:intestines', scale: Scale.Organ },
   kidneys: { id: 'organ:kidneys', scale: Scale.Organ },
+  spleen: { id: 'system:digestive', scale: Scale.OrganSystem },
+  pancreas: { id: 'system:digestive', scale: Scale.OrganSystem },
   skeleton: { id: 'system:skeletal', scale: Scale.OrganSystem },
   nerves: { id: 'system:nervous', scale: Scale.OrganSystem },
 };
@@ -77,6 +87,7 @@ const KEY_TO_RECORD: Record<string, { id: string; scale: Scale }> = {
 // ─── Scene builder ────────────────────────────────────────────────────────────
 interface SceneHandle {
   loadSkeleton: () => void;
+  loadOrgans: () => void;
   setLayerVisible: (key: LayerKey, visible: boolean) => void;
   resize: () => void;
   cleanup: () => void;
@@ -97,7 +108,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, alpha: false, powerPreference: 'default' });
   renderer.setPixelRatio(dpr);
   renderer.setSize(Math.max(canvas.clientWidth, 1), Math.max(canvas.clientHeight, 1));
-  renderer.setClearColor(0x01000a, 1);
+  renderer.setClearColor(0x02040a, 1);
   renderer.shadowMap.enabled = false;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.55;
@@ -142,6 +153,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
 
   // ── Scene + camera ────────────────────────────────────────────────────────
   const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x02040a, 0.0011);
   const w = Math.max(canvas.clientWidth, 1), h = Math.max(canvas.clientHeight, 1);
   const camera = new THREE.PerspectiveCamera(52, w / h, 0.05, 40);
   camera.position.set(0, 0, 3.3);
@@ -162,27 +174,10 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   const fillLight = new THREE.DirectionalLight(0x4070ff, 0.3); fillLight.position.set(1.5, 1, 1.5); scene.add(fillLight);
   const rimLight = new THREE.DirectionalLight(0x6a20d8, 0.6); rimLight.position.set(0, 0.5, -3); scene.add(rimLight);
 
-  // ── Deep-space starfield — layered shells so the figure floats in a cosmos ──
-  const starShells: THREE.Points[] = [];
-  const makeStarShell = (count: number, radius: number, size: number, opacity: number, tint: number) => {
-    const pos = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      const u = Math.random(), v = Math.random();
-      const theta = 2 * Math.PI * u, phi = Math.acos(2 * v - 1);
-      const r = radius * (0.85 + Math.random() * 0.15);
-      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      pos[i * 3 + 2] = r * Math.cos(phi);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const mat = new THREE.PointsMaterial({ color: tint, size, sizeAttenuation: true, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
-    const pts = new THREE.Points(geo, mat);
-    scene.add(pts); starShells.push(pts);
-  };
-  makeStarShell(900, 16, 0.06, 0.9, 0xbcd0ff);
-  makeStarShell(700, 22, 0.05, 0.6, 0x9a86ff);
-  makeStarShell(500, 30, 0.04, 0.4, 0x6f5bd0);
+  // ── Deep-space backdrop — the SAME procedural nebula + starfield the rest of
+  //    Bio Galaxy renders, so the organism tab's sky matches every other scale ──
+  const nebula = createNebulaBackground(36);
+  scene.add(nebula.mesh);
 
   // ── Float group — the whole assembly drifts + turns like a suspended specimen ─
   const floatGroup = new THREE.Group();
@@ -290,6 +285,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   const SYS_TINT: Record<string, number> = {
     skeleton: 0xece3cf, muscles: 0xa83244, nerves: 0xf2e08a,
     heart: 0xd83a4e, lungs: 0xd79bb0, brain: 0xc9b5d6, body: 0xe9c39a,
+    liver: 0x9d503f, kidneys: 0xa45b73, spleen: 0x7d3a52, pancreas: 0xd8a85a, intestines: 0xd88961,
   };
   const sharedMats: Record<string, THREE.MeshStandardMaterial> = {};
   const matFor = (key: string) => {
@@ -303,7 +299,9 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       emissiveIntensity: isBone ? 0.22 : isSkin ? 0.07 : 0.4,
       metalness: isBone ? 0.05 : 0.12, roughness: isBone ? 0.82 : 0.5,
       transparent: !opaque,
-      opacity: isSkin ? 0.2 : key === 'heart' || key === 'lungs' || key === 'brain' ? 0.68 : 0.66,
+      // Skin barely visible so the organs read through it; organs themselves
+      // sit near-opaque so each one stays legible inside the translucent body.
+      opacity: isSkin ? 0.2 : 0.86,
       depthWrite: opaque,
       side: THREE.FrontSide,
     });
@@ -315,12 +313,19 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     return mat;
   };
 
-  // ── Model container + lazy skeleton ─────────────────────────────────────────
+  // ── Model container + lazy skeleton + lazy organs ───────────────────────────
   const modelGroup = new THREE.Group();
   const skeletonGroup = new THREE.Group();
   skeletonGroup.visible = false;
+  // Internal organs share one HuBMAP coordinate frame, so a single affine map
+  // (see ORGAN_FIT) registers the whole cluster inside the body surface.
+  const organsGroup = new THREE.Group();
+  organsGroup.visible = false;
+  organsGroup.scale.setScalar(ORGAN_FIT.scale);
+  organsGroup.position.set(...ORGAN_FIT.position);
   floatGroup.add(modelGroup);
   floatGroup.add(skeletonGroup);
+  floatGroup.add(organsGroup);
 
   const gltfLoader = new GLTFLoader();
   gltfLoader.setMeshoptDecoder(MeshoptDecoder);
@@ -371,8 +376,34 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       (err) => { skeletonRequested = false; console.warn('[BodyExplorer3D] skeleton model load failed:', err); });
   };
 
+  // Drop a real open-source organ GLB into the shared organ frame, tag every
+  // mesh so a click resolves to its atlas record, and tint it to the system.
+  const ingestOrgan = (root: THREE.Object3D, entry: typeof ORGAN_MODELS[number]) => {
+    root.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      obj.material = matFor(entry.anatomyKey);
+      obj.frustumCulled = true;
+      obj.userData.anatomyKey = entry.anatomyKey;
+      obj.userData.anatomyName = entry.label;
+      anatomyTargets.push(obj);
+    });
+    organsGroup.add(root);
+  };
+
+  let organsRequested = false;
+  const loadOrgans = () => {
+    if (organsRequested) return;
+    organsRequested = true;
+    // Lightest organs first so something appears quickly; each is best-effort.
+    for (const entry of ORGAN_MODELS) {
+      gltfLoader.load(entry.url, (g) => ingestOrgan(g.scene, entry), undefined,
+        (err) => console.warn(`[BodyExplorer3D] organ "${entry.id}" load failed:`, err));
+    }
+  };
+
   const setLayerVisible = (key: LayerKey, visible: boolean) => {
     if (key === 'body') { modelGroup.visible = visible; }
+    else if (key === 'organs') { if (visible) loadOrgans(); organsGroup.visible = visible; }
     else { if (visible) loadSkeleton(); skeletonGroup.visible = visible; }
   };
 
@@ -441,11 +472,9 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       timeUniform.value += dt;
       controls.update();
 
-      for (let i = 0; i < starShells.length; i++) {
-        starShells[i].rotation.y += dt * (0.004 + i * 0.002);
-        const m = starShells[i].material as THREE.PointsMaterial;
-        m.opacity = (0.9 - i * 0.2) * (0.85 + 0.15 * Math.sin(timeUniform.value * (0.5 + i * 0.3)));
-      }
+      // Drift the shared nebula exactly as the main galaxy scene does.
+      nebula.material.uniforms.uTime.value = timeUniform.value;
+      nebula.mesh.rotation.y = timeUniform.value * 0.003;
 
       // Serene float + the faintest breathing swell of the body.
       floatGroup.position.y = Math.sin(timeUniform.value * 0.55) * 0.035;
@@ -491,6 +520,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
 
   return {
     loadSkeleton,
+    loadOrgans,
     setLayerVisible,
     resize,
     cleanup() {
@@ -507,7 +537,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       scene.traverse((o) => {
         if (o instanceof THREE.Mesh || o instanceof THREE.Points) o.geometry?.dispose();
       });
-      starShells.forEach((p) => (p.material as THREE.Material).dispose());
+      nebula.material.dispose();
       renderer.dispose();
       try { renderer.forceContextLoss(); } catch { /* noop */ }
     },
@@ -525,6 +555,7 @@ interface Props {
 
 const LAYERS: { key: LayerKey; label: string; icon: React.ReactNode }[] = [
   { key: 'body', label: 'Body surface', icon: <Layers className="h-3.5 w-3.5" /> },
+  { key: 'organs', label: 'Internal organs', icon: <HeartPulse className="h-3.5 w-3.5" /> },
   { key: 'skeletal', label: 'Skeleton', icon: <Bone className="h-3.5 w-3.5" /> },
 ];
 
@@ -566,11 +597,13 @@ export const BodyExplorer3D: React.FC<Props> = ({ selectedId, onSelect, onHover,
     for (const { key } of LAYERS) s.setLayerVisible(key, layers.has(key));
   }, [layers, ready]);
 
-  // When a skeletal/bone record is selected elsewhere, reveal the skeleton.
+  // Reveal the matching layer when a record is selected elsewhere: the skeleton
+  // for bone records, and the internal organs for any organ / soft-tissue system.
   useEffect(() => {
-    if (selectedId === 'system:skeletal') {
-      setLayers((prev) => prev.has('skeletal') ? prev : new Set(prev).add('skeletal'));
-    }
+    if (!selectedId) return;
+    const reveal = (key: LayerKey) => setLayers((prev) => prev.has(key) ? prev : new Set(prev).add(key));
+    if (selectedId === 'system:skeletal') reveal('skeletal');
+    else if (selectedId.startsWith('organ:') || selectedId.startsWith('system:')) reveal('organs');
   }, [selectedId]);
 
   const toggle = (key: LayerKey) => setLayers((prev) => {
@@ -600,7 +633,7 @@ export const BodyExplorer3D: React.FC<Props> = ({ selectedId, onSelect, onHover,
       {/* Provenance + current pick. */}
       <div className="pointer-events-none absolute bottom-3 left-3 z-20 max-w-xs">
         {picked && <div className="mb-1.5 inline-block rounded-lg bg-[#07101d]/85 px-3 py-1.5 text-[12px] font-semibold text-cyan-100 shadow-lg backdrop-blur">{picked}</div>}
-        <div className="meta-label">Z-Anatomy · CC-BY-SA 4.0 · click a structure to inspect</div>
+        <div className="meta-label">Z-Anatomy body (CC-BY-SA 4.0) · HuBMAP CCF organs (CC-BY 4.0) · click a structure to inspect</div>
       </div>
 
       {!ready && (
