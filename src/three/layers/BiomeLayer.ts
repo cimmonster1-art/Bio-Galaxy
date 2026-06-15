@@ -155,8 +155,6 @@ export class BiomeLayer implements SceneLayer {
   private readonly hazeMat: THREE.MeshBasicMaterial;
   private readonly godRayMat: THREE.MeshBasicMaterial;
   private readonly godRayGroup: THREE.Group;
-  private readonly wildlifeMat: THREE.PointsMaterial;
-  private readonly wildlife: THREE.Points;
   private readonly canopyFoliage: THREE.InstancedMesh;
   private readonly markers: THREE.Mesh[] = [];
   private readonly markerMats: THREE.MeshBasicMaterial[] = [];
@@ -173,9 +171,6 @@ export class BiomeLayer implements SceneLayer {
   private readonly foliageMats: THREE.MeshStandardMaterial[] = [];
   private readonly shrubMats: THREE.MeshStandardMaterial[] = [];
   private readonly grassMats: THREE.MeshStandardMaterial[] = [];
-  private atmo: THREE.Points | null = null;
-  private atmoMat: THREE.PointsMaterial | null = null;
-  private atmoMode: Atmosphere = 'mist';
   private rayStrength = 1.25;
   private fogStrength = 1.4;
 
@@ -280,25 +275,9 @@ export class BiomeLayer implements SceneLayer {
     // Shrubs and bushes.
     this.scatterShrubs(240);
     // Ground cover: dense grass tufts and ferns.
-    this.scatterGrass(4200);
+    this.scatterGrass(9000);
     // Forest-floor clutter.
     this.scatterClutter();
-
-    // ── Ambient wildlife particles ────────────────────────────────────────────
-    const COUNT = 600;
-    const positions = new Float32Array(COUNT * 3);
-    for (let i = 0; i < COUNT; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 220;
-      positions[i * 3 + 1] = Math.random() * 60 - 6;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 220;
-    }
-    const wlGeo = new THREE.BufferGeometry();
-    wlGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    this.wildlifeMat = new THREE.PointsMaterial({ color: 0x9ff0ff, size: 0.5, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true });
-    this.wildlife = new THREE.Points(wlGeo, this.wildlifeMat);
-    this.wildlife.frustumCulled = false;
-    this.root.add(this.wildlife);
-    this.fadeables.push(this.wildlifeMat);
 
     // ── Selectable biome-variant waypoints ────────────────────────────────────
     BIOME_VARIANTS.forEach((variant, i) => {
@@ -314,27 +293,6 @@ export class BiomeLayer implements SceneLayer {
       this.pickables.push(ring);
       this.root.add(ring);
     });
-
-    // ── Airborne atmosphere: the single strongest biome tell ──────────────────
-    // One reusable particle field that becomes mist, snow, sand, or spores. It is
-    // reconfigured (colour, size, motion) whenever the biome changes.
-    const ATMO = 1400;
-    const atmoPos = new Float32Array(ATMO * 3);
-    for (let i = 0; i < ATMO; i++) {
-      atmoPos[i * 3] = (Math.random() - 0.5) * 300;
-      atmoPos[i * 3 + 1] = GROUND_Y + Math.random() * 90;
-      atmoPos[i * 3 + 2] = (Math.random() - 0.5) * 300;
-    }
-    const atmoGeo = new THREE.BufferGeometry();
-    atmoGeo.setAttribute('position', new THREE.BufferAttribute(atmoPos, 3));
-    this.atmoMat = new THREE.PointsMaterial({
-      color: 0xbfe0d8, size: 1.2, transparent: true, opacity: 0,
-      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
-    });
-    this.atmo = new THREE.Points(atmoGeo, this.atmoMat);
-    this.atmo.frustumCulled = false;
-    this.root.add(this.atmo);
-    this.fadeables.push(this.atmoMat);
 
     // ── Real roaming wildlife (best-effort, with no fallback clutter) ──────────
     this.spawnAnimal('deer', 'organism:herbivore', 4, 40);
@@ -364,12 +322,6 @@ export class BiomeLayer implements SceneLayer {
       layer.mesh.count = Math.max(0, Math.round(layer.full * density));
     }
 
-    this.atmoMode = v.atmosphere;
-    if (this.atmoMat) {
-      this.atmoMat.color.setHex(v.atmoColor);
-      this.atmoMat.size = v.atmosphere === 'snow' ? 1.8 : v.atmosphere === 'sand' ? 0.8 : v.atmosphere === 'mist' ? 2.6 : 1.1;
-      this.atmoMat.opacity = 0; // re-faded in by update()
-    }
   }
 
   // ── construction helpers ────────────────────────────────────────────────────
@@ -501,9 +453,10 @@ export class BiomeLayer implements SceneLayer {
   }
 
   private scatterGrass(count: number): void {
-    // A slim, slightly curved blade reads as grass rather than a spike.
-    const geo = new THREE.ConeGeometry(0.09, 1.7, 3);
-    geo.translate(0, 0.85, 0);
+    // A short, slim blade — kept low and clustered densely so the ground reads as
+    // a real grassy floor rather than a field of sparse spikes.
+    const geo = new THREE.ConeGeometry(0.06, 1.05, 3);
+    geo.translate(0, 0.52, 0);
     const mat = this.windMaterial(0x4f9a3e, 0.95, 1.2, { flat: false });
     const grass = new THREE.InstancedMesh(geo, mat, count);
     const m = new THREE.Matrix4(); const q = new THREE.Quaternion(); const s = new THREE.Vector3(); const p = new THREE.Vector3();
@@ -598,19 +551,11 @@ export class BiomeLayer implements SceneLayer {
     // gently rather than sitting as a static slab.
     this.godRayMat.opacity = Math.min(this.godRayMat.opacity, this.intensity * this.rayStrength * (0.2 + 0.05 * Math.sin(elapsed * 0.6)));
     this.godRayGroup.rotateY(dt * 0.05);
-    this.updateAtmosphere(dt, elapsed);
     this.markerMats.forEach((mat, i) => {
       const pulse = 0.5 + 0.5 * Math.sin(elapsed * 1.5 + i);
-      mat.opacity = Math.min(mat.opacity, this.intensity * (0.35 + pulse * 0.45));
+      mat.opacity = Math.min(mat.opacity, this.intensity * (0.18 + pulse * 0.22));
     });
 
-    const pos = this.wildlife.geometry.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) {
-      let y = pos.getY(i) + dt * (1.2 + (i % 5) * 0.3);
-      if (y > 56) y = -6;
-      pos.setY(i, y);
-    }
-    pos.needsUpdate = true;
     for (const ring of this.markers) ring.rotation.z += dt * 0.4;
 
     // Roaming animals wander a slow circle and face their heading.
@@ -621,40 +566,6 @@ export class BiomeLayer implements SceneLayer {
       a.group.position.set(x, GROUND_Y + heightAt(x, z), z);
       a.group.rotation.y = -a.angle + Math.PI / 2;
     }
-  }
-
-  /** Drive the airborne particles according to the active biome's signature. */
-  private updateAtmosphere(dt: number, elapsed: number): void {
-    if (!this.atmo) return;
-    const pos = this.atmo.geometry.attributes.position as THREE.BufferAttribute;
-    const top = GROUND_Y + 90;
-    for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i); let y = pos.getY(i); let z = pos.getZ(i);
-      switch (this.atmoMode) {
-        case 'snow': // flakes fall and drift, recycling from the top
-          y -= dt * (6 + (i % 5));
-          x += Math.sin(elapsed * 0.6 + i) * dt * 1.2;
-          if (y < GROUND_Y) y = top;
-          break;
-        case 'sand': // sand blows fast and low across the dunes
-          x += dt * (26 + (i % 7) * 4);
-          y = GROUND_Y + 1 + ((y - GROUND_Y + Math.sin(elapsed + i) * 0.6) % 18 + 18) % 18;
-          if (x > 150) x = -150;
-          break;
-        case 'mist': // humid mist hangs low and rolls slowly
-          x += Math.sin(elapsed * 0.2 + i) * dt * 1.4;
-          z += Math.cos(elapsed * 0.18 + i) * dt * 1.4;
-          y = GROUND_Y + 2 + ((y - GROUND_Y + dt * 0.5) % 26);
-          break;
-        default: // spores / pollen / marine snow rise gently and wander
-          y += dt * (1.2 + (i % 4) * 0.4);
-          x += Math.sin(elapsed * 0.3 + i) * dt * 0.8;
-          if (y > top) y = GROUND_Y + 1;
-          break;
-      }
-      pos.setXYZ(i, x, y, z);
-    }
-    pos.needsUpdate = true;
   }
 
   getPickables(): THREE.Object3D[] {

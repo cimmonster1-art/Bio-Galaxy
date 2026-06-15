@@ -12,7 +12,6 @@ import { CosmosLayer } from './layers/CosmosLayer';
 import { SolarSystemLayer } from './layers/SolarSystemLayer';
 import { EarthLayer } from './layers/EarthLayer';
 import { BiomeLayer } from './layers/BiomeLayer';
-import { EcologyGlobeLayer } from './layers/EcologyGlobeLayer';
 import { TreeOfLifeLayer } from './layers/TreeOfLifeLayer';
 import { AnatomyModelLayer, ModelProvenance } from './layers/AnatomyModelLayer';
 import { TissueField } from './layers/TissueField';
@@ -51,7 +50,6 @@ export class BioGalaxyScene {
   private readonly cosmos: CosmosLayer;
   private readonly solarSystem: SolarSystemLayer;
   private readonly biome: BiomeLayer;
-  private readonly ecologyGlobe: EcologyGlobeLayer;
   private readonly tree: TreeOfLifeLayer;
   private readonly anatomy: AnatomyModelLayer;
   private readonly cell: CellScene;
@@ -108,7 +106,6 @@ export class BioGalaxyScene {
     this.cosmos = new CosmosLayer();
     this.solarSystem = new SolarSystemLayer();
     this.biome = new BiomeLayer();
-    this.ecologyGlobe = new EcologyGlobeLayer();
     this.tree = new TreeOfLifeLayer();
     this.anatomy = new AnatomyModelLayer();
     this.cell = new CellScene();
@@ -118,7 +115,6 @@ export class BioGalaxyScene {
       this.solarSystem,
       new EarthLayer(),
       this.biome,
-      this.ecologyGlobe,
       this.tree,
       this.anatomy,
       new TissueField(),
@@ -164,7 +160,6 @@ export class BioGalaxyScene {
     this.cell.setSelected(id);
     this.anatomy.setSelected(id);
     this.solarSystem.setSelected(id);
-    this.ecologyGlobe.setSelectedCity(id && id.startsWith('city:') ? id : null);
     if (id && id.startsWith('biome:')) this.biome.setVariant(id.replace(/^biome:/, ''));
     this.start();
   }

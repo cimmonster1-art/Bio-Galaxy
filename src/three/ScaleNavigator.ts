@@ -19,7 +19,6 @@ const SCALE_DISTANCE: Record<Scale, number> = {
   [Scale.SolarSystem]: 220,
   [Scale.Planet]: 95,
   [Scale.Biome]: 62,
-  [Scale.Ecosystem]: 50,
   [Scale.Organism]: 44,
   [Scale.OrganSystem]: 38,
   [Scale.Organ]: 30,

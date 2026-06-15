@@ -18,7 +18,7 @@ interface Group {
 // continuous physical journey from the cosmos to the atom.
 const GROUPS: Group[] = [
   { label: 'Cosmos', from: Scale.Cosmos, to: Scale.Planet },
-  { label: 'Living World', from: Scale.Biome, to: Scale.Ecosystem },
+  { label: 'Living World', from: Scale.Biome, to: Scale.Biome },
   { label: 'Anatomy', from: Scale.Organism, to: Scale.Tissue },
   { label: 'Cellular', from: Scale.Cell, to: Scale.Organelle },
   { label: 'Molecular', from: Scale.ProteinComplex, to: Scale.Atom },

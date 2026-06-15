@@ -651,7 +651,7 @@ function cityToBioObject(city: EcologyCity): BioObject {
   return {
     id: `city:${city.id}`,
     name: city.name,
-    scale: Scale.Ecosystem,
+    scale: Scale.Biome,
     kind: 'place',
     summary: city.summary,
     size: `${city.country} · ${city.lat.toFixed(2)}°, ${city.lon.toFixed(2)}° · Köppen ${city.climate.koppen}`,

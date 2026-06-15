@@ -44,13 +44,6 @@ export const SCALE_LEVELS: ScaleLevel[] = [
     unit: 'kilometers',
   },
   {
-    scale: Scale.Ecosystem,
-    name: 'Ecosystem',
-    magnitude: '~1 km',
-    blurb: 'A functioning network of organisms and the relationships that connect them.',
-    unit: 'meters',
-  },
-  {
     scale: Scale.Organism,
     name: 'Organism',
     magnitude: '~1 m',
@@ -199,7 +192,6 @@ export const PRIMARY_SCALES: Scale[] = [
   Scale.SolarSystem,
   Scale.Planet,
   Scale.Biome,
-  Scale.Ecosystem,
   Scale.Organism,
   Scale.OrganSystem,
   Scale.Organ,

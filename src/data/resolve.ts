@@ -162,7 +162,7 @@ const ECO_ORGANISMS: { id: string; name: string; summary: string }[] = [
 
 const ecosystemObjects: Record<string, BioObject> = {};
 for (const s of ECO_STRUCTURES) {
-  ecosystemObjects[`ecosystem:${s.id}`] = { id: `ecosystem:${s.id}`, name: s.name, scale: Scale.Ecosystem, kind: 'ecosystem', summary: s.summary, size: 'ecosystem component', facts: ['Part of a functioning ecological network.', 'Connected by energy, nutrient, and pollination flows.'], provenanceNote: ECO_NOTE };
+  ecosystemObjects[`ecosystem:${s.id}`] = { id: `ecosystem:${s.id}`, name: s.name, scale: Scale.Biome, kind: 'ecosystem', summary: s.summary, size: 'ecosystem component', facts: ['Part of a functioning ecological network.', 'Connected by energy, nutrient, and pollination flows.'], provenanceNote: ECO_NOTE };
 }
 for (const o of ECO_ORGANISMS) {
   ecosystemObjects[`organism:${o.id}`] = { id: `organism:${o.id}`, name: o.name, scale: Scale.Organism, kind: 'organism', summary: o.summary, size: 'organism scale', facts: ['Selecting it descends to the organism scale.', 'A node in the ecosystem interaction network.'], provenanceNote: ECO_NOTE };
