@@ -3,6 +3,7 @@ import { SCALE_LEVELS } from './scales';
 import { searchTaxa } from './taxonomy';
 import { BIO_OBJECTS } from './registry';
 import { ECOLOGY_CITIES } from './ecology';
+import { NAMED_STAR_INDEX, DEEP_SKY } from './celestial';
 
 export interface SearchResult {
   id: string;
@@ -63,6 +64,18 @@ export function searchAtlas(query: string, limit = 10): SearchResult[] {
       if (s.name.toLowerCase().includes(q) || s.scientific.toLowerCase().includes(q)) {
         results.push({ id: `organism:eco:${s.id}`, label: s.name, sublabel: `Species · ${city.name}`, scale: Scale.Organism });
       }
+    }
+  }
+
+  // Stars and deep-sky bodies from the celestial catalogue.
+  for (const d of DEEP_SKY) {
+    if (d.name.toLowerCase().includes(q)) {
+      results.push({ id: `deepsky:${d.id}`, label: d.name, sublabel: d.type, scale: d.kind === 'galaxy' ? Scale.Galaxy : Scale.Cosmos });
+    }
+  }
+  for (const star of NAMED_STAR_INDEX) {
+    if (star.name.toLowerCase().includes(q)) {
+      results.push({ id: star.id, label: star.name, sublabel: 'Star', scale: Scale.Galaxy });
     }
   }
 

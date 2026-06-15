@@ -51,6 +51,21 @@ export function contextualQuestions(context: CopilotContext): string[] {
       `Which databases record ${object.name}?`,
     ];
   }
+  // Stars and deep-sky bodies are grounded in the star catalogues.
+  if (object.kind === 'star') {
+    return [
+      `What kind of star is ${object.name}?`,
+      `How far away is ${object.name} and how bright is it?`,
+      `Which star catalogues record ${object.name}?`,
+    ];
+  }
+  if (object.kind === 'galaxy' || object.kind === 'cosmos') {
+    return [
+      `What is ${object.name}?`,
+      `How far away is ${object.name}?`,
+      `Which observatories and catalogues study ${object.name}?`,
+    ];
+  }
   return [
     `Explain ${object.name} from structure to function`,
     `How does ${object.name} connect to nearby biological scales?`,

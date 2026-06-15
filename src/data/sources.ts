@@ -174,6 +174,53 @@ export const DATA_SOURCES: Record<DataSourceId, DataSource> = {
       'Live encyclopedic summaries and Wikimedia Commons imagery for places, biomes, and species.',
     homepage: 'https://en.wikipedia.org',
   },
+
+  // ── Astronomy & star-catalogue sources ────────────────────────────────────
+  hyg: {
+    id: 'hyg',
+    name: 'HYG Database',
+    short: 'HYG',
+    domain: 'Bright-star catalogue',
+    description:
+      'A merged star catalogue (Hipparcos, Yale Bright Star, and Gliese) of positions, magnitudes, and spectral classes. CC BY-SA 4.0.',
+    homepage: 'https://github.com/astronexus/HYG-Database',
+  },
+  hipparcos: {
+    id: 'hipparcos',
+    name: 'Hipparcos',
+    short: 'Hipparcos',
+    domain: 'Astrometric star catalogue',
+    description:
+      'ESA’s Hipparcos mission catalogue: precise positions, parallaxes, and proper motions for ~118,000 stars.',
+    homepage: 'https://www.cosmos.esa.int/web/hipparcos',
+  },
+  gaia: {
+    id: 'gaia',
+    name: 'ESA Gaia',
+    short: 'Gaia',
+    domain: 'Galactic survey',
+    description:
+      'ESA’s Gaia mission: a three-dimensional survey of nearly two billion stars with positions, distances, and motions.',
+    homepage: 'https://www.cosmos.esa.int/web/gaia',
+  },
+  simbad: {
+    id: 'simbad',
+    name: 'SIMBAD',
+    short: 'SIMBAD',
+    domain: 'Astronomical object database',
+    description:
+      'CDS Strasbourg database of astronomical objects: identifiers, coordinates, classifications, and bibliography.',
+    homepage: 'https://simbad.cds.unistra.fr/simbad/',
+  },
+  esa: {
+    id: 'esa',
+    name: 'ESA',
+    short: 'ESA',
+    domain: 'Space science',
+    description:
+      'European Space Agency missions and science archives spanning planetary, stellar, and deep-space observation.',
+    homepage: 'https://www.esa.int',
+  },
 };
 
 export const DATA_SOURCE_ORDER: DataSourceId[] = [
@@ -197,6 +244,12 @@ export const DATA_SOURCE_ORDER: DataSourceId[] = [
   'ala',
   'wikidata',
   'wikipedia',
+  // Astronomy / star catalogues.
+  'hyg',
+  'hipparcos',
+  'gaia',
+  'simbad',
+  'esa',
 ];
 
 export function getSource(id: DataSourceId): DataSource {

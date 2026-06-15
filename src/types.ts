@@ -74,7 +74,13 @@ export type DataSourceId =
   | 'unep'
   | 'ala'
   | 'wikidata'
-  | 'wikipedia';
+  | 'wikipedia'
+  // ── Astronomy & star-catalogue sources (Cosmos / Galaxy scale) ──
+  | 'hyg'
+  | 'hipparcos'
+  | 'gaia'
+  | 'simbad'
+  | 'esa';
 
 export interface DataSource {
   id: DataSourceId;

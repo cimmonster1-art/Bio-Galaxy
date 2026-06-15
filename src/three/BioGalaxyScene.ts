@@ -9,6 +9,7 @@ import { PerformanceManager } from './core/PerformanceManager';
 import { PostFX } from './core/PostFX';
 import { createNebulaBackground } from './shaders/nebula';
 import { CosmosLayer } from './layers/CosmosLayer';
+import { StarFieldLayer } from './layers/StarFieldLayer';
 import { SolarSystemLayer } from './layers/SolarSystemLayer';
 import { EarthLayer } from './layers/EarthLayer';
 import { BiomeLayer } from './layers/BiomeLayer';
@@ -115,6 +116,7 @@ export class BioGalaxyScene {
     this.protein = new ProteinStructureLayer();
     this.layers = [
       this.cosmos,
+      new StarFieldLayer(),
       this.solarSystem,
       new EarthLayer(),
       this.biome,
