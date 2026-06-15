@@ -91,7 +91,7 @@ interface SceneHandle {
   loadOrgans: () => void;
   setLayerVisible: (key: LayerKey, visible: boolean) => void;
   setScale: (scale: number) => void;
-  setFocus: (key: string | null) => void;
+  setFocus: (keys: string[] | null) => void;
   resize: () => void;
   cleanup: () => void;
 }
@@ -234,15 +234,17 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     [Scale.OrganSystem]: 3.0,
     [Scale.Organ]: 2.0,
   };
-  // When no structure is selected, isolate something representative.
-  const DEFAULT_ISO: Record<number, string> = {
-    [Scale.OrganSystem]: 'skeleton',
-    [Scale.Organ]: 'heart',
+  // When no structure is selected, isolate something representative. Each entry
+  // is a SET of anatomy keys, so an organ system shows every mesh that belongs
+  // to it (e.g. the whole digestive tract), not just one stand-in organ.
+  const DEFAULT_ISO: Record<number, string[]> = {
+    [Scale.OrganSystem]: ['skeleton'],
+    [Scale.Organ]: ['heart'],
   };
   const focusCenter = BODY_CENTER.clone();
-  let focusKey: string | null = null;
+  let focusKeys: string[] | null = null;
   let curScale: number = Scale.Organism;
-  let isolationKey: string | null = null;
+  let isolationKeys: string[] | null = null;
   let desiredScaleDist = 4.6;
 
   /** Distance needed to frame a bounding sphere of the given radius. */
@@ -260,20 +262,20 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     skeletonGroup.visible = true;
     organsGroup.visible = true;
     for (const m of anatomyTargets) {
-      m.visible = isolationKey === null || m.userData.anatomyKey === isolationKey;
+      m.visible = isolationKeys === null || isolationKeys.includes(m.userData.anatomyKey as string);
     }
-    shadowCatcher.visible = isolationKey !== null;
+    shadowCatcher.visible = isolationKeys !== null;
   };
 
   /** Recompute the orbit pivot + dolly. In isolation mode (or with an explicit
    *  selection) frame the structure's bounding box; otherwise frame the body. */
   const recomputeFocus = () => {
-    const frameKey = isolationKey ?? focusKey;
-    if (frameKey) {
+    const frameKeys = isolationKeys ?? focusKeys;
+    if (frameKeys) {
       const box = new THREE.Box3();
       let found = false;
       for (const m of anatomyTargets) {
-        if (m.userData.anatomyKey !== frameKey || m.visible === false) continue;
+        if (!frameKeys.includes(m.userData.anatomyKey as string) || m.visible === false) continue;
         box.expandByObject(m);
         found = true;
       }
@@ -296,7 +298,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
    *  current scale + selection. */
   const updateMode = () => {
     const organScale = curScale === Scale.Organ || curScale === Scale.OrganSystem;
-    isolationKey = organScale ? (focusKey ?? DEFAULT_ISO[curScale] ?? 'heart') : null;
+    isolationKeys = organScale ? (focusKeys ?? DEFAULT_ISO[curScale] ?? ['heart']) : null;
     if (organScale) { loadSkeleton(); loadOrgans(); }
     applyVisibility();
     recomputeFocus();
@@ -307,8 +309,8 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
     desiredScaleDist = SCALE_DIST[scale] ?? 4.6;
     updateMode();
   };
-  const setFocus = (key: string | null) => {
-    focusKey = key;
+  const setFocus = (keys: string[] | null) => {
+    focusKeys = keys;
     // The skeleton/organs load lazily; make sure the structure is on its way.
     loadSkeleton(); loadOrgans();
     updateMode();
@@ -833,20 +835,21 @@ interface Props {
   className?: string;
 }
 
-/** Map an atlas record id → the coarse anatomy key its meshes are tagged with,
- *  so a selection can be framed in the model. */
-function focusKeyForId(id: string | null | undefined): string | null {
+/** Map an atlas record id → the set of coarse anatomy keys its meshes are tagged
+ *  with, so a selected organ system frames every structure it contains (the whole
+ *  nervous system, the whole digestive tract) rather than a single stand-in. */
+function focusKeysForId(id: string | null | undefined): string[] | null {
   if (!id) return null;
-  if (id.startsWith('organ:')) return id.slice('organ:'.length);
-  const SYSTEM_KEY: Record<string, string> = {
-    'system:skeletal': 'skeleton',
-    'system:nervous': 'nerves',
-    'system:muscular': 'muscles',
-    'system:digestive': 'intestines',
-    'system:respiratory': 'lungs',
-    'system:circulatory': 'heart',
+  if (id.startsWith('organ:')) return [id.slice('organ:'.length)];
+  const SYSTEM_KEYS: Record<string, string[]> = {
+    'system:skeletal': ['skeleton'],
+    'system:nervous': ['brain', 'nerves'],
+    'system:cardiovascular': ['heart'],
+    'system:respiratory': ['lungs'],
+    'system:digestive': ['liver', 'stomach', 'intestines', 'spleen', 'pancreas'],
+    'system:urinary': ['kidneys'],
   };
-  return SYSTEM_KEY[id] ?? null;
+  return SYSTEM_KEYS[id] ?? null;
 }
 
 /**
@@ -889,7 +892,7 @@ export const BodyExplorer3D: React.FC<Props> = ({ scale, selectedId, onSelect, o
 
   // Focus the camera on whatever organ / system is selected elsewhere.
   useEffect(() => {
-    sceneRef.current?.setFocus(focusKeyForId(selectedId));
+    sceneRef.current?.setFocus(focusKeysForId(selectedId));
   }, [selectedId, ready]);
 
   return (

@@ -17,7 +17,6 @@ function activeLayer(scale: Scale): string {
   if (scale === Scale.SolarSystem) return 'Solar System';
   if (scale === Scale.Planet) return 'Earth';
   if (scale === Scale.Biome) return 'Biome';
-  if (scale === Scale.Ecosystem) return 'Ecosystem';
   if (scale <= Scale.Organ) return 'Anatomy';
   if (scale === Scale.Tissue) return 'Tissue';
   if (scale <= Scale.Organelle) return 'Cell';

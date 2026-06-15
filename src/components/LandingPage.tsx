@@ -7,7 +7,7 @@ import { AttributionSection } from './AttributionSection';
 
 interface Props { onOpenAtlas: () => void; }
 const CREDIBILITY = DATA_SOURCE_ORDER.map((id) => getSource(id).name);
-const SCALE_STOPS = ['Cosmos', 'Solar system', 'Biome', 'Ecosystem', 'Anatomy', 'Cell', 'Atom'];
+const SCALE_STOPS = ['Cosmos', 'Solar system', 'Biome', 'Anatomy', 'Cell', 'Atom'];
 
 /** Landing page with a live scene, concise product detail, and full provenance. */
 export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {

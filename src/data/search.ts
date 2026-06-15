@@ -58,7 +58,7 @@ export function searchAtlas(query: string, limit = 10): SearchResult[] {
   // into life, reachable directly from search.
   for (const city of ECOLOGY_CITIES) {
     if (city.name.toLowerCase().includes(q) || city.country.toLowerCase().includes(q)) {
-      results.push({ id: `city:${city.id}`, label: city.name, sublabel: `Ecology · ${city.country}`, scale: Scale.Ecosystem });
+      results.push({ id: `city:${city.id}`, label: city.name, sublabel: `Ecology · ${city.country}`, scale: Scale.Biome });
     }
     for (const s of city.species) {
       if (s.name.toLowerCase().includes(q) || s.scientific.toLowerCase().includes(q)) {

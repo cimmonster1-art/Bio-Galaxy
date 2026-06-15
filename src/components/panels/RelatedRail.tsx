@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ChevronRight, ChevronUp, Layers } from 'lucide-react';
+import { ChevronRight, ChevronUp, Layers, X } from 'lucide-react';
 import { BioObject } from '../../types';
 import { SCALE_LEVELS } from '../../data/scales';
 import { relatedGroups } from '../../data/relations';
@@ -9,6 +9,8 @@ import { useAsync } from '../../hooks/useAsync';
 interface Props {
   selected: BioObject | null;
   onNavigate: (id: string) => void;
+  /** Dismiss the rail by clearing the current selection. */
+  onClose?: () => void;
 }
 
 // A short, human label for the descend relationship, so the rail header reads
@@ -83,13 +85,23 @@ const RailCard: React.FC<{ item: BioObject; onNavigate: (id: string) => void; up
  * No selection is a dead end: you can descend from an organ to the gene that
  * builds it, or climb from an atom up through chemistry into living biology.
  */
-export const RelatedRail: React.FC<Props> = ({ selected, onNavigate }) => {
+export const RelatedRail: React.FC<Props> = ({ selected, onNavigate, onClose }) => {
   const groups = useMemo(() => (selected ? relatedGroups(selected) : { up: [], down: [] }), [selected]);
   if (!selected || (groups.up.length === 0 && groups.down.length === 0)) return null;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-3 pb-3">
-      <div className="pointer-events-auto mx-auto max-w-[min(100%,72rem)] rounded-xl border border-white/10 bg-[#04070f]/85 p-2 backdrop-blur">
+      <div className="pointer-events-auto relative mx-auto max-w-[min(100%,72rem)] rounded-xl border border-white/10 bg-[#04070f]/85 p-2 pr-9 backdrop-blur">
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close related cards"
+            className="absolute right-1.5 top-1.5 z-10 grid h-7 w-7 place-items-center rounded-lg border border-white/10 bg-[#07101d]/85 text-slate-300 transition hover:border-cyan-300/50 hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
         {groups.up.length > 0 && (
           <div className="mb-1.5 border-b border-white/8 pb-1.5">
             <header className="mb-1 flex items-center gap-2 px-1">
