@@ -68,7 +68,10 @@ export class AnatomyModelLayer implements SceneLayer {
   private buildAtlas(): void {
     this.atlas.userData.pick = { id: `organism:${this.organismId}`, scale: Scale.Organism };
     this.pickables.push(this.atlas);
-    const skin = createMembraneMaterial({ color: '#478ca3', rimColor: '#70e5f2', opacity: 0.13, rimPower: 2.4 });
+    // Rim kept muted and the falloff tightened (higher rimPower) so the figure
+    // reads as a calm translucent skin rather than blooming into neon on
+    // low-DPR desktops, where the bright Fresnel edge otherwise over-blooms.
+    const skin = createMembraneMaterial({ color: '#3f7e91', rimColor: '#54a9bd', opacity: 0.1, rimPower: 3.0 });
     skin.side = THREE.DoubleSide;
     const body = this.atlasSurface;
 

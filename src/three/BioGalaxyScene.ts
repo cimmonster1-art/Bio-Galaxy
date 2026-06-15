@@ -78,7 +78,9 @@ export class BioGalaxyScene {
     this.renderer.setSize(width, height);
     this.renderer.setClearColor(0x02040a, 1);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
+    // Exposure kept at neutral 1.0 so the HDR bloom path doesn't push bright
+    // emissive/rim elements into a neon blowout on desktop.
+    this.renderer.toneMappingExposure = 1.0;
     // Soft contact shadows ground the biome's vegetation and the anatomy without
     // the hard edges that would break the atmospheric look.
     this.renderer.shadowMap.enabled = true;

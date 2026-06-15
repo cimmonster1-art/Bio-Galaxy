@@ -48,9 +48,9 @@ export class PostFX {
 
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(width, height),
-      0.42, // strength
+      0.28, // strength: restrained so bright rims don't bloom into neon on low-DPR desktops
       0.5, // radius
-      0.82, // threshold: only genuinely bright elements bloom
+      0.88, // threshold: only genuinely bright elements bloom
     );
     this.composer.addPass(this.bloom);
 
