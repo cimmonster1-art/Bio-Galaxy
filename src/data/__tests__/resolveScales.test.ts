@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { resolveObject } from '../resolve';
 import { searchAtlas } from '../search';
+import { relatedObjects, relatedGroups } from '../relations';
 import { Scale } from '../../types';
+
+const childIds = (id: string): string[] => relatedObjects(resolveObject(id)!).map((o) => o.id);
+const parentIds = (id: string): string[] => relatedGroups(resolveObject(id)!).up.map((o) => o.id);
 
 describe('atom navigation', () => {
   it('resolves any element by its atom: id with a live element symbol', () => {
@@ -51,5 +55,39 @@ describe('red blood cell navigation', () => {
 
   it('is reachable from search', () => {
     assert(searchAtlas('red blood cell').some((r) => r.id === 'cell:rbc'));
+  });
+});
+
+describe('navigable hierarchy for the new scales', () => {
+  it('descends red blood cell to haemoglobin, then heme, then the iron atom', () => {
+    assert(childIds('cell:rbc').includes('protein:hemoglobin'));
+    assert(childIds('protein:hemoglobin').includes('mol_heme'));
+    const heme = childIds('mol_heme');
+    assert(heme.includes('atom:Fe'));
+    // The whole chain resolves to real objects, not dead links.
+    for (const id of ['protein:hemoglobin', 'mol_heme', 'atom:Fe']) {
+      assert(resolveObject(id), `${id} should resolve`);
+    }
+  });
+
+  it('lets a red blood cell climb back into the cardiovascular system', () => {
+    assert(parentIds('cell:rbc').includes('system:cardiovascular'));
+  });
+
+  it('surfaces haemoglobin and heme from search by their alternate spellings', () => {
+    assert(searchAtlas('hemoglobin').some((r) => r.id === 'protein:hemoglobin'));
+    assert(searchAtlas('haemoglobin').some((r) => r.id === 'protein:hemoglobin'));
+    assert(searchAtlas('heme').some((r) => r.id === 'mol_heme'));
+  });
+
+  it('descends a named galaxy into stars and our Solar System', () => {
+    const kids = childIds('galaxy:andromeda');
+    assert(kids.includes('planet:sun'));
+    assert(kids.some((id) => id.startsWith('star:')));
+  });
+
+  it('keeps carbon connected whether reached as atom:C or the legacy id', () => {
+    assert(childIds('atom:C').includes('mol_methane'));
+    assert(childIds('atom_carbon').includes('mol_methane'));
   });
 });

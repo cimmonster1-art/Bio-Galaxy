@@ -23,7 +23,7 @@ const BIOME_MEMBERS = ['ecosystem:canopy', 'ecosystem:flowering', 'organism:poll
 const ORGAN_SYSTEMS = ['system:skeletal', 'system:nervous', 'system:cardiovascular', 'system:respiratory', 'system:digestive', 'system:urinary'];
 const SYSTEM_ORGANS: Record<string, string[]> = {
   'system:nervous': ['organ:brain'],
-  'system:cardiovascular': ['organ:heart'],
+  'system:cardiovascular': ['organ:heart', 'cell:rbc'],
   'system:respiratory': ['organ:lungs'],
   'system:digestive': ['organ:liver', 'organ:stomach', 'organ:intestines'],
   'system:urinary': ['organ:kidneys'],
@@ -73,6 +73,11 @@ const CONTAINS: Record<string, string[]> = {
   'region:alveolus': ['mol_oxygen'],
   'mol_oxygen': ['water_cluster'],
 
+  // Blood: red blood cell → haemoglobin → heme → iron atom (oxygen transport).
+  'cell:rbc': ['protein:hemoglobin', 'mol_oxygen'],
+  'protein:hemoglobin': ['mol_heme', 'mol_oxygen', 'atom:Fe'],
+  'mol_heme': ['atom:Fe', 'atom_carbon'],
+
   // Cell interior.
   mitochondrion: ['atp_synthase', 'cytochrome_c'],
   nucleus: ['dna_helix', 'ribosomes'],
@@ -99,9 +104,19 @@ for (const [parent, children] of Object.entries(CONTAINS)) {
   }
 }
 
+// The element resolver mints carbon as `atom:C`, but carbon's curated chemistry
+// chain (and the cross-links pointing back to it) all key off the legacy
+// `atom_carbon` id. Normalize so navigating either id lights up the same graph.
+const ATOM_ALIAS: Record<string, string> = { 'atom:C': 'atom_carbon' };
+const aliasId = (id: string): string => ATOM_ALIAS[id] ?? id;
+
+/** Stars and our Solar System sit inside any galaxy. */
+const GALAXY_MEMBERS = ['planet:sun', 'star:0', 'star:1', 'star:2', 'star:3', 'star:4'];
+
 /** Generic descend fallback by object kind, so most selections open onto more. */
 function genericChildren(object: BioObject): string[] {
   switch (object.kind) {
+    case 'galaxy': return GALAXY_MEMBERS;
     case 'planet': return PLANETS.filter((id) => id !== object.id);
     case 'star': {
       const i = Number(object.id.replace('star:', ''));
@@ -140,7 +155,7 @@ function childIds(object: BioObject): string[] {
       if (kids.length) return kids;
     }
   }
-  return CONTAINS[object.id] ?? genericChildren(object);
+  return CONTAINS[aliasId(object.id)] ?? genericChildren(object);
 }
 
 function parentIds(object: BioObject): string[] {
@@ -149,7 +164,7 @@ function parentIds(object: BioObject): string[] {
     const parent = lineage.at(-2);
     return parent ? [`taxon:${parent.id}`] : [];
   }
-  return PARENTS[object.id] ?? genericParents(object);
+  return PARENTS[aliasId(object.id)] ?? genericParents(object);
 }
 
 function resolveAll(ids: string[], excludeId: string, limit: number): BioObject[] {
