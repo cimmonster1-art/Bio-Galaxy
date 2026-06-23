@@ -22,6 +22,14 @@ const ANATOMY: SearchResult[] = [
   { id: 'cell:rbc', label: 'Red blood cell', sublabel: 'Cell · erythrocyte', scale: Scale.Cell },
 ];
 
+// Marquee cross-scale objects that anchor a signature traversal but live outside
+// the registry; surfaced here with their alternate spellings so a search lands
+// directly on the curated, navigable record.
+const MARQUEE: { id: string; label: string; sublabel: string; scale: Scale; terms: string[] }[] = [
+  { id: 'protein:hemoglobin', label: 'Haemoglobin', sublabel: 'Protein complex · oxygen transport', scale: Scale.ProteinComplex, terms: ['haemoglobin', 'hemoglobin', 'hgb', 'hb'] },
+  { id: 'mol_heme', label: 'Heme B', sublabel: 'Molecule · iron porphyrin', scale: Scale.Molecule, terms: ['heme', 'haem', 'heme b', 'protoheme'] },
+];
+
 /**
  * Search across the whole atlas: the Tree of Life, curated subcellular objects,
  * and anatomy. Returns a ranked, capped list keyed by resolver id so a result
@@ -55,6 +63,12 @@ export function searchAtlas(query: string, limit = 10): SearchResult[] {
 
   for (const item of ANATOMY) {
     if (item.label.toLowerCase().includes(q)) results.push(item);
+  }
+
+  for (const item of MARQUEE) {
+    if (item.terms.some((t) => t === q || t.includes(q))) {
+      results.push({ id: item.id, label: item.label, sublabel: item.sublabel, scale: item.scale });
+    }
   }
 
   // Earth Ecology Explorer cities and their key species are entry points

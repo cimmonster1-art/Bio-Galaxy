@@ -188,4 +188,27 @@ export const SCIENCE_OBJECTS: Record<string, BioObject> = {
       'Also acts as a neurotransmitter in the spinal cord.',
     ], source: 'pubchem', pubchemCid: 750, crossRefs: ['uniprot'], provenanceNote: 'Chemical identity from PubChem (CID 750).',
   },
+
+  // ── Blood: red blood cell → haemoglobin → heme → iron ────────────────────────
+  // The oxygen-transport chain, descending from a whole cell to a single metal
+  // atom, with a live experimental structure at the protein rung.
+  'protein:hemoglobin': {
+    id: 'protein:hemoglobin', name: 'Haemoglobin', scale: Scale.ProteinComplex, kind: 'complex',
+    summary: 'The four-subunit oxygen-carrying protein that fills every red blood cell, binding oxygen at its four iron-bearing heme groups.',
+    size: '~64 kDa tetramer', facts: [
+      'Two alpha and two beta globin chains, each cradling one heme.',
+      'Switches shape between oxygen-bound and oxygen-free states.',
+      'Carries roughly a billion oxygen molecules per red cell.',
+    ], source: 'rcsb', crossRefs: ['uniprot', 'alphafold', 'ncbi'],
+    accession: 'P69905', pdbId: '1HHO', alphafoldId: 'P69905',
+  },
+  'mol_heme': {
+    id: 'mol_heme', name: 'Heme B', scale: Scale.Molecule, kind: 'molecule',
+    summary: 'The iron-bearing porphyrin ring at the heart of haemoglobin, where a single iron atom reversibly binds one oxygen molecule.',
+    size: '~1 nm', facts: [
+      'A flat porphyrin ring of carbon and nitrogen holding one iron ion.',
+      'The iron is the actual site where oxygen attaches.',
+      'Also the cofactor of myoglobin and many cytochromes.',
+    ], source: 'pubchem', pubchemCid: 444098, crossRefs: ['reactome'], provenanceNote: 'Chemical identity from PubChem (CID 444098).',
+  },
 };
