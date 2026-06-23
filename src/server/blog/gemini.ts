@@ -29,6 +29,9 @@ const ANGLES = [
   'why a key-free, public-data approach lowers the barrier to exploring biology',
   'how the search bar previews organisms, molecules, and structures instantly',
   'connecting genomics, pathways, and expression data into one continuous map',
+  'what it means to be Google Earth for the natural sciences rather than a database browser',
+  'why searching for a physical thing should return the object itself, not a list of links',
+  'navigating a continuous hierarchy from a galaxy down to a single atom',
 ];
 
 function pickAngle(seed: number): string {
