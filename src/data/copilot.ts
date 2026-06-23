@@ -1,7 +1,12 @@
 import { BioObject, DataSourceId, Scale } from '../types';
 import { SCALE_LEVELS } from './scales';
 import { allResolvedObjects } from './resolve';
+import { relatedGroups } from './relations';
 import { DATA_SOURCES, DATA_SOURCE_ORDER } from './sources';
+
+const scaleName = (scale: Scale): string => SCALE_LEVELS[scale].name.toLowerCase();
+const objectList = (objects: BioObject[]): string =>
+  objects.map((object) => `${object.name} (${scaleName(object.scale)})`).join(', ');
 
 export interface CopilotContext {
   scale: Scale;
@@ -67,7 +72,18 @@ export function contextualQuestions(context: CopilotContext): string[] {
 
 export function contextualStops(context: CopilotContext, limit = 3): BioObject[] {
   const focus = observedObject(context);
-  return rankObjects('', context, focus).filter((object) => object.id !== focus?.id).slice(0, limit);
+  // Prefer the true navigation graph: descend first, then ascend, so suggested
+  // stops are exactly the records a click would open. Fall back to ranking.
+  if (focus) {
+    const graph = relatedGroups(focus);
+    const neighbours = [...graph.down, ...graph.up];
+    const seen = new Set<string>([focus.id]);
+    const stops = neighbours.filter((object) => !seen.has(object.id) && seen.add(object.id));
+    if (stops.length >= limit) return stops.slice(0, limit);
+    const filler = rankObjects('', context, focus).filter((object) => !seen.has(object.id));
+    return [...stops, ...filler].slice(0, limit);
+  }
+  return rankObjects('', context, focus).slice(0, limit);
 }
 
 export function answerQuestion(query: string, context: CopilotContext): CopilotAnswer {
@@ -89,21 +105,38 @@ export function answerQuestion(query: string, context: CopilotContext): CopilotA
     };
   }
 
-  const related = matches.filter((object) => object.id !== primary.id).slice(0, 3);
+  // Connections are grounded in the real navigation graph, not a heuristic, so
+  // the copilot names exactly the records a click would take you to.
+  const graph = relatedGroups(primary);
+  const up = graph.up.slice(0, 3);
+  const down = graph.down.slice(0, 4);
+  const queryRelated = matches.filter((object) => object.id !== primary.id).slice(0, 3);
+  // Sources reflect everything cited: the focus, the query matches, and the graph.
+  const citedSources = collectSources([primary, ...matches, ...up, ...down]);
+
+  const connectionBits: string[] = [];
+  if (up.length) connectionBits.push(`it is part of ${objectList(up)}`);
+  if (down.length) connectionBits.push(`it contains or connects to ${objectList(down)}`);
+  const connections = connectionBits.length
+    ? `Within the atlas graph, ${connectionBits.join(', and ')}. Each of these is itself a navigable, source-cited record, so the view never dead-ends.`
+    : queryRelated.length
+      ? `The closest records in the corpus are ${objectList(queryRelated)}, which place this view in a wider structural and functional context.`
+      : `This record is interpreted against the neighboring ${scaleName(Math.max(0, primary.scale - 1) as Scale)} and ${scaleName(Math.min(SCALE_LEVELS.length - 1, primary.scale + 1) as Scale)} scales.`;
+
   const paragraphs = [
-    `${primary.name} is shown at the ${SCALE_LEVELS[primary.scale].name.toLowerCase()} scale. ${primary.summary} Its recorded size or scope is ${primary.size}.`,
+    `${primary.name} is shown at the ${scaleName(primary.scale)} scale. ${primary.summary} Its recorded size or scope is ${primary.size}.`,
     explainMechanism(primary),
-    related.length
-      ? `In the atlas corpus, the closest connected records are ${related.map((object) => `${object.name} (${SCALE_LEVELS[object.scale].name.toLowerCase()})`).join(', ')}. These links place the current view in a wider structural and functional context.`
-      : `This record is interpreted against the neighboring ${SCALE_LEVELS[Math.max(0, primary.scale - 1) as Scale].name.toLowerCase()} and ${SCALE_LEVELS[Math.min(SCALE_LEVELS.length - 1, primary.scale + 1) as Scale].name.toLowerCase()} scales.`,
-    `Evidence coverage is assembled from the atlas corpus across ${sourceNames(sources)}. Source coverage describes what the atlas can substantiate; it is not a claim that every open biological record has been loaded into this view.`,
+    connections,
+    `Evidence coverage is assembled from the atlas corpus across ${sourceNames(citedSources.length ? citedSources : sources)}. Source coverage describes what the atlas can substantiate; it is not a claim that every open biological record has been loaded into this view.`,
   ];
 
+  // Lead evidence with the focus facts, then the actual graph neighbours.
+  const neighbourEvidence = [...down, ...up].slice(0, 2).map((object) => `${object.name}: ${object.summary}`);
   return {
     title: primary.name,
     paragraphs,
-    evidence: [...primary.facts, ...related.slice(0, 2).map((object) => `${object.name}: ${object.summary}`)].slice(0, 6),
-    sources: sources.length ? sources : DATA_SOURCE_ORDER,
+    evidence: [...primary.facts, ...neighbourEvidence].slice(0, 6),
+    sources: citedSources.length ? citedSources : sources.length ? sources : DATA_SOURCE_ORDER,
   };
 }
 
