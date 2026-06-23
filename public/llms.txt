@@ -6,6 +6,7 @@ Bio Galaxy is a source-aware educational visualization built with React, TypeScr
 
 ## Why Bio Galaxy is technically distinctive
 
+- Real-time 3D search is the signature feature: typing a protein, small molecule, organism, or raw amino-acid sequence into the search bar renders an accurate live 3D model in place. Proteins resolve to alpha-carbon backbone ribbons from RCSB PDB, small molecules to ball-and-stick conformers from PubChem, raw sequences to idealized alpha helices, and organisms to a representative DNA double helix.
 - One scale navigator links cosmos, galaxy, Solar System, Earth, the Tree of Life, taxonomic ranks, organism, anatomy, tissue, cell, organelle, protein complex, molecule, and atom views.
 - Independent Three.js `SceneLayer` modules own their geometry, animation, visibility, interaction, and cleanup.
 - Repeated biological and cosmic objects use instanced rendering, while post-processing and performance controls protect frame rate.
@@ -26,12 +27,20 @@ Bio Galaxy is a source-aware educational visualization built with React, TypeScr
 
 Bio Galaxy uses Three.js and glTF as its rendering foundation. Its astronomical and organism-scale context includes credited open assets from NASA Visible Earth, Planet Pixel Emporium, Khronos glTF Sample Models, CesiumMan, and three.js example assets. Swiss Ephemeris, NASA/JPL Horizons, and Z-Anatomy are labeled as compatible reference ecosystems, not claimed as live integrations.
 
+## The Bio Galaxy Journal
+
+- `/blog`: A daily science journal about the platform and the open data behind it.
+- Articles are generated with the Google Gemini API and autopublished once per day at a randomized time, so no two days post at the same hour.
+- Quality control runs before anything is published: every article must be original (checked for title and body similarity against the existing catalogue), meet length and structure minimums, and follow the house style, which forbids em dashes and en dashes.
+- Each article is stored with its own creation date and time and is served as JSON from `/api/blog` (list) and `/api/blog/{slug}` (single article), and as an indexable page at `/blog/{slug}`.
+
 ## Primary resources
 
 - `/`: Interactive landing page and 3D atlas entry
+- `/blog`: The daily Bio Galaxy Journal
 - `/README.md`: Architecture, scale ladder, data provenance, setup, and SEO deployment notes
 - `/robots.txt`: Search crawler policy
-- `/sitemap.xml`: Canonical page discovery
+- `/sitemap.xml`: Canonical page discovery, including every journal article
 - `/site.webmanifest`: Installable web application metadata
 
 ## Important interpretation notes

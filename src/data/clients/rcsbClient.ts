@@ -118,6 +118,64 @@ function normalizeElement(el: string): string {
   return el.charAt(0).toUpperCase() + el.slice(1).toLowerCase();
 }
 
+/** An ordered alpha-carbon backbone, split per polypeptide chain. Raw angstroms. */
+export interface BackboneTrace {
+  pdbId: string;
+  /** One polyline of CA coordinates per chain, in residue order. */
+  chains: AtomCoord[][];
+  /** Total alpha-carbon count across all chains. */
+  residueCount: number;
+}
+
+/**
+ * Fetch a structure's alpha-carbon backbone from open PDB coordinates and group
+ * it into ordered per-chain polylines. This is the data a smooth ribbon/tube
+ * trace renders from — the standard, legible way to show a whole protein fold.
+ */
+export async function fetchBackboneTrace(
+  pdbId: string,
+  opts: RequestOptions = {},
+): Promise<BackboneTrace> {
+  const text = await getText(structureFileUrl(pdbId), {
+    cacheMs: 30 * 60_000,
+    retries: 2,
+    timeoutMs: 12000,
+    ...opts,
+  });
+  const chains = parseBackbone(text);
+  const residueCount = chains.reduce((total, chain) => total + chain.length, 0);
+  return { pdbId: pdbId.toUpperCase(), chains, residueCount };
+}
+
+/** Parse ordered alpha-carbon (CA) atoms per chain, ignoring alternate locations. */
+function parseBackbone(text: string): AtomCoord[][] {
+  const byChain = new Map<string, AtomCoord[]>();
+  const seen = new Set<string>();
+  let model = 0;
+  for (const line of text.split('\n')) {
+    if (line.startsWith('ENDMDL')) {
+      model += 1;
+      if (model >= 1) break; // First model only, for NMR ensembles.
+    }
+    if (!line.startsWith('ATOM')) continue;
+    if (line.slice(12, 16).trim() !== 'CA') continue;
+    const altLoc = line.slice(16, 17).trim();
+    if (altLoc && altLoc !== 'A') continue;
+    const chainId = line.slice(21, 22).trim() || '_';
+    const resKey = `${chainId}:${line.slice(22, 27).trim()}`;
+    if (seen.has(resKey)) continue;
+    seen.add(resKey);
+    const x = Number.parseFloat(line.slice(30, 38));
+    const y = Number.parseFloat(line.slice(38, 46));
+    const z = Number.parseFloat(line.slice(46, 54));
+    if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(z)) continue;
+    const chain = byChain.get(chainId) ?? [];
+    chain.push({ element: 'C', x, y, z });
+    if (!byChain.has(chainId)) byChain.set(chainId, chain);
+  }
+  return Array.from(byChain.values()).filter((chain) => chain.length >= 2);
+}
+
 /** Center coordinates on their centroid and scale to a target radius. */
 function normalize(atoms: AtomCoord[], targetRadius: number): void {
   if (atoms.length === 0) return;

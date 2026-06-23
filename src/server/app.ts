@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createServer as createViteServer } from 'vite';
 import { scienceProxy } from './scienceProxy';
+import { blogRouter } from './blog/routes';
 import { getSiteUrl, injectAbsoluteSeoUrls, robotsTxt, sitemapXml } from './seo';
 
 /** Build the web application without opening a port, so it can be tested and embedded. */
@@ -16,7 +17,9 @@ export async function createApp(): Promise<Express> {
   app.use('/api', (_req, res, next) => {
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
     next();
-  }, scienceProxy());
+  });
+  app.use('/api/blog', blogRouter());
+  app.use('/api', scienceProxy());
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
