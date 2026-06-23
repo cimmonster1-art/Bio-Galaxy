@@ -60,6 +60,8 @@ export const GlobalSearch: React.FC<Props> = ({ onSelect }) => {
     if (preview.kind === 'ballstick') return 'Ball-and-stick conformer';
     if (preview.kind === 'peptide') return 'Idealized α-helix';
     if (preview.kind === 'dna') return 'DNA double helix';
+    if (preview.kind === 'atom') return 'Bohr atomic model';
+    if (preview.kind === 'galaxy') return 'Spiral galaxy';
     if (preview.kind === 'star') return 'Stellar model';
     if (preview.kind === 'planet') return 'Planetary body';
     return 'Atlas object';
