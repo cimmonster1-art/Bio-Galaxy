@@ -1,12 +1,13 @@
 # Bio Galaxy
 
-> Bio Galaxy is an open-source, interactive 3D biological atlas that connects 22 scales from the observable cosmos to individual atoms through one continuous spatial interface.
+> Bio Galaxy is Google Earth for the natural sciences: an open-source interface where you search any physical thing, from a galaxy to an atom, and it renders in real-time 3D with source-cited context, across 22 connected scales from the observable cosmos to individual atoms.
 
-Bio Galaxy is a source-aware educational visualization built with React, TypeScript, Three.js, and WebGL. It combines purpose-built scene layers with typed clients for respected public scientific databases. The result is an explorable map of biological context rather than a collection of disconnected diagrams.
+Bio Galaxy is a source-aware educational visualization built with React, TypeScript, Three.js, and WebGL. It combines purpose-built scene layers with typed clients for respected public scientific databases. Instead of returning documents, PDFs, or database rows, a search returns the object itself as an explorable 3D scene: a galaxy, a planet, a city, a biome, an organism, an organ, a cell, an organelle, a protein, a molecule, an atom. The result is a navigable map of scientific reality rather than a collection of disconnected diagrams.
 
 ## Why Bio Galaxy is technically distinctive
 
-- Real-time 3D search is the signature feature: typing a protein, small molecule, organism, or raw amino-acid sequence into the search bar renders an accurate live 3D model in place. Proteins resolve to alpha-carbon backbone ribbons from RCSB PDB, small molecules to ball-and-stick conformers from PubChem, raw sequences to idealized alpha helices, and organisms to a representative DNA double helix.
+- Search anything physical is the headline idea: a galaxy, planet, city, organism, organ, cell, organelle, protein, molecule, or atom each resolves into a navigable 3D object with scientific context, not a list of links.
+- Real-time 3D search is the signature feature: typing a protein, small molecule, organism, star, planet, or raw amino-acid sequence into the search bar renders an accurate live 3D model in place. Proteins resolve to alpha-carbon backbone ribbons from RCSB PDB, small molecules to ball-and-stick conformers from PubChem, raw sequences to idealized alpha helices, organisms to a representative DNA double helix, and stars and planets to scientifically tinted bodies.
 - One scale navigator links cosmos, galaxy, Solar System, Earth, the Tree of Life, taxonomic ranks, organism, anatomy, tissue, cell, organelle, protein complex, molecule, and atom views.
 - Independent Three.js `SceneLayer` modules own their geometry, animation, visibility, interaction, and cleanup.
 - Repeated biological and cosmic objects use instanced rendering, while post-processing and performance controls protect frame rate.
