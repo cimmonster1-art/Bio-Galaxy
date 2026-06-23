@@ -58,4 +58,30 @@ describe('instantPreview resolution', () => {
     const model = instantPreview('ACDEFGHIK', undefined);
     assert.equal(model?.kind, 'peptide');
   });
+
+  it('renders any element, not just carbon, with the right proton count', () => {
+    const oganesson = instantPreview('oganesson', undefined);
+    assert.equal(oganesson?.kind, 'atom');
+    if (oganesson?.kind === 'atom') assert.equal(oganesson.protons, 118);
+    const iron = instantPreview('Fe', undefined);
+    assert.equal(iron?.kind, 'atom');
+    if (iron?.kind === 'atom') assert.equal(iron.protons, 26);
+  });
+
+  it('renders an atom for a prefixed atom result id', () => {
+    const result: SearchResult = { id: 'atom:O', label: 'Oxygen atom', sublabel: 'Element', scale: 13 as never };
+    const model = instantPreview('breath', result);
+    assert.equal(model?.kind, 'atom');
+    if (model?.kind === 'atom') assert.equal(model.protons, 8);
+  });
+
+  it('renders a mitochondrion as an organelle', () => {
+    assert.equal(instantPreview('mitochondrion', undefined)?.kind, 'organelle');
+    assert.equal(instantPreview('mitochondria', undefined)?.kind, 'organelle');
+  });
+
+  it('renders a red blood cell as a biconcave disk', () => {
+    assert.equal(instantPreview('red blood cell', undefined)?.kind, 'rbc');
+    assert.equal(instantPreview('erythrocyte', undefined)?.kind, 'rbc');
+  });
 });

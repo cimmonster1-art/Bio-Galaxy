@@ -159,6 +159,8 @@ function buildModel(group: THREE.Group, model: PreviewModel): ((dt: number, t: n
     case 'dna': return buildDna(group);
     case 'atom': return buildAtom(group, model.protons, model.symbol);
     case 'galaxy': return buildGalaxy(group);
+    case 'organelle': return buildMitochondrion(group);
+    case 'rbc': return buildRedBloodCell(group);
     case 'star': return buildStar(group, model.color);
     case 'planet': return buildPlanet(group, model.color);
     case 'cell': return buildCell(group);
@@ -468,6 +470,81 @@ function buildGalaxy(group: THREE.Group): (dt: number, t: number) => void {
     }
     pos.needsUpdate = true;
   };
+}
+
+/**
+ * A mitochondrion: an outer membrane capsule wrapping a folded inner membrane
+ * whose cristae are the deep infoldings where ATP is made. The cristae are a row
+ * of half-tori threaded along the long axis, and the whole organelle breathes
+ * gently to read as living tissue rather than a static prop.
+ */
+function buildMitochondrion(group: THREE.Group): (dt: number, t: number) => void {
+  const LEN = 11, RAD = 4.4;
+  // Outer membrane: a translucent stadium-shaped capsule (stretched sphere).
+  const outer = new THREE.Mesh(
+    new THREE.SphereGeometry(RAD, 48, 32),
+    new THREE.MeshPhysicalMaterial({ color: '#c4623f', transparent: true, opacity: 0.22, roughness: 0.4, transmission: 0.5, thickness: 2, side: THREE.DoubleSide }),
+  );
+  outer.scale.set(LEN / (2 * RAD), 1, 1);
+  group.add(outer);
+  // Inner matrix: a warmer, denser core.
+  const inner = new THREE.Mesh(
+    new THREE.SphereGeometry(RAD * 0.82, 40, 28),
+    new THREE.MeshStandardMaterial({ color: '#e0884c', emissive: '#3a1606', emissiveIntensity: 0.4, roughness: 0.6, transparent: true, opacity: 0.5 }),
+  );
+  inner.scale.set(LEN / (2 * RAD) * 0.92, 0.92, 0.92);
+  group.add(inner);
+
+  // Cristae: shelf-like infoldings of the inner membrane along the long axis.
+  const cristaMat = new THREE.MeshStandardMaterial({ color: '#f0a35c', emissive: '#5a2408', emissiveIntensity: 0.5, roughness: 0.5, side: THREE.DoubleSide, transparent: true, opacity: 0.92 });
+  const cristae: THREE.Mesh[] = [];
+  const n = 9;
+  for (let i = 0; i < n; i++) {
+    const f = (i / (n - 1)) * 2 - 1; // -1..1 along the axis
+    const x = f * (LEN / 2 - 1.6);
+    const r = RAD * 0.74 * Math.sqrt(Math.max(0.05, 1 - f * f * 0.85));
+    const crista = new THREE.Mesh(new THREE.TorusGeometry(r, 0.32, 10, 40, Math.PI * 1.3), cristaMat);
+    crista.position.x = x;
+    crista.rotation.y = Math.PI / 2;
+    crista.rotation.z = (i % 2 ? 1 : -1) * 0.5;
+    group.add(crista);
+    cristae.push(crista);
+  }
+  return (_dt, t) => {
+    const s = 1 + Math.sin(t * 1.1) * 0.025;
+    outer.scale.y = s; outer.scale.z = s;
+  };
+}
+
+/**
+ * A red blood cell: the signature biconcave disk, built as a lathe of the
+ * erythrocyte cross-section so the dimpled centre and rounded rim are real
+ * geometry, with a faint haemoglobin-tinted sheen.
+ */
+function buildRedBloodCell(group: THREE.Group): null {
+  // Cross-section profile (radius r) from centre to rim; dimpled in the middle.
+  const profile: THREE.Vector2[] = [];
+  const R = 7.5;
+  const steps = 24;
+  for (let i = 0; i <= steps; i++) {
+    const r = (i / steps) * R;
+    const u = r / R;
+    // Biconcave thickness: thin at centre, bulge near rim, taper to edge.
+    const thick = (0.9 + 2.6 * Math.pow(u, 2.2) - 1.7 * Math.pow(u, 6)) * (1 - Math.pow(u, 10));
+    profile.push(new THREE.Vector2(r, thick));
+  }
+  // Mirror to the lower half so the lathe closes top and bottom.
+  const full = [
+    ...profile.map((p) => new THREE.Vector2(p.x, p.y)),
+    ...profile.slice().reverse().map((p) => new THREE.Vector2(p.x, -p.y)),
+  ];
+  const geo = new THREE.LatheGeometry(full, 64);
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshPhysicalMaterial({ color: '#c0303a', emissive: '#3a0608', emissiveIntensity: 0.35, roughness: 0.32, clearcoat: 0.6, clearcoatRoughness: 0.4, sheen: 1, sheenColor: new THREE.Color('#ff8a8a') });
+  const cell = new THREE.Mesh(geo, mat);
+  cell.rotation.x = Math.PI / 2.6;
+  group.add(cell);
+  return null;
 }
 
 /** A luminous star: emissive core plus an additive corona sprite. */

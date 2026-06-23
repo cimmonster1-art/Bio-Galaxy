@@ -5,6 +5,8 @@ import { ecologyObjects } from './ecology';
 import { SCIENCE_OBJECTS } from './science';
 import { STAR_OBJECTS } from './stars';
 import { TaxonNode, allTaxa, lineageOf } from './taxonomy';
+import { ELEMENTS, elementBySymbol } from './elements';
+import { NAMED_GALAXIES } from './galaxies';
 
 // Resolves a pick id coming from any scene layer into a full BioObject.
 //
@@ -168,16 +170,53 @@ for (const o of ECO_ORGANISMS) {
   ecosystemObjects[`organism:${o.id}`] = { id: `organism:${o.id}`, name: o.name, scale: Scale.Organism, kind: 'organism', summary: o.summary, size: 'organism scale', facts: ['Selecting it descends to the organism scale.', 'A node in the ecosystem interaction network.'], provenanceNote: ECO_NOTE };
 }
 
-// Cosmic structures clickable at the largest scales.
+// Cosmic structures clickable at the largest scales. Alongside the procedural
+// stand-ins, every named galaxy resolves to its own object so a search for
+// "Andromeda" lands on real distance, diameter, and morphology context.
 const cosmicStructures: Record<string, BioObject> = {
   cosmos: { id: 'cosmos', name: 'Observable Universe', scale: Scale.Cosmos, kind: 'cosmos', summary: 'The cosmic web of galaxy filaments, clusters, and voids spanning the observable universe.', size: '~93 billion light-years across', facts: ['Matter is organized into filaments and clusters separated by vast voids.', 'Structure traces the underlying dark-matter scaffold.'], provenanceNote: 'Procedural large-scale-structure visualization.' },
   galaxy: { id: 'galaxy', name: 'Spiral Galaxy', scale: Scale.Galaxy, kind: 'galaxy', summary: 'A spiral galaxy of hundreds of billions of stars with a bright core and winding arms.', size: '~100,000 light-years across', facts: ['A dense bulge surrounds the central core.', 'Spiral arms are sites of active star formation.'], provenanceNote: 'Procedural galaxy visualization.' },
 };
 
-// A representative atom (carbon), clickable at the deepest scale. Its live
-// periodic-table data is pulled from PubChem.
+// Named galaxies (Milky Way, Andromeda, ...) as navigable objects.
+const galaxyObjects: Record<string, BioObject> = {};
+for (const g of NAMED_GALAXIES) {
+  galaxyObjects[`galaxy:${g.id}`] = {
+    id: `galaxy:${g.id}`, name: g.name, scale: Scale.Galaxy, kind: 'galaxy',
+    summary: g.summary, size: `${g.diameter} across · ${g.distance} away`, facts: g.facts,
+    provenanceNote: `${g.morphology}. Procedural spiral render; figures from public astronomical catalogues.`,
+  };
+}
+
+// Atoms at the deepest scale. Carbon keeps its hand-written context; every other
+// element resolves on demand to a schematic atom whose live periodic-table data
+// (mass, configuration, electronegativity, ...) is pulled from PubChem by symbol.
+const CARBON: BioObject = { id: 'atom:C', name: 'Carbon atom', scale: Scale.Atom, kind: 'atom', summary: 'A dense nucleus of protons and neutrons surrounded by orbiting electrons, carbon, the scaffold of organic life.', size: '~140 pm (covalent radius)', facts: ['Nearly all the mass sits in the tiny nucleus.', 'Electrons occupy quantized orbital shells.', 'Four valence electrons let carbon form the backbone of every biomolecule.'], element: 'C', source: 'pubchem', provenanceNote: 'Schematic atomic model; element data from PubChem.' };
+
+/** Build a schematic atom object for any element symbol. */
+function atomObject(symbol: string): BioObject | undefined {
+  const el = elementBySymbol(symbol);
+  if (!el) return undefined;
+  if (el.symbol === 'C') return CARBON;
+  const name = `${el.name.charAt(0).toUpperCase()}${el.name.slice(1)} atom`;
+  return {
+    id: `atom:${el.symbol}`, name, scale: Scale.Atom, kind: 'atom',
+    summary: `A ${el.name} atom: a dense nucleus of ${el.protons} protons with neutrons, surrounded by ${el.protons} electrons in quantized shells.`,
+    size: `Z = ${el.protons}`,
+    facts: ['Nearly all the mass sits in the tiny nucleus.', 'Electrons occupy quantized orbital shells.', `Atomic number ${el.protons}: ${el.protons} protons define the element.`],
+    element: el.symbol, source: 'pubchem', provenanceNote: 'Schematic atomic model; element data from PubChem.',
+  };
+}
+
+// Carbon is indexed eagerly (relations reference it); the rest resolve lazily.
 const atomObjects: Record<string, BioObject> = {
-  atom_carbon: { id: 'atom_carbon', name: 'Carbon atom', scale: Scale.Atom, kind: 'atom', summary: 'A dense nucleus of protons and neutrons surrounded by orbiting electrons — carbon, the scaffold of organic life.', size: '~140 pm (covalent radius)', facts: ['Nearly all the mass sits in the tiny nucleus.', 'Electrons occupy quantized orbital shells.', 'Four valence electrons let carbon form the backbone of every biomolecule.'], element: 'C', source: 'pubchem', provenanceNote: 'Schematic atomic model; element data from PubChem.' },
+  'atom:C': CARBON,
+  atom_carbon: { ...CARBON, id: 'atom_carbon' }, // legacy id kept for existing relations
+};
+
+// A single iconic specialized cell, navigable and previewable as a biconcave disk.
+const cellObjects: Record<string, BioObject> = {
+  'cell:rbc': { id: 'cell:rbc', name: 'Red blood cell', scale: Scale.Cell, kind: 'cell', summary: 'A biconcave, enucleate cell packed with haemoglobin that ferries oxygen from the lungs to every tissue.', size: '~7-8 µm across', facts: ['Loses its nucleus on maturation, making room for haemoglobin.', 'The biconcave shape maximizes surface area for gas exchange.', 'About 25 trillion circulate in an adult at once.'], provenanceNote: 'Schematic erythrocyte model.' },
 };
 
 // Tissue: one immersive specimen (skeletal muscle) and its substructures.
@@ -206,7 +245,9 @@ const moleculeObjects: Record<string, BioObject> = {
 export function resolveObject(id: string): BioObject | undefined {
   const tissueMatch = /^tissue:cell:(\d+)$/.exec(id);
   if (tissueMatch) return tissueCellObject(Number(tissueMatch[1]));
-  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? SCIENCE_OBJECTS[id] ?? cosmicObjects[id] ?? cosmicStructures[id] ?? STAR_OBJECTS[id] ?? atomObjects[id] ?? biomeObjects[id] ?? ecosystemObjects[id] ?? ecologyObjects[id] ?? tissueObjects[id] ?? moleculeObjects[id];
+  const atomMatch = /^atom:(.+)$/.exec(id);
+  if (atomMatch) return atomObjects[id] ?? atomObject(atomMatch[1]);
+  return BIO_OBJECTS[id] ?? taxonObjects[id] ?? ANATOMY_OBJECTS[id] ?? SCIENCE_OBJECTS[id] ?? cosmicObjects[id] ?? cosmicStructures[id] ?? galaxyObjects[id] ?? STAR_OBJECTS[id] ?? atomObjects[id] ?? cellObjects[id] ?? biomeObjects[id] ?? ecosystemObjects[id] ?? ecologyObjects[id] ?? tissueObjects[id] ?? moleculeObjects[id];
 }
 
 /** Complete locally indexed corpus used by search and the read-only copilot. */
@@ -218,8 +259,11 @@ export function allResolvedObjects(): BioObject[] {
     ...Object.values(SCIENCE_OBJECTS),
     ...Object.values(cosmicObjects),
     ...Object.values(cosmicStructures),
+    ...Object.values(galaxyObjects),
     ...Object.values(STAR_OBJECTS),
-    ...Object.values(atomObjects),
+    ...ELEMENTS.map((e) => atomObject(e.symbol)!),
+    atomObjects.atom_carbon,
+    ...Object.values(cellObjects),
     ...Object.values(biomeObjects),
     ...Object.values(ecosystemObjects),
     ...Object.values(ecologyObjects),
