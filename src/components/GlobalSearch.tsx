@@ -8,6 +8,14 @@ interface Props {
   onSelect: (id: string) => void;
 }
 
+// A short, deliberately cross-scale set of starting points, so an empty search
+// bar advertises the real range of the atlas: a galaxy, a planet, a city, an
+// organism, an organ, a cell, an organelle, a molecule, and an atom.
+const EXAMPLE_QUERIES = [
+  'Human heart', 'Jupiter', 'ATP', 'Blue whale', 'Mitochondrion',
+  'Carbon atom', 'Milky Way', 'Red blood cell', 'Hemoglobin', 'Oak tree',
+];
+
 /**
  * Global atlas search. An accessible combobox over taxa, subcellular objects,
  * and anatomy. Press "/" to focus, arrow keys to move, Enter to navigate, and
@@ -124,7 +132,7 @@ export const GlobalSearch: React.FC<Props> = ({ onSelect }) => {
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder="Search life  ( / )"
+          placeholder="Search anything physical  ( / )"
           aria-label="Search the atlas"
           aria-controls="atlas-search-list"
           aria-autocomplete="list"
@@ -134,6 +142,28 @@ export const GlobalSearch: React.FC<Props> = ({ onSelect }) => {
           className="w-full bg-transparent text-[12px] text-slate-200 placeholder:text-slate-600 focus:outline-none"
         />
       </div>
+
+      {open && !query.trim() && (
+        <div className="panel absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-md p-2.5">
+          <div className="meta-label mb-2 text-cyan-300/90">Search anything physical, from a galaxy to an atom</div>
+          <div className="flex flex-wrap gap-1.5">
+            {EXAMPLE_QUERIES.map((example) => (
+              <button
+                key={example}
+                type="button"
+                onClick={() => {
+                  setQuery(example);
+                  setActiveIndex(0);
+                  inputRef.current?.focus();
+                }}
+                className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-cyan-500/40 hover:text-cyan-200"
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {open && query.trim() && (preview || results.length > 0) && (
         <div className="panel absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-md">
