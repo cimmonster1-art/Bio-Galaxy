@@ -157,6 +157,8 @@ function buildModel(group: THREE.Group, model: PreviewModel): ((dt: number, t: n
     case 'ballstick': return buildBallStick(group, model.atoms, model.bonds);
     case 'peptide': return buildPeptide(group, model.residues);
     case 'dna': return buildDna(group);
+    case 'atom': return buildAtom(group, model.protons, model.symbol);
+    case 'galaxy': return buildGalaxy(group);
     case 'star': return buildStar(group, model.color);
     case 'planet': return buildPlanet(group, model.color);
     case 'cell': return buildCell(group);
@@ -316,6 +318,156 @@ function buildDna(group: THREE.Group): null {
     group.add(m);
   }
   return null;
+}
+
+// Simplified Bohr shell capacities (K, L, M, ... ) used to lay electrons out
+// into concentric orbits. This is the schematic model taught in chemistry, not
+// the true quantum orbital, and the preview labels it as such.
+const SHELL_CAPACITY = [2, 8, 8, 18, 18, 32];
+
+/** Distribute `z` electrons across schematic Bohr shells. */
+function shellCounts(z: number): number[] {
+  const shells: number[] = [];
+  let left = z;
+  for (const cap of SHELL_CAPACITY) {
+    if (left <= 0) break;
+    const n = Math.min(cap, left);
+    shells.push(n);
+    left -= n;
+  }
+  if (left > 0) shells.push(left); // very heavy elements: spill into one more ring
+  return shells;
+}
+
+/**
+ * A schematic atom: a packed nucleus of proton/neutron nucleons surrounded by
+ * glowing electron shells. Electrons are beads that orbit their ring each frame,
+ * and the rings themselves are faint additive tori, so the whole thing reads as a
+ * luminous Bohr model. Scaled so even hydrogen and uranium fit the same frame.
+ */
+function buildAtom(group: THREE.Group, protons: number, _symbol: string): (dt: number, t: number) => void {
+  const shells = shellCounts(protons);
+  // Nucleus: a rough sphere-packing of red protons and blue-grey neutrons.
+  const nucleons = Math.min(60, protons * 2);
+  const nucGeo = new THREE.IcosahedronGeometry(0.62, 2);
+  const nucMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.1, emissive: '#220a0a', emissiveIntensity: 0.25 });
+  const nucMesh = new THREE.InstancedMesh(nucGeo, nucMat, nucleons);
+  nucMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(nucleons * 3), 3);
+  const dummy = new THREE.Object3D();
+  const col = new THREE.Color();
+  const nucRadius = 0.55 + Math.cbrt(protons) * 0.42;
+  for (let i = 0; i < nucleons; i++) {
+    // Fibonacci-sphere shell placement, jittered inward for a packed-cluster look.
+    const y = 1 - (i / Math.max(1, nucleons - 1)) * 2;
+    const r = Math.sqrt(Math.max(0, 1 - y * y));
+    const phi = i * 2.39996;
+    const rr = nucRadius * (0.35 + 0.65 * Math.cbrt((i + 1) / nucleons));
+    dummy.position.set(Math.cos(phi) * r * rr, y * rr, Math.sin(phi) * r * rr);
+    dummy.scale.setScalar(0.9);
+    dummy.updateMatrix();
+    nucMesh.setMatrixAt(i, dummy.matrix);
+    nucMesh.setColorAt(i, col.set(i % 2 === 0 ? '#ef5b6b' : '#9fb0c4'));
+  }
+  nucMesh.instanceMatrix.needsUpdate = true;
+  if (nucMesh.instanceColor) nucMesh.instanceColor.needsUpdate = true;
+  group.add(nucMesh);
+
+  // Electron shells: faint rings plus orbiting electron beads.
+  const innerR = nucRadius + 1.6;
+  const gap = (9 - innerR) / Math.max(1, shells.length);
+  const electronGeo = new THREE.SphereGeometry(0.28, 16, 16);
+  const tickers: ((t: number) => void)[] = [];
+  shells.forEach((count, s) => {
+    const ringR = innerR + gap * s;
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(ringR, 0.025, 8, 96),
+      new THREE.MeshBasicMaterial({ color: '#4fd0e6', transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    ring.rotation.x = Math.PI / 2 + (s - shells.length / 2) * 0.18;
+    ring.rotation.z = s * 0.4;
+    group.add(ring);
+
+    const eMat = new THREE.MeshStandardMaterial({ color: '#9fe8ff', emissive: '#2fb0e0', emissiveIntensity: 1.4, roughness: 0.3 });
+    const eMesh = new THREE.InstancedMesh(electronGeo, eMat, count);
+    group.add(eMesh);
+    const phase = s * 0.7;
+    const dir = s % 2 === 0 ? 1 : -1; // alternate orbital direction per shell
+    const tilt = ring.rotation.clone();
+    tickers.push((t: number) => {
+      const m = new THREE.Matrix4();
+      const e = new THREE.Euler(tilt.x, tilt.y, tilt.z);
+      const q = new THREE.Quaternion().setFromEuler(e);
+      const p = new THREE.Vector3();
+      for (let i = 0; i < count; i++) {
+        const a = phase + (i / count) * Math.PI * 2 + dir * t * (1.4 - s * 0.12);
+        p.set(Math.cos(a) * ringR, 0, Math.sin(a) * ringR).applyQuaternion(q);
+        m.makeTranslation(p.x, p.y, p.z);
+        eMesh.setMatrixAt(i, m);
+      }
+      eMesh.instanceMatrix.needsUpdate = true;
+    });
+  });
+
+  return (_dt, t) => { for (const tick of tickers) tick(t); };
+}
+
+/**
+ * A procedural spiral galaxy: hundreds of thousands of additive points wound into
+ * logarithmic arms, warm and dense in the core, cool and sparse at the rim, with
+ * a luminous central bulge. Differential rotation makes the arms shear like a real
+ * disk. Sized to the same frame as every other preview.
+ */
+function buildGalaxy(group: THREE.Group): (dt: number, t: number) => void {
+  const COUNT = 14000;
+  const ARMS = 4;
+  const RADIUS = 9;
+  const positions = new Float32Array(COUNT * 3);
+  const colors = new Float32Array(COUNT * 3);
+  const radii = new Float32Array(COUNT);
+  const inner = new THREE.Color('#fff2cc');
+  const outer = new THREE.Color('#5b8def');
+  const tmp = new THREE.Color();
+  for (let i = 0; i < COUNT; i++) {
+    const t = Math.pow(Math.random(), 0.6); // bias toward the centre
+    const r = t * RADIUS;
+    const arm = (i % ARMS) / ARMS;
+    // Logarithmic spiral angle plus a radius-dependent scatter for arm thickness.
+    const spin = r * 0.55;
+    const spread = (1 - t) * 0.6 + 0.08;
+    const angle = arm * Math.PI * 2 + spin + (Math.random() - 0.5) * spread;
+    const thickness = (Math.random() - 0.5) * (0.6 - t * 0.5);
+    positions[i * 3] = Math.cos(angle) * r + (Math.random() - 0.5) * spread;
+    positions[i * 3 + 1] = thickness;
+    positions[i * 3 + 2] = Math.sin(angle) * r + (Math.random() - 0.5) * spread;
+    radii[i] = r;
+    tmp.copy(inner).lerp(outer, t);
+    colors[i * 3] = tmp.r; colors[i * 3 + 1] = tmp.g; colors[i * 3 + 2] = tmp.b;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.PointsMaterial({ size: 0.12, vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
+  const points = new THREE.Points(geo, mat);
+  group.add(points);
+
+  // Bright central bulge.
+  const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowSprite(), color: '#fff0c0', transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }));
+  core.scale.setScalar(7);
+  group.add(core);
+
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  const base = positions.slice();
+  return (_dt, t) => {
+    // Differential rotation: inner radii sweep faster than the rim.
+    for (let i = 0; i < COUNT; i++) {
+      const r = radii[i];
+      const a = t * (0.5 / (0.5 + r * 0.25));
+      const x = base[i * 3], z = base[i * 3 + 2];
+      pos.array[i * 3] = x * Math.cos(a) - z * Math.sin(a);
+      pos.array[i * 3 + 2] = x * Math.sin(a) + z * Math.cos(a);
+    }
+    pos.needsUpdate = true;
+  };
 }
 
 /** A luminous star: emissive core plus an additive corona sprite. */

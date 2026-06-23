@@ -57,7 +57,7 @@ export const LandingPage: React.FC<Props> = ({ onOpenAtlas }) => {
       </section>
 
       <section className="border-y border-white/[0.08] bg-white/[0.015]"><div className="mx-auto grid max-w-6xl gap-px px-4 py-6 sm:px-6 sm:py-8 md:grid-cols-2 lg:grid-cols-4">
-        <Feature icon={Boxes} label="Search anything physical" text="Type a protein, molecule, sequence, organism, star, or planet and the search bar renders it in real-time 3D, streamed live from RCSB PDB, PubChem, and more." />
+        <Feature icon={Boxes} label="Search anything physical" text="Type a protein, molecule, sequence, organism, atom, star, planet, or galaxy and the search bar renders it in real-time 3D, from Bohr-model atoms to spiral galaxies, streamed live from RCSB PDB, PubChem, and more." />
         <Feature icon={Layers3} label="One continuous journey" text="A single camera path travels through reality from the cosmos to the atom: biome, ecosystem, organism, cell, and molecule." />
         <Feature icon={Database} label="Source-aware objects" text="Selections surface live taxonomy, pathway, expression, genomic, and structural context." />
         <Feature icon={Server} label="Fast same-origin data gateway" text="Public, key-free APIs are normalized in typed clients and accelerated by server-side caching." />
