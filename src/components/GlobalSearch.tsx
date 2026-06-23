@@ -62,6 +62,8 @@ export const GlobalSearch: React.FC<Props> = ({ onSelect }) => {
     if (preview.kind === 'dna') return 'DNA double helix';
     if (preview.kind === 'atom') return 'Bohr atomic model';
     if (preview.kind === 'galaxy') return 'Spiral galaxy';
+    if (preview.kind === 'organelle') return 'Mitochondrion';
+    if (preview.kind === 'rbc') return 'Red blood cell';
     if (preview.kind === 'star') return 'Stellar model';
     if (preview.kind === 'planet') return 'Planetary body';
     return 'Atlas object';

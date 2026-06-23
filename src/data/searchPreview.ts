@@ -16,6 +16,11 @@ import type { SearchResult } from './search';
 import { BIO_OBJECTS } from './registry';
 import { rcsb, uniprot, pubchem } from './clients';
 import type { AtomCoord } from './clients/rcsbClient';
+import { asElement, elementBySymbol } from './elements';
+import { asGalaxy } from './galaxies';
+
+export { asElement } from './elements';
+export { asGalaxy } from './galaxies';
 
 export type PreviewModel =
   | { kind: 'backbone'; chains: AtomCoord[][]; title: string; source: string }
@@ -24,6 +29,8 @@ export type PreviewModel =
   | { kind: 'dna'; title: string; source: string }
   | { kind: 'atom'; protons: number; symbol: string; title: string; source: string }
   | { kind: 'galaxy'; title: string; source: string }
+  | { kind: 'organelle'; variant: 'mitochondrion'; title: string; source: string }
+  | { kind: 'rbc'; title: string; source: string }
   | { kind: 'star'; color: string; title: string; source: string }
   | { kind: 'planet'; color: string; title: string; source: string }
   | { kind: 'cell'; title: string; source: string };
@@ -38,59 +45,16 @@ export function asPeptideSequence(query: string): string | undefined {
   return undefined;
 }
 
-// A compact periodic table covering the elements a learner is most likely to
-// search by name or symbol. Each entry maps to its atomic number (proton count),
-// which fully determines the schematic Bohr shell model the preview draws.
-export interface ElementHit { symbol: string; protons: number; name: string; }
-const ELEMENTS: { symbol: string; protons: number; name: string }[] = [
-  { symbol: 'H', protons: 1, name: 'hydrogen' }, { symbol: 'He', protons: 2, name: 'helium' },
-  { symbol: 'Li', protons: 3, name: 'lithium' }, { symbol: 'Be', protons: 4, name: 'beryllium' },
-  { symbol: 'B', protons: 5, name: 'boron' }, { symbol: 'C', protons: 6, name: 'carbon' },
-  { symbol: 'N', protons: 7, name: 'nitrogen' }, { symbol: 'O', protons: 8, name: 'oxygen' },
-  { symbol: 'F', protons: 9, name: 'fluorine' }, { symbol: 'Ne', protons: 10, name: 'neon' },
-  { symbol: 'Na', protons: 11, name: 'sodium' }, { symbol: 'Mg', protons: 12, name: 'magnesium' },
-  { symbol: 'Al', protons: 13, name: 'aluminium' }, { symbol: 'Si', protons: 14, name: 'silicon' },
-  { symbol: 'P', protons: 15, name: 'phosphorus' }, { symbol: 'S', protons: 16, name: 'sulfur' },
-  { symbol: 'Cl', protons: 17, name: 'chlorine' }, { symbol: 'Ar', protons: 18, name: 'argon' },
-  { symbol: 'K', protons: 19, name: 'potassium' }, { symbol: 'Ca', protons: 20, name: 'calcium' },
-  { symbol: 'Fe', protons: 26, name: 'iron' }, { symbol: 'Cu', protons: 29, name: 'copper' },
-  { symbol: 'Zn', protons: 30, name: 'zinc' }, { symbol: 'I', protons: 53, name: 'iodine' },
-  { symbol: 'Au', protons: 79, name: 'gold' }, { symbol: 'U', protons: 92, name: 'uranium' },
-];
-const ELEMENT_BY_NAME = new Map(ELEMENTS.map((e) => [e.name, e]));
-const ELEMENT_BY_SYMBOL = new Map(ELEMENTS.map((e) => [e.symbol.toLowerCase(), e]));
-
-/**
- * Recognize a query that names a chemical element, so "Carbon", "carbon atom",
- * "oxygen", or a bare symbol like "Fe" resolves to a schematic atom. Returns the
- * element (symbol, proton count, name) or undefined.
- */
-export function asElement(query: string): ElementHit | undefined {
-  const cleaned = query.trim().toLowerCase().replace(/\s+atom$/, '').replace(/^an?\s+/, '').trim();
-  if (!cleaned) return undefined;
-  const byName = ELEMENT_BY_NAME.get(cleaned);
-  if (byName) return byName;
-  // Bare symbol: keep it tight (1–2 chars) so it never shadows a peptide or word.
-  if (cleaned.length <= 2) return ELEMENT_BY_SYMBOL.get(cleaned);
-  return undefined;
+/** Recognize a mitochondrion query so it renders as a cristae-filled organelle. */
+function asMitochondrion(query: string): boolean {
+  return /^mitochondri(on|a|um)$/.test(query.trim().toLowerCase());
 }
 
-// Named galaxies plus the structural words that should resolve to a spiral disk.
-const GALAXY_NAMES = new Set([
-  'milky way', 'andromeda', 'andromeda galaxy', 'whirlpool', 'whirlpool galaxy',
-  'triangulum', 'triangulum galaxy', 'pinwheel', 'pinwheel galaxy', 'sombrero',
-  'sombrero galaxy', 'cartwheel', 'messier 31', 'm31', 'ngc 224',
-]);
-
-/** Recognize a query that names or describes a galaxy. */
-export function asGalaxy(query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return false;
-  if (GALAXY_NAMES.has(q)) return true;
-  return /\bgalax(y|ies)\b/.test(q);
+/** Recognize a red-blood-cell query so it renders as a biconcave disk. */
+function asRedBloodCell(query: string): boolean {
+  return /^(red blood cells?|erythrocytes?|rbcs?)$/.test(query.trim().toLowerCase());
 }
 
-/** Approximate a star's display colour from its spectral class letter. */
 function spectralColor(spectral: string): string {
   const cls = spectral.trim().charAt(0).toUpperCase();
   const table: Record<string, string> = {
@@ -125,11 +89,16 @@ export function instantPreview(query: string, result: SearchResult | undefined):
     const name = query.trim().replace(/\b\w/g, (c) => c.toUpperCase());
     return { kind: 'galaxy', title: name, source: 'Procedural spiral-galaxy model' };
   }
+  // Iconic organelle and cell types each get their own scientific render.
+  if (asMitochondrion(query)) return { kind: 'organelle', variant: 'mitochondrion', title: 'Mitochondrion', source: 'Schematic organelle model' };
+  if (asRedBloodCell(query)) return { kind: 'rbc', title: 'Red blood cell', source: 'Schematic erythrocyte model' };
 
   if (!result) return query.trim() ? { kind: 'cell', title: query.trim(), source: 'Bio Galaxy' } : null;
 
   const { id, label } = result;
-  if (id === 'galaxy' || id === 'cosmos') return { kind: 'galaxy', title: label, source: 'Procedural spiral-galaxy model' };
+  if (id === 'galaxy' || id === 'cosmos' || id.startsWith('galaxy:')) return { kind: 'galaxy', title: label, source: 'Procedural spiral-galaxy model' };
+  if (id === 'mitochondrion') return { kind: 'organelle', variant: 'mitochondrion', title: label, source: 'Schematic organelle model' };
+  if (id === 'cell:rbc') return { kind: 'rbc', title: label, source: 'Schematic erythrocyte model' };
   if (id.startsWith('star:')) {
     const spectral = result.sublabel.split('·')[1]?.trim() ?? 'G';
     return { kind: 'star', color: spectralColor(spectral), title: label, source: 'HYG / bright-star catalogue' };
@@ -138,9 +107,14 @@ export function instantPreview(query: string, result: SearchResult | undefined):
   if (id.startsWith('taxon:') || id.startsWith('organism:') || id.startsWith('city:')) {
     return { kind: 'dna', title: label, source: 'NCBI Taxonomy' };
   }
+  if (id.startsWith('atom:') || id === 'atom_carbon') {
+    const sym = id === 'atom_carbon' ? 'C' : id.slice('atom:'.length);
+    const el = elementBySymbol(sym);
+    if (el) return { kind: 'atom', protons: el.protons, symbol: el.symbol, title: label, source: `Bohr model · Z = ${el.protons}` };
+  }
   const obj = BIO_OBJECTS[id];
   if (obj?.kind === 'atom' && obj.element) {
-    const el = ELEMENT_BY_SYMBOL.get(obj.element.toLowerCase());
+    const el = elementBySymbol(obj.element);
     if (el) return { kind: 'atom', protons: el.protons, symbol: el.symbol, title: label, source: `Bohr model · Z = ${el.protons}` };
   }
   if (obj && (obj.pdbId || obj.accession)) return { kind: 'cell', title: label, source: 'Loading structure…' };
@@ -158,9 +132,10 @@ export async function resolvePreview(
   result: SearchResult | undefined,
   signal: AbortSignal,
 ): Promise<PreviewModel | null> {
-  // Peptides, elements, and galaxies are fully resolved by the instant model;
-  // skip the network so a chemistry lookup never replaces the atom or disk.
-  if (asPeptideSequence(query) || asElement(query) || asGalaxy(query)) return null;
+  // Peptides, elements, galaxies, and iconic organelle/cell renders are fully
+  // resolved by the instant model; skip the network so a chemistry lookup never
+  // replaces the atom, disk, mitochondrion, or red blood cell.
+  if (asPeptideSequence(query) || asElement(query) || asGalaxy(query) || asMitochondrion(query) || asRedBloodCell(query)) return null;
 
   const obj = result ? BIO_OBJECTS[result.id] : undefined;
   const title = result?.label ?? query.trim();

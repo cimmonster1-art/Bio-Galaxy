@@ -23,6 +23,14 @@ const PLANET_FACETS = (
   ...(extra ?? []),
 ];
 
+const CARBON_FACETS: PhysicsFacet[] = [
+  { label: 'Electron configuration', value: '1s² 2s² 2p²', note: 'Six electrons across two shells.' },
+  { label: 'Valence electrons', value: '4', note: 'Lets carbon form four covalent bonds.' },
+  { label: 'Quantum numbers (2p)', value: 'n=2, ℓ=1', note: 'Principal and azimuthal numbers of the valence orbital.' },
+  { label: 'Binding force', value: 'Electromagnetic', note: 'The Coulomb force binds electrons to the nucleus.' },
+  { label: 'Atomic number', value: 'Z = 6' },
+];
+
 // Keyed by resolver id. Cosmic and atomic scales carry the richest physics.
 const PHYSICS_FACETS: Record<string, PhysicsFacet[]> = {
   cosmos: [
@@ -55,13 +63,8 @@ const PHYSICS_FACETS: Record<string, PhysicsFacet[]> = {
   'planet:saturn': PLANET_FACETS('10.44 m/s²', '35.5 km/s', 'H₂/He', 'Strong, remarkably axisymmetric field'),
   'planet:uranus': PLANET_FACETS('8.69 m/s²', '21.3 km/s', 'H₂/He/CH₄', 'Tilted, offset field; rotates on its side'),
   'planet:neptune': PLANET_FACETS('11.15 m/s²', '23.5 km/s', 'H₂/He/CH₄', 'Tilted, offset field'),
-  atom_carbon: [
-    { label: 'Electron configuration', value: '1s² 2s² 2p²', note: 'Six electrons across two shells.' },
-    { label: 'Valence electrons', value: '4', note: 'Lets carbon form four covalent bonds.' },
-    { label: 'Quantum numbers (2p)', value: 'n=2, ℓ=1', note: 'Principal and azimuthal numbers of the valence orbital.' },
-    { label: 'Binding force', value: 'Electromagnetic', note: 'The Coulomb force binds electrons to the nucleus.' },
-    { label: 'Atomic number', value: 'Z = 6' },
-  ],
+  atom_carbon: CARBON_FACETS,
+  'atom:C': CARBON_FACETS,
 };
 
 // By-kind fallbacks so physics-relevant objects still answer "why does it behave?"

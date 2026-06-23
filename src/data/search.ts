@@ -4,6 +4,8 @@ import { searchTaxa } from './taxonomy';
 import { BIO_OBJECTS } from './registry';
 import { ECOLOGY_CITIES } from './ecology';
 import { BRIGHT_STAR_CATALOG } from './stars';
+import { ELEMENTS } from './elements';
+import { NAMED_GALAXIES } from './galaxies';
 
 export interface SearchResult {
   id: string;
@@ -17,6 +19,7 @@ export interface SearchResult {
 const ANATOMY: SearchResult[] = [
   { id: 'system:cardiovascular', label: 'Cardiovascular System', sublabel: 'Organ system', scale: Scale.OrganSystem },
   { id: 'organ:heart', label: 'Heart', sublabel: 'Organ', scale: Scale.Organ },
+  { id: 'cell:rbc', label: 'Red blood cell', sublabel: 'Cell · erythrocyte', scale: Scale.Cell },
 ];
 
 /**
@@ -64,6 +67,22 @@ export function searchAtlas(query: string, limit = 10): SearchResult[] {
       if (s.name.toLowerCase().includes(q) || s.scientific.toLowerCase().includes(q)) {
         results.push({ id: `organism:eco:${s.id}`, label: s.name, sublabel: `Species · ${city.name}`, scale: Scale.Organism });
       }
+    }
+  }
+
+  // Chemical elements: every element is reachable by name or symbol and lands at
+  // the Atom scale, where its live periodic-table record loads from PubChem.
+  for (const el of ELEMENTS) {
+    if (el.name.includes(q) || el.symbol.toLowerCase() === q) {
+      const name = `${el.name.charAt(0).toUpperCase()}${el.name.slice(1)}`;
+      results.push({ id: `atom:${el.symbol}`, label: `${name} atom`, sublabel: `Element · ${el.symbol} · Z = ${el.protons}`, scale: Scale.Atom });
+    }
+  }
+
+  // Named galaxies land at the Galaxy scale with their own morphology context.
+  for (const g of NAMED_GALAXIES) {
+    if (g.name.toLowerCase().includes(q) || g.aliases.some((a) => a.includes(q))) {
+      results.push({ id: `galaxy:${g.id}`, label: g.name, sublabel: `Galaxy · ${g.morphology}`, scale: Scale.Galaxy });
     }
   }
 
