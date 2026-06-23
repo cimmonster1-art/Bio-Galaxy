@@ -292,6 +292,34 @@ The data layer turns isolated scenes into one continuously traversable graph:
   organism meshes and the HuBMAP/HRA CC-BY organ library (shared metre, Y-up frame).
 - **`search.ts`** indexes scales, taxa, registry objects, ecology cities, and stars
   for the global search box.
+- **`searchPreview.ts`** + **`SearchPreview3D.tsx`** power **real-time 3D search**:
+  as you type, the highlighted result resolves to a live model rendered in the
+  search dropdown. Proteins stream their alpha-carbon backbone from RCSB PDB and
+  draw as an N→C coloured ribbon, small molecules stream a PubChem 3D conformer and
+  draw as a ball-and-stick model, a raw amino-acid sequence becomes an idealized
+  alpha helix coloured by residue chemistry, and organisms fall back to a DNA
+  double helix. An instant stand-in shows first, then the fetched coordinates
+  replace it; each keystroke supersedes the previous request.
+
+---
+
+## The daily journal (`/blog`)
+
+The server runs an autopublishing journal under `src/server/blog`:
+
+- **`gemini.ts`** asks the Google Gemini API for one structured article on a rotating
+  angle about the platform, returning strict JSON. The key is read from
+  `GEMINI_API_KEY` and never logged.
+- **`quality.ts`** enforces house style and originality: it `sanitize`s away every em
+  and en dash, then `assess`es length, paragraph structure, duplicate titles, and
+  body similarity (word-shingle Jaccard) against the existing catalogue.
+- **`scheduler.ts`** publishes once per day at a time randomized within the day,
+  retrying generation until a draft clears quality control. With no key configured
+  it stays idle and the journal serves whatever is stored.
+- **`store.ts`** persists posts to `content/blog/posts.json`, each with its own
+  creation date and time; **`routes.ts`** serves them at `/api/blog` and
+  `/api/blog/{slug}`. Every article also has an indexable page at `/blog/{slug}`
+  listed in the sitemap.
 
 ---
 

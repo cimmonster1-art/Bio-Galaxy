@@ -7,13 +7,13 @@
     <title>Bio Galaxy | Interactive 3D Biological Atlas</title>
     <meta
       name="description"
-      content="Explore biology from the cosmos to atoms in Bio Galaxy, an interactive 3D atlas connected to UniProt, Reactome, RCSB PDB, Ensembl, Human Protein Atlas, and NCBI."
+      content="Bio Galaxy is an interactive 3D biological atlas where searching renders results in real time: type any protein, molecule, or amino-acid sequence and watch an accurate live structure appear, streamed from UniProt, RCSB PDB, PubChem, Reactome, Ensembl, Human Protein Atlas, and NCBI."
     />
     <meta name="application-name" content="Bio Galaxy" />
     <meta name="author" content="Bio Galaxy contributors" />
     <meta name="creator" content="Bio Galaxy contributors" />
     <meta name="publisher" content="Bio Galaxy contributors" />
-    <meta name="keywords" content="3D biological atlas, interactive biology, Tree of Life, cell biology, protein structure, molecular visualization, bioinformatics, open science, Three.js" />
+    <meta name="keywords" content="3D biological atlas, real-time 3D search, interactive biology, protein structure viewer, molecule 3D viewer, amino acid sequence visualization, Tree of Life, cell biology, molecular visualization, bioinformatics, open science, Three.js" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="googlebot" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
@@ -30,7 +30,7 @@
     <meta property="og:locale" content="en_US" />
     <meta property="og:url" content="/" />
     <meta property="og:title" content="Bio Galaxy | Interactive 3D Biological Atlas" />
-    <meta property="og:description" content="Navigate 22 connected scales from the cosmos and Tree of Life to cells, proteins, molecules, and atoms using public scientific data." />
+    <meta property="og:description" content="Search any protein, molecule, or sequence and watch it render in real time as an accurate 3D structure. Navigate 22 connected scales from the cosmos to the atom using public scientific data." />
     <meta property="og:image" content="/social-preview.svg" />
     <meta property="og:image:type" content="image/svg+xml" />
     <meta property="og:image:width" content="1200" />
@@ -39,7 +39,7 @@
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Bio Galaxy | Interactive 3D Biological Atlas" />
-    <meta name="twitter:description" content="Explore 22 connected scales of biology through live 3D scenes and source-aware public scientific data." />
+    <meta name="twitter:description" content="Type any protein, molecule, or sequence and watch it render in real-time 3D. Explore 22 connected scales of biology through source-aware public scientific data." />
     <meta name="twitter:image" content="/social-preview.svg" />
     <meta name="twitter:image:alt" content="Bio Galaxy, one continuous interactive atlas from cosmos to atom" />
 
@@ -68,11 +68,13 @@
             "isAccessibleForFree": true,
             "description": "A Three.js spatial interface over public biological databases, with 22 connected scales spanning cosmic, taxonomic, anatomical, cellular, and molecular views.",
             "featureList": [
+              "Real-time 3D rendering of search results: proteins, molecules, and amino-acid sequences",
               "Continuous navigation across 22 scales",
               "Interactive Three.js scientific visualization",
               "Live records from public scientific databases",
               "Source-aware taxonomy, pathway, expression, genomic, and structural context",
-              "Key-free same-origin scientific data gateway"
+              "Key-free same-origin scientific data gateway",
+              "A daily, quality-controlled science journal"
             ],
             "isPartOf": { "@id": "/#website" }
           },
@@ -85,6 +87,15 @@
             "isPartOf": { "@id": "/#website" },
             "mainEntity": { "@id": "/#application" },
             "about": ["Biology", "Tree of Life", "Cell biology", "Protein structure", "Molecular visualization"]
+          },
+          {
+            "@type": "Blog",
+            "@id": "/#blog",
+            "name": "Bio Galaxy Journal",
+            "url": "/blog",
+            "description": "A daily, quality-controlled journal about the Bio Galaxy platform and the open science behind it. Every article is original and checked for house style.",
+            "inLanguage": "en-US",
+            "isPartOf": { "@id": "/#website" }
           }
         ]
       }

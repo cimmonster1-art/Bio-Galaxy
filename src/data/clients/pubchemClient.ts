@@ -3,7 +3,8 @@
 // synonyms) and periodic-table data for atoms. The PUG-REST API is public and
 // requires no key.
 
-import { getJson, RequestOptions } from './http';
+import { getJson, getText, RequestOptions } from './http';
+import type { AtomCoord } from './rcsbClient';
 
 const PUG = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug';
 
@@ -69,6 +70,71 @@ export async function getCompound(
     charge: p.Charge,
     synonyms,
   };
+}
+
+/** A bonded 3D conformer for a small molecule: real atom positions and bonds. */
+export interface Conformer {
+  cid: number;
+  atoms: AtomCoord[];
+  /** Bonds as index pairs into `atoms`. */
+  bonds: [number, number][];
+}
+
+/**
+ * Resolve a compound name to its PubChem CID. Used so a free-text molecule
+ * search ("caffeine", "glucose") can stream a real 3D conformer.
+ */
+export async function findCidByName(name: string, opts: RequestOptions = {}): Promise<number | undefined> {
+  const url = `${PUG}/compound/name/${encodeURIComponent(name)}/cids/JSON`;
+  try {
+    const data = await getJson<{ IdentifierList?: { CID?: number[] } }>(url, { cacheMs: 30 * 60_000, ...opts });
+    return data.IdentifierList?.CID?.[0];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Download the computed 3D conformer (SDF) for a compound and parse its atom
+ * coordinates and bond table. These are real, experimentally consistent
+ * geometries from PubChem, rendered as a ball-and-stick model. No key required.
+ */
+export async function fetch3DConformer(cid: number, opts: RequestOptions = {}): Promise<Conformer> {
+  const url = `${PUG}/compound/cid/${cid}/record/SDF?record_type=3d`;
+  const sdf = await getText(url, { cacheMs: 30 * 60_000, retries: 2, timeoutMs: 12000, ...opts });
+  const { atoms, bonds } = parseSdf(sdf);
+  if (atoms.length === 0) throw new Error(`No 3D conformer for CID ${cid}`);
+  return { cid, atoms, bonds };
+}
+
+/** Parse the atom and bond blocks of an MDL V2000 SDF molfile. */
+function parseSdf(sdf: string): { atoms: AtomCoord[]; bonds: [number, number][] } {
+  const lines = sdf.split('\n');
+  // Line 4 (index 3) is the counts line: aaabbb… (atoms, bonds), fixed 3-wide.
+  const counts = lines[3] ?? '';
+  const atomCount = Number.parseInt(counts.slice(0, 3), 10);
+  const bondCount = Number.parseInt(counts.slice(3, 6), 10);
+  if (!Number.isFinite(atomCount) || atomCount <= 0) return { atoms: [], bonds: [] };
+
+  const atoms: AtomCoord[] = [];
+  for (let i = 0; i < atomCount; i++) {
+    const line = lines[4 + i] ?? '';
+    const x = Number.parseFloat(line.slice(0, 10));
+    const y = Number.parseFloat(line.slice(10, 20));
+    const z = Number.parseFloat(line.slice(20, 30));
+    const element = line.slice(31, 34).trim() || 'C';
+    if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(z)) continue;
+    atoms.push({ element, x, y, z });
+  }
+
+  const bonds: [number, number][] = [];
+  for (let i = 0; i < bondCount; i++) {
+    const line = lines[4 + atomCount + i] ?? '';
+    const a = Number.parseInt(line.slice(0, 3), 10) - 1;
+    const b = Number.parseInt(line.slice(3, 6), 10) - 1;
+    if (a >= 0 && b >= 0 && a < atoms.length && b < atoms.length) bonds.push([a, b]);
+  }
+  return { atoms, bonds };
 }
 
 /** Normalized chemical-element record consumed by the atom detail panel. */

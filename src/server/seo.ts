@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { listPosts } from './blog/store';
 
 const SITE_URL_ENV = 'SITE_URL';
 
@@ -26,16 +27,23 @@ export function robotsTxt(req: Request, res: Response): void {
   );
 }
 
-export function sitemapXml(req: Request, res: Response): void {
+export async function sitemapXml(req: Request, res: Response): Promise<void> {
   const siteUrl = escapeXml(getSiteUrl(req));
+  const posts = await listPosts();
+  const urls = [
+    `  <url>\n    <loc>${siteUrl}/</loc>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>`,
+    `  <url>\n    <loc>${siteUrl}/blog</loc>\n    <changefreq>daily</changefreq>\n    <priority>0.8</priority>\n  </url>`,
+    ...posts.map(
+      (post) =>
+        `  <url>\n    <loc>${siteUrl}/blog/${escapeXml(post.slug)}</loc>\n` +
+        `    <lastmod>${escapeXml(post.createdAt.slice(0, 10))}</lastmod>\n` +
+        `    <changefreq>monthly</changefreq>\n    <priority>0.6</priority>\n  </url>`,
+    ),
+  ];
   res.type('application/xml').send(
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
       `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-      `  <url>\n` +
-      `    <loc>${siteUrl}/</loc>\n` +
-      `    <changefreq>weekly</changefreq>\n` +
-      `    <priority>1.0</priority>\n` +
-      `  </url>\n` +
+      `${urls.join('\n')}\n` +
       `</urlset>\n`,
   );
 }

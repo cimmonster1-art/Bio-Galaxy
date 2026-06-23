@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import { searchAtlas } from '../data/search';
+import { instantPreview, resolvePreview, type PreviewModel } from '../data/searchPreview';
+import { SearchPreview3D } from './SearchPreview3D';
 
 interface Props {
   onSelect: (id: string) => void;
@@ -19,6 +21,41 @@ export const GlobalSearch: React.FC<Props> = ({ onSelect }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const results = useMemo(() => searchAtlas(query), [query]);
+  const active = results[activeIndex] ?? results[0];
+  const [preview, setPreview] = useState<PreviewModel | null>(null);
+
+  // Render a live 3D model of whatever is highlighted: an instant stand-in first,
+  // then the real fetched structure when one resolves. Each keystroke or arrow
+  // move supersedes the previous fetch.
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setPreview(null);
+      return;
+    }
+    setPreview(instantPreview(query, active));
+    const controller = new AbortController();
+    resolvePreview(query, active, controller.signal)
+      .then((model) => {
+        if (model && !controller.signal.aborted) setPreview(model);
+      })
+      .catch(() => {
+        /* Keep the instant stand-in if the upstream fetch fails. */
+      });
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, active?.id]);
+
+  const previewLabel = useMemo(() => {
+    if (!preview) return null;
+    if (preview.kind === 'backbone') return 'Protein backbone ribbon';
+    if (preview.kind === 'ballstick') return 'Ball-and-stick conformer';
+    if (preview.kind === 'peptide') return 'Idealized α-helix';
+    if (preview.kind === 'dna') return 'DNA double helix';
+    if (preview.kind === 'star') return 'Stellar model';
+    if (preview.kind === 'planet') return 'Planetary body';
+    return 'Atlas object';
+  }, [preview]);
 
   // "/" focuses the search from anywhere outside a text field.
   useEffect(() => {
@@ -98,12 +135,27 @@ export const GlobalSearch: React.FC<Props> = ({ onSelect }) => {
         />
       </div>
 
-      {open && results.length > 0 && (
+      {open && query.trim() && (preview || results.length > 0) && (
+        <div className="panel absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-md">
+          {preview && (
+            <div className="flex items-stretch gap-3 border-b border-white/10 bg-gradient-to-b from-cyan-500/[0.06] to-transparent p-2.5">
+              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-md border border-white/10 bg-[#02040a]">
+                <SearchPreview3D model={preview} />
+              </div>
+              <div className="flex min-w-0 flex-col justify-center gap-1">
+                <span className="meta-label text-cyan-300/90">Live 3D preview</span>
+                <span className="truncate text-[13px] font-semibold text-slate-100">{preview.title}</span>
+                <span className="text-[11px] text-slate-400">{previewLabel}</span>
+                <span className="truncate text-[10px] text-slate-500">{preview.source}</span>
+              </div>
+            </div>
+          )}
+          {results.length > 0 && (
         <ul
           id="atlas-search-list"
           role="listbox"
           aria-label="Search results"
-          className="panel absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto scroll-thin rounded-md py-1"
+          className="max-h-60 overflow-y-auto scroll-thin py-1"
         >
           {results.map((r, i) => (
             <li
@@ -125,6 +177,8 @@ export const GlobalSearch: React.FC<Props> = ({ onSelect }) => {
             </li>
           ))}
         </ul>
+          )}
+        </div>
       )}
     </div>
   );
