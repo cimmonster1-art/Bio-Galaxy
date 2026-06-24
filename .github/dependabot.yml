@@ -1,0 +1,27 @@
+# Automated dependency scanning and update PRs. Dependabot watches the npm
+# manifest and the GitHub Actions used in CI, opens grouped PRs on a weekly
+# cadence, and files security PRs out-of-band the moment an advisory lands.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # One PR per ecosystem area keeps the weekly noise low; security updates
+      # still come through individually and immediately.
+      production-dependencies:
+        dependency-type: production
+      development-dependencies:
+        dependency-type: development
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - ci

@@ -1,0 +1,72 @@
+name: CI
+
+# Type-check, test, and build on every push and pull request so regressions
+# are caught before they reach main. Bio Galaxy runs entirely against public,
+# key-free APIs, so the build needs no secrets.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Type-check · Test · Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check (lint)
+        run: npm run lint
+
+      - name: Unit & regression tests
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
+
+  # Dependency vulnerability scan. Runs alongside the verify job (not gating it)
+  # so a newly disclosed advisory surfaces on every push and PR. The hard gate is
+  # on high+critical in the production dependency tree - the code that actually
+  # ships. Dev-only build/test tooling is reported in the full informational scan
+  # but does not fail the build.
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: npm audit (production deps, high+ severity gate)
+        run: npm audit --omit=dev --audit-level=high
+      - name: npm audit (full report, informational)
+        if: always()
+        run: npm audit || true
+
+  # Secret scanning: catch a committed key/token before it ships. Full history
+  # (fetch-depth 0) so it scans the diff range on PRs and the whole tree on push.
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
