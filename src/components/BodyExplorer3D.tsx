@@ -154,12 +154,13 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       composer.setPixelRatio(renderer.getPixelRatio());
       renderPass = new RenderPass(undefined as any, undefined as any);
       composer.addPass(renderPass);
-      // A whisper of bloom for atmosphere only. Strength dropped 0.42 → 0.14 and
-      // threshold raised 0.85 → 0.92 so bloom catches just the true highlights
-      // (heart flush, faint rim) instead of smearing the entire body into glow.
+      // A trace of bloom for atmosphere only. Strength dropped 0.14 → 0.05 and
+      // threshold raised 0.92 → 0.96 so bloom catches only the very brightest
+      // specular highlights (a beating heart's flush) — the body itself never
+      // blooms, so it reads as a lit anatomical specimen, not a glowing ghost.
       bloomPass = new UnrealBloomPass(
         new THREE.Vector2(Math.max(canvas.clientWidth * 0.5, 1), Math.max(canvas.clientHeight * 0.5, 1)),
-        0.14, 0.28, 0.92,
+        0.05, 0.2, 0.96,
       );
       composer.addPass(bloomPass);
     } catch (e) {
@@ -510,8 +511,12 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
           // Damp, fleshy — a faint moist sheen, not a plastic gloss. Higher
           // roughness + lower clearcoat/emissive let the fibre relief and
           // shadows define the form instead of a flat highlight.
-          color: tint, emissive: tint, emissiveIntensity: 0.05,
-          metalness: 0.0, roughness: 0.62,
+          // No resting self-emission: the light rig and environment reflections
+          // alone define the organ, so it reads as real wet tissue under a lamp
+          // rather than something glowing from within. (The heart re-introduces a
+          // tiny emissive pulse in the render loop as it contracts.)
+          color: tint, emissive: tint, emissiveIntensity: 0.0,
+          metalness: 0.0, roughness: 0.68,
           clearcoat: 0.3, clearcoatRoughness: 0.55,
           sheen: 0.5, sheenColor: new THREE.Color(tint).lerp(new THREE.Color(0xff8a8a), 0.3), sheenRoughness: 0.7,
           transparent: true, opacity: 0.97, depthWrite: true,
@@ -519,12 +524,13 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
         })
       : new THREE.MeshStandardMaterial({
           color: tint, emissive: tint,
-          // Emissive cut hard (bone 0.22→0.1, skin 0.07→0.03, other 0.4→0.14):
-          // the lights and environment should define the form, not self-glow.
-          // The old values stacked across overlapping translucent layers into a
-          // blown-out white blob.
-          emissiveIntensity: isBone ? 0.1 : isSkin ? 0.03 : 0.14,
-          metalness: isBone ? 0.05 : 0.12, roughness: isBone ? 0.82 : 0.5,
+          // Emissive cut to near-zero (bone 0.1→0.02, skin 0.03→0, other 0.14→0.04):
+          // the lights and environment define the form, not self-glow. Any
+          // self-emission stacks across the overlapping translucent layers into a
+          // washed-out white haze, so the skin carries none at all and the
+          // interior only a faint trace to keep deep structures from going black.
+          emissiveIntensity: isBone ? 0.02 : isSkin ? 0.0 : 0.04,
+          metalness: isBone ? 0.05 : 0.12, roughness: isBone ? 0.85 : 0.6,
           transparent: !opaque,
           // Skin barely visible so the organs read through it.
           opacity: isSkin ? 0.18 : 0.86,
@@ -532,11 +538,12 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
           envMapIntensity: 0.9,
           side: THREE.FrontSide,
         });
-    // Rim Fresnel cut way back (skin 0.9→0.22, bone 0.5→0.25). On a rounded body
-    // almost the whole silhouette is glancing, so a strong rim painted a bright
-    // emissive halo over the entire form — the chief reason it read as illegible.
-    if (isSkin)                 enrich(mat, { rim: 0.22, detail: 0.32, detailScale: 34, striation: 0.35, bump: 0.25 });
-    else if (isBone)            enrich(mat, { rim: 0.25, detail: 0.5, detailScale: 50, bump: 1.1, tex: grainTex, texAmt: 0.5, texScale: 1.8 });
+    // Rim Fresnel cut to a hairline (skin 0.22→0.08, bone 0.25→0.1). On a rounded
+    // body almost the whole silhouette is glancing, so even a modest rim painted a
+    // bright emissive halo over the entire form — the chief reason it read as a
+    // glowing ghost. A faint rim still separates the specimen from the void.
+    if (isSkin)                 enrich(mat, { rim: 0.08, detail: 0.32, detailScale: 34, striation: 0.35, bump: 0.25 });
+    else if (isBone)            enrich(mat, { rim: 0.1, detail: 0.5, detailScale: 50, bump: 1.1, tex: grainTex, texAmt: 0.5, texScale: 1.8 });
     else if (key === 'muscles') enrich(mat, { detail: 0.7, detailScale: 36, striation: 1.0, bump: 0.95, tex: muscleTex, texAmt: 0.6, texScale: 1.2 });
     else if (key === 'brain')   enrich(mat, { detail: 0.45, detailScale: 64, bump: 1.15, folds: 1.0, tex: grainTex, texAmt: 0.22, texScale: 2.2 });
     // Heart: pronounced myocardial fibre relief tiled tightly across the small
@@ -764,7 +771,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
         const beat = Math.min(1, Math.exp(-Math.pow((p - 0.12) / 0.055, 2)) + 0.6 * Math.exp(-Math.pow((p - 0.34) / 0.055, 2)));
         const sc = 1 + beat * 0.05;
         heartOrgan.obj.scale.set(heartOrgan.base.x * sc, heartOrgan.base.y * sc, heartOrgan.base.z * sc);
-        for (const m of heartOrgan.mats) m.emissiveIntensity = 0.12 + beat * 0.35;
+        for (const m of heartOrgan.mats) m.emissiveIntensity = 0.02 + beat * 0.18;
       }
 
       if (composer && renderPass) {
