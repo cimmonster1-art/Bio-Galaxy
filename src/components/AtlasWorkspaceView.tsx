@@ -34,7 +34,7 @@ export const AtlasWorkspaceView: React.FC<{ atlas: AtlasController }> = ({ atlas
       <SceneControls scale={atlas.scale} hovered={atlas.hovered} onStep={atlas.stepScale} />
       {atlas.workspace === 'eras' && <CosmicTimeline scale={atlas.scale} onSelectScale={atlas.setScale} onClose={() => atlas.setWorkspace(null)} />}
       {atlas.workspace === 'playback' && <EvolutionPlayback onSelectScale={atlas.setScale} onProgress={atlas.setCinematicProgress} onClose={() => atlas.setWorkspace(null)} />}
-      {atlas.coreAnatomyScale && !atlas.workspace && <AnatomyExplorer scale={atlas.scale} selectedId={atlas.selected?.id} onSelect={atlas.navigateTo} onScaleChange={atlas.setScale} />}
+      {atlas.coreAnatomyScale && !atlas.workspace && <AnatomyExplorer scale={atlas.scale} selectedId={atlas.selected?.id} onSelect={atlas.navigateTo} />}
       {/* Universal relationship rail: every selection opens onto the records
           inside it. Hidden during full-screen workspaces. */}
       {!atlas.workspace && <RelatedRail selected={atlas.selected} onNavigate={atlas.navigateTo} onClose={() => atlas.handleSelect(null)} />}

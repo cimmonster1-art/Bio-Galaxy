@@ -103,12 +103,17 @@ interface SceneCallbacks {
 
 function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle {
   const isMobile = window.innerWidth <= 768;
-  const dpr = Math.min(window.devicePixelRatio, isMobile ? 1.25 : 2);
+  // Cap desktop DPR at 1.75 (was 2): on 4K/Retina panels the 2× framebuffer with
+  // shadows + bloom was the main source of dropped frames, for sharpness the eye
+  // can't resolve at this zoom. Mobile stays at 1.25.
+  const dpr = Math.min(window.devicePixelRatio, isMobile ? 1.25 : 1.75);
   const useBloom = !isMobile;
   const timeUniform = { value: 0 };
 
   // ── Renderer ──────────────────────────────────────────────────────────────
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, alpha: false, powerPreference: 'default' });
+  // 'high-performance' asks the OS to schedule us on the discrete GPU on dual-GPU
+  // laptops instead of the integrated chip — a large, free win for this scene.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(dpr);
   renderer.setSize(Math.max(canvas.clientWidth, 1), Math.max(canvas.clientHeight, 1));
   renderer.setClearColor(0x02040a, 1);
@@ -117,7 +122,10 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.3;
+  // Pulled back from 1.3 → 1.0: the old exposure pushed the lit + emissive
+  // surfaces over the bloom threshold and washed the whole specimen to an
+  // illegible white. 1.0 keeps the tissue readable.
+  renderer.toneMappingExposure = 1.0;
 
   // ── Open-source anatomy detail textures (MIT, from three.js) ───────────────
   // Sampled triplanar in `enrich` (no UVs needed) to add real photographic
@@ -146,9 +154,12 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
       composer.setPixelRatio(renderer.getPixelRatio());
       renderPass = new RenderPass(undefined as any, undefined as any);
       composer.addPass(renderPass);
+      // A whisper of bloom for atmosphere only. Strength dropped 0.42 → 0.14 and
+      // threshold raised 0.85 → 0.92 so bloom catches just the true highlights
+      // (heart flush, faint rim) instead of smearing the entire body into glow.
       bloomPass = new UnrealBloomPass(
         new THREE.Vector2(Math.max(canvas.clientWidth * 0.5, 1), Math.max(canvas.clientHeight * 0.5, 1)),
-        0.42, 0.3, 0.85,
+        0.14, 0.28, 0.92,
       );
       composer.addPass(bloomPass);
     } catch (e) {
@@ -320,14 +331,16 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   // A soft sky/ground hemisphere fills the form naturally, a warm shadow-casting
   // key sculpts the relief and throws real soft shadows between the organs and
   // skeleton, and cool fill + violet rim lights separate the body from the void.
-  scene.add(new THREE.HemisphereLight(0xa9c4ff, 0x140a26, 0.55));
-  scene.add(new THREE.AmbientLight(0x140a32, 0.18));
+  scene.add(new THREE.HemisphereLight(0xa9c4ff, 0x140a26, 0.4));
+  scene.add(new THREE.AmbientLight(0x140a32, 0.16));
 
-  const keyLight = new THREE.DirectionalLight(0xfff1e0, 1.5);
+  const keyLight = new THREE.DirectionalLight(0xfff1e0, 1.05);
   keyLight.position.set(-2, 3.6, 2.8);
   keyLight.castShadow = true;
-  keyLight.shadow.mapSize.set(2048, 2048);
-  keyLight.shadow.radius = 4;
+  // 1024² soft shadows instead of 2048²: a quarter of the shadow-pass cost for
+  // a barely perceptible quality drop — the single biggest per-frame win here.
+  keyLight.shadow.mapSize.set(1024, 1024);
+  keyLight.shadow.radius = 3;
   keyLight.shadow.bias = -0.0006;
   keyLight.shadow.normalBias = 0.02;
   {
@@ -338,8 +351,8 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
   }
   scene.add(keyLight);
 
-  const fillLight = new THREE.DirectionalLight(0x4070ff, 0.35); fillLight.position.set(2, 1, 1.5); scene.add(fillLight);
-  const rimLight = new THREE.DirectionalLight(0x8a5cff, 0.7); rimLight.position.set(0, 0.6, -3.2); scene.add(rimLight);
+  const fillLight = new THREE.DirectionalLight(0x4070ff, 0.28); fillLight.position.set(2, 1, 1.5); scene.add(fillLight);
+  const rimLight = new THREE.DirectionalLight(0x8a5cff, 0.45); rimLight.position.set(0, 0.6, -3.2); scene.add(rimLight);
 
   // Soft contact-shadow catcher: in organ-isolation mode the lone structure
   // casts a real grounding shadow onto this invisible plane instead of floating
@@ -506,17 +519,24 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
         })
       : new THREE.MeshStandardMaterial({
           color: tint, emissive: tint,
-          emissiveIntensity: isBone ? 0.22 : isSkin ? 0.07 : 0.4,
+          // Emissive cut hard (bone 0.22→0.1, skin 0.07→0.03, other 0.4→0.14):
+          // the lights and environment should define the form, not self-glow.
+          // The old values stacked across overlapping translucent layers into a
+          // blown-out white blob.
+          emissiveIntensity: isBone ? 0.1 : isSkin ? 0.03 : 0.14,
           metalness: isBone ? 0.05 : 0.12, roughness: isBone ? 0.82 : 0.5,
           transparent: !opaque,
           // Skin barely visible so the organs read through it.
-          opacity: isSkin ? 0.2 : 0.86,
+          opacity: isSkin ? 0.18 : 0.86,
           depthWrite: opaque,
           envMapIntensity: 0.9,
           side: THREE.FrontSide,
         });
-    if (isSkin)                 enrich(mat, { rim: 0.9, detail: 0.32, detailScale: 34, striation: 0.35, bump: 0.25 });
-    else if (isBone)            enrich(mat, { rim: 0.5, detail: 0.5, detailScale: 50, bump: 1.1, tex: grainTex, texAmt: 0.5, texScale: 1.8 });
+    // Rim Fresnel cut way back (skin 0.9→0.22, bone 0.5→0.25). On a rounded body
+    // almost the whole silhouette is glancing, so a strong rim painted a bright
+    // emissive halo over the entire form — the chief reason it read as illegible.
+    if (isSkin)                 enrich(mat, { rim: 0.22, detail: 0.32, detailScale: 34, striation: 0.35, bump: 0.25 });
+    else if (isBone)            enrich(mat, { rim: 0.25, detail: 0.5, detailScale: 50, bump: 1.1, tex: grainTex, texAmt: 0.5, texScale: 1.8 });
     else if (key === 'muscles') enrich(mat, { detail: 0.7, detailScale: 36, striation: 1.0, bump: 0.95, tex: muscleTex, texAmt: 0.6, texScale: 1.2 });
     else if (key === 'brain')   enrich(mat, { detail: 0.45, detailScale: 64, bump: 1.15, folds: 1.0, tex: grainTex, texAmt: 0.22, texScale: 2.2 });
     // Heart: pronounced myocardial fibre relief tiled tightly across the small
@@ -744,7 +764,7 @@ function buildScene(canvas: HTMLCanvasElement, cb: SceneCallbacks): SceneHandle 
         const beat = Math.min(1, Math.exp(-Math.pow((p - 0.12) / 0.055, 2)) + 0.6 * Math.exp(-Math.pow((p - 0.34) / 0.055, 2)));
         const sc = 1 + beat * 0.05;
         heartOrgan.obj.scale.set(heartOrgan.base.x * sc, heartOrgan.base.y * sc, heartOrgan.base.z * sc);
-        for (const m of heartOrgan.mats) m.emissiveIntensity = 0.4 + beat * 0.9;
+        for (const m of heartOrgan.mats) m.emissiveIntensity = 0.12 + beat * 0.35;
       }
 
       if (composer && renderPass) {
