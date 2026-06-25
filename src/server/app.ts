@@ -11,6 +11,48 @@ export async function createApp(): Promise<Express> {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
+
+  // Security headers applied to every response.
+  app.use((_req, res, next) => {
+    res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), interest-cohort=()');
+    res.setHeader(
+      'Content-Security-Policy',
+      [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob: https:",
+        "font-src 'self' data:",
+        [
+          "connect-src 'self'",
+          'https://rest.uniprot.org',
+          'https://reactome.org',
+          'https://data.rcsb.org',
+          'https://files.rcsb.org',
+          'https://rest.ensembl.org',
+          'https://www.proteinatlas.org',
+          'https://eutils.ncbi.nlm.nih.gov',
+          'https://pubchem.ncbi.nlm.nih.gov',
+          'https://alphafold.ebi.ac.uk',
+          'https://en.wikipedia.org',
+        ].join(' '),
+        "worker-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+        'upgrade-insecure-requests',
+      ].join('; ')
+    );
+    // Explicitly disable legacy XSS auditor (modern browsers ignore it; old ones
+    // had exploitable bypass bugs when it was enabled).
+    res.setHeader('X-XSS-Protection', '0');
+    next();
+  });
+
   app.get('/favicon.ico', (_req, res) => res.redirect(308, '/favicon.svg'));
   app.get('/robots.txt', robotsTxt);
   app.get('/sitemap.xml', sitemapXml);

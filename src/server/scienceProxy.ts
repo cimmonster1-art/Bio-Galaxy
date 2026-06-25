@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 
 const ALLOWED_HOSTS = new Set([
   'rest.uniprot.org', 'reactome.org', 'data.rcsb.org', 'files.rcsb.org',
@@ -8,6 +8,37 @@ const ALLOWED_HOSTS = new Set([
 const FRESH_MS = 5 * 60_000;
 const STALE_MS = 60 * 60_000;
 const MAX_ENTRIES = 250;
+
+// Rate limiter: max 60 requests per IP per minute.
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX = 60;
+interface RateBucket { count: number; windowStart: number; }
+const rateBuckets = new Map<string, RateBucket>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const bucket = rateBuckets.get(ip);
+  if (!bucket || now - bucket.windowStart >= RATE_WINDOW_MS) {
+    rateBuckets.set(ip, { count: 1, windowStart: now });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > RATE_MAX;
+}
+
+// Prune stale rate buckets every 5 minutes to prevent unbounded memory growth.
+setInterval(() => {
+  const cutoff = Date.now() - RATE_WINDOW_MS * 2;
+  for (const [ip, bucket] of rateBuckets) {
+    if (bucket.windowStart < cutoff) rateBuckets.delete(ip);
+  }
+}, 5 * 60_000).unref();
+
+function clientIp(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+  return req.socket?.remoteAddress ?? 'unknown';
+}
 
 interface CacheEntry { body: Buffer; contentType: string; storedAt: number; }
 const cache = new Map<string, CacheEntry>();
@@ -31,10 +62,16 @@ async function load(url: string): Promise<CacheEntry> {
   return request;
 }
 
-/** Same-origin, allowlisted gateway for the atlas's public, key-free science APIs. */
+/** Same-origin, allowlisted, rate-limited gateway for the atlas's public, key-free science APIs. */
 export function scienceProxy(): Router {
   const router = Router();
   router.get('/science', async (req, res) => {
+    const ip = clientIp(req);
+    if (isRateLimited(ip)) {
+      res.status(429).set('Retry-After', '60').json({ error: 'Rate limit exceeded. Max 60 requests per minute per IP.' });
+      return;
+    }
+
     const raw = typeof req.query.url === 'string' ? req.query.url : '';
     let target: URL;
     try { target = new URL(raw); } catch { res.status(400).json({ error: 'A valid upstream URL is required.' }); return; }

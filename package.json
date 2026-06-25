@@ -9,7 +9,11 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/data/__tests__/*.test.ts src/server/__tests__/*.test.ts src/components/errors/__tests__/*.test.tsx"
+    "check:architecture": "node scripts/check-file-length.mjs",
+    "audit": "npm audit --audit-level=high",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "test": "tsx --test src/data/__tests__/*.test.ts src/server/__tests__/*.test.ts src/components/errors/__tests__/*.test.tsx",
+    "ci": "npm run lint && npm run check:architecture && npm run build && npm run test"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
