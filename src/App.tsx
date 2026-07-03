@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { LandingPage } from './components/LandingPage';
 import { AtlasShell } from './components/AtlasShell';
 import { BlogPage } from './components/blog/BlogPage';
@@ -34,11 +35,21 @@ export default function App(): React.ReactElement {
   if (view === 'blog') {
     const path = window.location.pathname;
     const slug = path.startsWith('/blog/') ? decodeURIComponent(path.slice('/blog/'.length)) : null;
-    return <BlogPage slug={slug} onHome={goHome} />;
+    return (
+      <>
+        <BlogPage slug={slug} onHome={goHome} />
+        <Analytics />
+      </>
+    );
   }
-  return view === 'atlas' ? (
-    <AtlasShell onExit={() => setView('landing')} />
-  ) : (
-    <LandingPage onOpenAtlas={() => setView('atlas')} />
+  return (
+    <>
+      {view === 'atlas' ? (
+        <AtlasShell onExit={() => setView('landing')} />
+      ) : (
+        <LandingPage onOpenAtlas={() => setView('atlas')} />
+      )}
+      <Analytics />
+    </>
   );
 }
