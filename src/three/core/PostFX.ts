@@ -7,18 +7,10 @@ import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
 /**
- * Post-processing pipeline shared by every scale, so the whole atlas looks like
- * it belongs to one universe:
- *
- *   • an HDR, multisampled render target — crisp anti-aliased edges that read
- *     like temporal AA, with headroom for bright emissive elements to bloom;
- *   • a restrained UnrealBloom pass for the soft glow on nodes, membranes,
- *     god-rays, and structures;
- *   • a gentle vignette that pulls the eye inward toward the subject;
- *   • an OutputPass applying ACES tone mapping and color management.
- *
- * Owns its composer and render targets and disposes them on teardown to avoid
- * WebGL memory leaks.
+ * Shared post-processing for the physical-scale atlas. The image should read as
+ * a scientific visualization first: bloom is reserved for genuinely emissive
+ * features, the vignette is nearly imperceptible, and ACES handles highlights
+ * without turning tissue, terrain or planets into neon props.
  */
 export class PostFX {
   private readonly composer: EffectComposer;
@@ -43,22 +35,20 @@ export class PostFX {
     this.composer = new EffectComposer(renderer, this.renderTarget);
     this.composer.setPixelRatio(dpr);
     this.composer.setSize(width, height);
-
     this.composer.addPass(new RenderPass(scene, camera));
 
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(width, height),
-      0.42, // strength
-      0.5, // radius
-      0.82, // threshold: only genuinely bright elements bloom
+      0.16,
+      0.28,
+      0.91,
     );
     this.composer.addPass(this.bloom);
 
     const vignette = new ShaderPass(VignetteShader);
-    vignette.uniforms.offset.value = 1.1;
-    vignette.uniforms.darkness.value = 1.05;
+    vignette.uniforms.offset.value = 1.02;
+    vignette.uniforms.darkness.value = 0.76;
     this.composer.addPass(vignette);
-
     this.composer.addPass(new OutputPass());
   }
 
