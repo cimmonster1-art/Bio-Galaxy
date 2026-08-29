@@ -2,32 +2,44 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 /**
- * Best-effort loader for real open-source GLB models used to give the living
- * scales genuine species identity. Loading is non-blocking and always resolves:
- * on any network/parse failure it yields null so the caller can fall back to a
- * procedural stand-in. Mirrors the proven approach used for the HuBMAP organs.
+ * Small permissively licensed GLB catalogue for the ecology layer. The key is
+ * the actual model identity; we never relabel a horse as a deer or a fox as a
+ * wolf. When Bio Galaxy does not have an exact open asset for a species, that
+ * biome simply renders without a token animal.
  */
 const loader = new GLTFLoader();
 
-/** Open-source, permissively licensed wildlife models committed on GitHub and
- *  served with CORS from raw.githubusercontent.com. */
 export const WILDLIFE_MODELS = {
-  // PixelMannen (CC0) + rig by tomkranis (CC-BY 4.0), via KhronosGroup samples.
-  wolf: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Fox/glTF-Binary/Fox.glb',
-  // mirada / three.js examples (CC-BY).
-  deer: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/Horse.glb',
-  bird: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/Parrot.glb',
+  // KhronosGroup glTF Sample Assets. Fox model: CC0 geometry with CC-BY rigging.
+  fox: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Fox/glTF-Binary/Fox.glb',
+  // three.js example assets, distributed with the project under its examples licensing.
+  horse: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/Horse.glb',
+  parrot: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/Parrot.glb',
   stork: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/models/gltf/Stork.glb',
+  // KhronosGroup sample asset: the model is actually a barramundi fish.
+  barramundi: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/BarramundiFish/glTF-Binary/BarramundiFish.glb',
 } as const;
 
 export const WILDLIFE_CREDIT =
-  'Animal models: three.js examples (CC-BY) and KhronosGroup glTF Sample Assets (CC0/CC-BY).';
+  'Fauna assets: KhronosGroup glTF Sample Assets and three.js example models; exact model identity is preserved in Bio Galaxy.';
 
-/** Load a GLB, resolving null on any failure so callers can fall back. */
+/**
+ * Load a GLB, resolving null on any failure. If the asset contains animation,
+ * play its first clip and attach the mixer to the scene so a living layer can
+ * advance it without changing the simple Group return type used elsewhere.
+ */
 export function loadGlb(url: string): Promise<THREE.Group | null> {
   return new Promise((resolve) => {
     try {
-      loader.load(url, (g) => resolve(g.scene), undefined, () => resolve(null));
+      loader.load(url, (gltf) => {
+        const scene = gltf.scene;
+        if (gltf.animations.length > 0) {
+          const mixer = new THREE.AnimationMixer(scene);
+          mixer.clipAction(gltf.animations[0]).play();
+          scene.userData.animationMixer = mixer;
+        }
+        resolve(scene);
+      }, undefined, () => resolve(null));
     } catch {
       resolve(null);
     }
@@ -50,10 +62,10 @@ export function fitModel(root: THREE.Object3D, targetHeight: number): void {
   root.position.x -= center.x;
   root.position.z -= center.z;
   root.position.y -= fitted.min.y;
-  root.traverse((o) => {
-    if ((o as THREE.Mesh).isMesh) {
-      o.castShadow = true;
-      o.receiveShadow = true;
+  root.traverse((object) => {
+    if ((object as THREE.Mesh).isMesh) {
+      object.castShadow = true;
+      object.receiveShadow = true;
     }
   });
 }

@@ -1,537 +1,554 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Scale, PickTag } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
-import { loadGlb, fitModel, WILDLIFE_MODELS } from '../core/glbLoader';
-import {
-  createFoliageTexture, createGroundTexture, createBarkTexture, createBumpTexture,
-} from '../textures/proceduralTextures';
+import { fitModel, loadGlb, WILDLIFE_MODELS } from '../core/glbLoader';
 
-/** Merge several displaced spheres into one irregular, bushy crown so a canopy
- *  reads as a clump of foliage rather than a single faceted ball. */
-function bushyCrown(radius: number): THREE.BufferGeometry {
-  const parts: THREE.BufferGeometry[] = [];
-  const blobs = 5 + Math.floor(Math.random() * 3);
-  for (let i = 0; i < blobs; i++) {
-    const r = radius * (0.5 + Math.random() * 0.45);
-    const sphere = new THREE.IcosahedronGeometry(r, 2);
-    // Roughen each blob's surface so the silhouette is leafy, not smooth.
-    const p = sphere.attributes.position as THREE.BufferAttribute;
-    for (let v = 0; v < p.count; v++) {
-      const n = 1 + (Math.random() - 0.5) * 0.28;
-      p.setXYZ(v, p.getX(v) * n, p.getY(v) * n, p.getZ(v) * n);
-    }
-    sphere.translate(
-      (Math.random() - 0.5) * radius * 1.1,
-      radius * (0.3 + Math.random() * 0.7),
-      (Math.random() - 0.5) * radius * 1.1,
-    );
-    parts.push(sphere);
-  }
-  const merged = mergeGeometries(parts, false) ?? parts[0];
-  merged.computeVertexNormals();
-  for (const part of parts) if (part !== merged) part.dispose();
-  return merged;
+type BiomeId = 'rainforest' | 'reef' | 'tundra' | 'savanna' | 'temperate' | 'desert';
+
+interface BiomeVariant {
+  id: BiomeId;
+  name: string;
+  ground: number;
+  ground2: number;
+  sky: number;
+  haze: number;
+  particle: number;
 }
 
 /**
- * Soft, feathered light-shaft texture for the volumetric god-rays. It is
- * brightest just below the sun source, eases to nothing along its length, and
- * feathers to fully transparent at both edges — so a shaft reads as a dazzling
- * beam of sunlight from any angle and never shows a hard cylinder rim.
+ * The biome scale is intentionally six different environments rather than one
+ * forest kit recoloured six ways. Coral reef has no trees. Tundra has no forest
+ * floor. Desert has no mushrooms. Each scene has its own terrain, structure,
+ * atmosphere and (where we have an exact permissively licensed asset) fauna.
  */
-function createGodRayTexture(): THREE.Texture {
-  const w = 96;
-  const h = 320;
+export const BIOME_VARIANTS: BiomeVariant[] = [
+  { id: 'rainforest', name: 'Tropical Rainforest', ground: 0x24351f, ground2: 0x152515, sky: 0x173c35, haze: 0x5d8f78, particle: 0xc8e6d5 },
+  { id: 'reef', name: 'Coral Reef', ground: 0xc7b889, ground2: 0x8f8a67, sky: 0x083c59, haze: 0x1684a0, particle: 0xbcecf3 },
+  { id: 'tundra', name: 'Arctic Tundra', ground: 0xb8c2c4, ground2: 0x7e8988, sky: 0x607889, haze: 0xc7d4da, particle: 0xf5fbff },
+  { id: 'savanna', name: 'Savanna', ground: 0x8d7437, ground2: 0x5f542c, sky: 0xa88355, haze: 0xc1a36c, particle: 0xe5cf8d },
+  { id: 'temperate', name: 'Temperate Forest', ground: 0x36452a, ground2: 0x222d20, sky: 0x48665e, haze: 0x78948a, particle: 0xe1d9a5 },
+  { id: 'desert', name: 'Desert', ground: 0xc49b5d, ground2: 0x8a653b, sky: 0xb77b55, haze: 0xd0a873, particle: 0xe3c48e },
+];
+
+const GROUND_Y = -10;
+const RADIUS = 150;
+const UP = new THREE.Vector3(0, 1, 0);
+
+type Fadeable = { mat: THREE.Material & { opacity: number }; base: number; biome: BiomeId };
+type FaunaMotion = {
+  biome: BiomeId;
+  group: THREE.Group;
+  radius: number;
+  angle: number;
+  speed: number;
+  yOffset: number;
+  verticalDrift: number;
+  mixer?: THREE.AnimationMixer;
+};
+
+type AmbientMotion = { biome: BiomeId; object: THREE.Object3D; speed: number };
+
+function seeded(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s += 0x6d2b79f5;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function terrainHeight(id: BiomeId, x: number, z: number): number {
+  const broad = Math.sin(x * 0.028) * Math.cos(z * 0.024);
+  const detail = Math.sin(x * 0.087 + z * 0.061) * 0.55;
+  const r2 = x * x + z * z;
+  if (id === 'reef') return broad * 1.15 + detail * 0.35 - Math.exp(-r2 / 2900) * 1.4;
+  if (id === 'tundra') return broad * 2.1 + detail * 0.7;
+  if (id === 'desert') return Math.sin(x * 0.021 + z * 0.008) * 4.0 + Math.sin(z * 0.036) * 1.4;
+  if (id === 'savanna') return broad * 2.7 + detail * 0.8;
+  return broad * 4.0 + detail * 1.15 - Math.exp(-r2 / 1200) * 2.0;
+}
+
+function makeTerrainTexture(a: number, b: number, seed: number): THREE.CanvasTexture {
+  const size = 256;
   const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
+  canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
+  const random = seeded(seed);
   if (ctx) {
-    const img = ctx.createImageData(w, h);
-    const cx = (w - 1) / 2;
-    for (let y = 0; y < h; y++) {
-      const v = y / (h - 1);
-      // Along the shaft: bloom in just under the sun, then taper toward the floor.
-      const along = Math.pow(1 - v, 1.7) * (0.3 + 0.7 * Math.min(1, v * 7));
-      for (let x = 0; x < w; x++) {
-        // Across the shaft: a soft Gaussian core feathered to clear edges.
-        const dx = (x - cx) / (w * 0.3);
-        const a = Math.max(0, Math.min(1, along * Math.exp(-dx * dx)));
-        const i = (y * w + x) * 4;
-        img.data[i] = 255;
-        img.data[i + 1] = 247;
-        img.data[i + 2] = 222;
-        img.data[i + 3] = Math.round(a * 255);
+    const c1 = new THREE.Color(a);
+    const c2 = new THREE.Color(b);
+    const image = ctx.createImageData(size, size);
+    const mixed = new THREE.Color();
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const macro = 0.5 + Math.sin(x * 0.075) * 0.10 + Math.cos(y * 0.064) * 0.08;
+        const grain = (random() - 0.5) * 0.22;
+        mixed.copy(c1).lerp(c2, THREE.MathUtils.clamp(macro + grain, 0, 1));
+        const i = (y * size + x) * 4;
+        image.data[i] = Math.round(mixed.r * 255);
+        image.data[i + 1] = Math.round(mixed.g * 255);
+        image.data[i + 2] = Math.round(mixed.b * 255);
+        image.data[i + 3] = 255;
       }
     }
-    ctx.putImageData(img, 0, 0);
+    ctx.putImageData(image, 0, 0);
   }
   const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(12, 12);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.needsUpdate = true;
+  texture.anisotropy = 4;
   return texture;
 }
 
-/**
- * Biome — a living planetary environment you descend into from orbit. Built as a
- * layered ecosystem rather than a field of identical lollipop trees:
- *
- *   • a hierarchical vegetation system — old-growth canopy, understory saplings,
- *     shrubs, and ground cover — each instanced with strong per-plant variation
- *     in height, tilt, and colour;
- *   • forest-floor clutter — fallen logs, rocks, mushrooms, and dead snags;
- *   • rolling terrain with hills and a hollow, dense atmospheric haze,
- *     volumetric god-ray shafts, a dynamic sky, and wind that sways everything;
- *   • real open-source wildlife models roaming the clearing.
- *
- * Six biome variants ring the horizon as selectable waypoints, and the ground,
- * vegetation, and animals are all clickable.
- */
-
-/** Airborne particle signature that gives each biome its instantly readable mood. */
-type Atmosphere = 'mist' | 'snow' | 'sand' | 'spores' | 'none';
-
-interface BiomeVariant {
-  id: string; name: string; canopy: number; ground: number; horizon: number;
-  /** Grass-blade and shrub tints for the ground layer. */
-  grass: number; shrub: number;
-  /** Fraction (0–1) of the full vegetation set rendered, so deserts read sparse. */
-  treeDensity: number; grassDensity: number; shrubDensity: number;
-  /** Airborne identity: rainforest mist, tundra snow, desert sand, etc. */
-  atmosphere: Atmosphere; atmoColor: number;
-  /** Haze tint and strength, and how strong the sun shafts read. */
-  fog: number; fogStrength: number; rayStrength: number;
+function composeAlong(from: THREE.Vector3, to: THREE.Vector3, radius: number, target: THREE.Matrix4): void {
+  const delta = to.clone().sub(from);
+  const length = delta.length();
+  const midpoint = from.clone().add(to).multiplyScalar(0.5);
+  const q = new THREE.Quaternion().setFromUnitVectors(UP, delta.normalize());
+  target.compose(midpoint, q, new THREE.Vector3(radius, length, radius));
 }
 
-// Each biome is tuned to be recognizable at a glance — by palette, by how dense
-// or sparse its vegetation is, and above all by what hangs in its air.
-export const BIOME_VARIANTS: BiomeVariant[] = [
-  { id: 'rainforest', name: 'Tropical Rainforest', canopy: 0x1f6b3a, ground: 0x24351f, horizon: 0x123b32,
-    grass: 0x3f8f3a, shrub: 0x356b2e, treeDensity: 1, grassDensity: 1, shrubDensity: 1,
-    atmosphere: 'mist', atmoColor: 0xbfe0d8, fog: 0x2a5a52, fogStrength: 1.4, rayStrength: 1.25 },
-  { id: 'reef', name: 'Coral Reef', canopy: 0x18a3b8, ground: 0x0f3a55, horizon: 0x0a4a63,
-    grass: 0x2fa39a, shrub: 0x2a8fa0, treeDensity: 0.5, grassDensity: 0.7, shrubDensity: 0.7,
-    atmosphere: 'spores', atmoColor: 0xcdeeff, fog: 0x12506b, fogStrength: 1.7, rayStrength: 0.85 },
-  { id: 'tundra', name: 'Arctic Tundra', canopy: 0xbfe6ff, ground: 0x9fb0bc, horizon: 0x214055,
-    grass: 0x8a9a92, shrub: 0x7d8a82, treeDensity: 0.12, grassDensity: 0.35, shrubDensity: 0.3,
-    atmosphere: 'snow', atmoColor: 0xffffff, fog: 0xb8c8d6, fogStrength: 1.15, rayStrength: 0.7 },
-  { id: 'savanna', name: 'Savanna', canopy: 0x7f8a3a, ground: 0x6b5a2a, horizon: 0x4a3a1e,
-    grass: 0xc7a14a, shrub: 0x9a8a3a, treeDensity: 0.25, grassDensity: 1, shrubDensity: 0.3,
-    atmosphere: 'spores', atmoColor: 0xe8d8a0, fog: 0xc8a060, fogStrength: 0.75, rayStrength: 1.05 },
-  { id: 'temperate', name: 'Temperate Forest', canopy: 0x2f7d4a, ground: 0x2c3a22, horizon: 0x1d4034,
-    grass: 0x5a9a3e, shrub: 0x3f7d36, treeDensity: 0.8, grassDensity: 0.9, shrubDensity: 0.8,
-    atmosphere: 'spores', atmoColor: 0xeae0a0, fog: 0x3a6a5a, fogStrength: 0.85, rayStrength: 1.0 },
-  { id: 'desert', name: 'Desert', canopy: 0x9a8a4a, ground: 0xc2a060, horizon: 0x5a3a22,
-    grass: 0xb89a5a, shrub: 0xa8924e, treeDensity: 0.06, grassDensity: 0.12, shrubDensity: 0.15,
-    atmosphere: 'sand', atmoColor: 0xe8c98a, fog: 0xd8b070, fogStrength: 0.6, rayStrength: 0.5 },
-];
-
-const SUN = new THREE.Vector3(0.45, 0.62, 0.35).normalize();
-const GROUND_Y = -10;
-const RADIUS = 150;
-
-/** Shared rolling-terrain height field so plants sit on the surface. */
-function heightAt(x: number, z: number): number {
-  return (
-    Math.sin(x * 0.045) * Math.cos(z * 0.04) * 4.2 +
-    Math.sin(x * 0.12 + z * 0.1) * 1.4 -
-    Math.exp(-((x * x + z * z) / 900)) * 5 // a central hollow / clearing
-  );
-}
-
+/** Scientific, scene-specific ecology at the Biome scale. */
 export class BiomeLayer implements SceneLayer {
   readonly root = new THREE.Group();
   readonly activeScales = [Scale.Biome];
 
   private intensity = 0;
-  private active: BiomeVariant = BIOME_VARIANTS[0];
-  private readonly wind = { value: 0 };
-
-  private readonly skyMat: THREE.ShaderMaterial;
-  private readonly groundMat: THREE.MeshStandardMaterial;
-  private readonly ground: THREE.Mesh;
-  private readonly hazeMat: THREE.MeshBasicMaterial;
-  private readonly godRayMat: THREE.MeshBasicMaterial;
-  private readonly godRayGroup: THREE.Group;
-  private readonly canopyFoliage: THREE.InstancedMesh;
-  private readonly markers: THREE.Mesh[] = [];
-  private readonly markerMats: THREE.MeshBasicMaterial[] = [];
-  private readonly fadeables: (THREE.Material & { opacity: number })[] = [];
-  private readonly windMats: THREE.Material[] = [];
-  private readonly pickables: THREE.Object3D[] = [];
-  private readonly animals: { group: THREE.Group; angle: number; radius: number; speed: number }[] = [];
-  private readonly loadedRoots: THREE.Object3D[] = [];
-
-  // Per-variant identity plumbing: instanced vegetation whose visible count is
-  // dialled by biome density, the foliage/grass/shrub materials to retint, and a
-  // single airborne particle field reconfigured into mist / snow / sand / spores.
-  private readonly vegLayers: { mesh: THREE.InstancedMesh; full: number; kind: 'tree' | 'shrub' | 'grass' }[] = [];
-  private readonly foliageMats: THREE.MeshStandardMaterial[] = [];
-  private readonly shrubMats: THREE.MeshStandardMaterial[] = [];
-  private readonly grassMats: THREE.MeshStandardMaterial[] = [];
-  private rayStrength = 1.25;
-  private fogStrength = 1.4;
-
-  // Shared living-world surfaces, generated once and reused across instances.
-  private readonly foliageTex = createFoliageTexture('#3f9d4a', 256);
-  private readonly foliageBump = createBumpTexture(256, 0.12);
-  private readonly barkTex = createBarkTexture('#3c2a1a', 256);
-  private readonly groundTex = createGroundTexture('#3f7d3a', '#3a2c1c', 512);
-  private readonly groundBump = createBumpTexture(512, 0.05);
-  private readonly textures: THREE.Texture[] = [this.foliageTex, this.foliageBump, this.barkTex, this.groundTex, this.groundBump];
+  private activeId: BiomeId = 'rainforest';
+  private readonly groups = new Map<BiomeId, THREE.Group>();
+  private readonly fadeables: Fadeable[] = [];
+  private readonly textures: THREE.Texture[] = [];
+  private readonly pickables = new Map<BiomeId, THREE.Object3D[]>();
+  private readonly fauna: FaunaMotion[] = [];
+  private readonly ambient: AmbientMotion[] = [];
 
   constructor() {
     this.root.name = 'BiomeLayer';
     this.root.visible = false;
-    this.foliageTex.repeat.set(2, 2);
-    this.barkTex.repeat.set(1, 3);
-    this.groundTex.repeat.set(18, 18);
-    this.groundBump.repeat.set(24, 24);
 
-    // ── Dynamic sky ───────────────────────────────────────────────────────────
-    this.skyMat = new THREE.ShaderMaterial({
-      side: THREE.BackSide, depthWrite: false, transparent: true,
-      uniforms: {
-        uTime: { value: 0 }, uOpacity: { value: 0 },
-        uTop: { value: new THREE.Color(0x041018) },
-        uHorizon: { value: new THREE.Color(this.active.horizon) },
-        uSun: { value: SUN.clone() }, uSunColor: { value: new THREE.Color(0xbff0ff) },
-      },
-      vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-      fragmentShader: `precision highp float; uniform float uTime,uOpacity; uniform vec3 uTop,uHorizon,uSun,uSunColor; varying vec3 vDir;
-        void main(){ vec3 d=normalize(vDir); float h=clamp(d.y*0.5+0.5,0.0,1.0);
-          vec3 col=mix(uHorizon,uTop,pow(h,0.65)); float sun=max(dot(d,normalize(uSun)),0.0);
-          col += uSunColor*pow(sun,220.0)*1.4 + uSunColor*pow(sun,6.0)*0.18;
-          col += vec3(0.02,0.05,0.06)*(sin(d.x*6.0+uTime*0.05)*0.5+0.5)*smoothstep(0.0,0.4,d.y);
-          gl_FragColor=vec4(col,uOpacity); }`,
-    });
-    const sky = new THREE.Mesh(new THREE.SphereGeometry(820, 32, 24), this.skyMat);
-    sky.frustumCulled = false;
-    this.root.add(sky);
-    this.fadeables.push(this.skyMat as unknown as THREE.Material & { opacity: number });
+    for (const variant of BIOME_VARIANTS) {
+      const group = new THREE.Group();
+      group.name = `Biome:${variant.id}`;
+      group.visible = variant.id === this.activeId;
+      this.groups.set(variant.id, group);
+      this.pickables.set(variant.id, []);
+      this.root.add(group);
+      this.buildBase(variant, group);
+      if (variant.id === 'rainforest') this.buildRainforest(group);
+      if (variant.id === 'reef') this.buildReef(group);
+      if (variant.id === 'tundra') this.buildTundra(group);
+      if (variant.id === 'savanna') this.buildSavanna(group);
+      if (variant.id === 'temperate') this.buildTemperate(group);
+      if (variant.id === 'desert') this.buildDesert(group);
+      this.addAir(variant, group);
+    }
 
-    // ── Rolling terrain with a central clearing ───────────────────────────────
-    const groundGeo = new THREE.CircleGeometry(RADIUS, 120);
+    // Only use assets that are exactly what their source says they are. If an
+    // exact model is not available, the biome is left without a token animal
+    // rather than substituting another species.
+    this.spawnFauna('temperate', 'fox', 'organism:predator', 3.1, 58, 0, 0.07, 0.08);
+    this.spawnFauna('rainforest', 'parrot', 'organism:bird', 2.1, 52, 18, 0.11, 2.5);
+    this.spawnFauna('reef', 'barramundi', 'organism:fish', 2.4, 45, 4.5, 0.14, 1.4);
+  }
+
+  private tracked<T extends THREE.Material & { opacity: number }>(biome: BiomeId, mat: T, base = 1): T {
+    mat.transparent = true;
+    mat.opacity = 0;
+    this.fadeables.push({ mat, base, biome });
+    return mat;
+  }
+
+  private registerPick(biome: BiomeId, object: THREE.Object3D, id = `biome:${biome}`): void {
+    object.userData.pick = { id, scale: id.startsWith('organism:') ? Scale.Organism : Scale.Biome };
+    this.pickables.get(biome)?.push(object);
+  }
+
+  private buildBase(v: BiomeVariant, group: THREE.Group): void {
+    const texture = makeTerrainTexture(v.ground, v.ground2, 101 + BIOME_VARIANTS.indexOf(v) * 97);
+    this.textures.push(texture);
+
+    const groundGeo = new THREE.CircleGeometry(RADIUS, 144);
     groundGeo.rotateX(-Math.PI / 2);
-    const gp = groundGeo.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < gp.count; i++) gp.setY(i, heightAt(gp.getX(i), gp.getZ(i)));
-    gp.needsUpdate = true;
+    const pos = groundGeo.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      pos.setY(i, terrainHeight(v.id, x, z));
+    }
+    pos.needsUpdate = true;
     groundGeo.computeVertexNormals();
-    this.groundMat = new THREE.MeshStandardMaterial({
-      color: this.active.ground, roughness: 0.97, metalness: 0, transparent: true, opacity: 0, envMapIntensity: 0.4,
-      map: this.groundTex, bumpMap: this.groundBump, bumpScale: 0.6,
-    });
-    this.ground = new THREE.Mesh(groundGeo, this.groundMat);
-    this.ground.position.y = GROUND_Y;
-    this.ground.receiveShadow = true;
-    this.ground.userData.pick = { id: `biome:${this.active.id}`, scale: Scale.Biome };
-    this.root.add(this.ground);
-    this.fadeables.push(this.groundMat);
-    this.pickables.push(this.ground);
-
-    // ── Atmospheric haze + volumetric god-rays ────────────────────────────────
-    this.hazeMat = new THREE.MeshBasicMaterial({ color: 0x1d4a5a, transparent: true, opacity: 0, side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false });
-    const haze = new THREE.Mesh(new THREE.SphereGeometry(360, 24, 18), this.hazeMat);
-    haze.frustumCulled = false;
-    this.root.add(haze);
-    this.fadeables.push(this.hazeMat);
-
-    // Volumetric god-rays: soft, feathered light shafts streaming down from the
-    // sun direction. Crossed billboards sharing one additive gradient texture
-    // read as a dazzling, hyperreal beam of sunlight from any angle — replacing
-    // the old hard-edged cylinder cone.
-    const godRayTex = createGodRayTexture();
-    this.textures.push(godRayTex);
-    this.godRayMat = new THREE.MeshBasicMaterial({
-      map: godRayTex, color: 0xfff3d6, transparent: true, opacity: 0,
-      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
-    });
-    this.godRayGroup = new THREE.Group();
-    const shaftLen = 280;
-    const blades = 5;
-    for (let i = 0; i < blades; i++) {
-      const plane = new THREE.PlaneGeometry(96, shaftLen);
-      plane.translate(0, -shaftLen / 2, 0); // pivot at the top, the sun end
-      const blade = new THREE.Mesh(plane, this.godRayMat);
-      blade.rotation.y = (i / blades) * Math.PI; // cross the billboards around the shaft
-      blade.scale.x = 0.7 + (i % 2) * 0.5;        // vary widths so it never reads as a flat fan
-      blade.frustumCulled = false;
-      this.godRayGroup.add(blade);
-    }
-    this.godRayGroup.position.copy(SUN.clone().multiplyScalar(90)).add(new THREE.Vector3(0, 40, 0));
-    this.godRayGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), SUN);
-    this.godRayGroup.frustumCulled = false;
-    this.root.add(this.godRayGroup);
-    this.fadeables.push(this.godRayMat);
-
-    // ── Hierarchical vegetation ───────────────────────────────────────────────
-    // Canopy: tall old-growth + mature trees, sparse, with wide crowns.
-    this.scatterTrees('canopy', 64, 18, RADIUS * 0.92, 9, 9, 0.18);
-    this.canopyFoliage = this.lastFoliage!;
-    // Understory: smaller trees and saplings, denser.
-    this.scatterTrees('understory', 150, 14, RADIUS * 0.95, 3.5, 4, 0.12);
-    // Shrubs and bushes.
-    this.scatterShrubs(240);
-    // Ground cover: dense grass tufts and ferns.
-    this.scatterGrass(9000);
-    // Forest-floor clutter.
-    this.scatterClutter();
-
-    // ── Selectable biome-variant waypoints ────────────────────────────────────
-    BIOME_VARIANTS.forEach((variant, i) => {
-      const angle = (i / BIOME_VARIANTS.length) * Math.PI * 2;
-      const mat = new THREE.MeshBasicMaterial({ color: variant.canopy, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.22, 12, 40), mat);
-      ring.position.set(Math.cos(angle) * 96, 16 + Math.sin(i) * 4, Math.sin(angle) * 96);
-      ring.lookAt(0, 16, 0);
-      ring.userData.pick = { id: `biome:${variant.id}`, scale: Scale.Biome };
-      this.markers.push(ring);
-      this.markerMats.push(mat);
-      this.fadeables.push(mat);
-      this.pickables.push(ring);
-      this.root.add(ring);
-    });
-
-    // ── Real roaming wildlife (best-effort, with no fallback clutter) ──────────
-    this.spawnAnimal('deer', 'organism:herbivore', 4, 40);
-    this.spawnAnimal('wolf', 'organism:predator', 3.2, 60);
-
-    // Lock in the starting biome's full identity (densities, tints, air).
-    this.applyIdentity();
-  }
-
-  /** Reconfigure every per-variant trait: vegetation density, palette, haze,
-   *  ray strength, and the airborne particle signature. */
-  private applyIdentity(): void {
-    const v = this.active;
-    this.groundMat.color.setHex(v.ground);
-    this.skyMat.uniforms.uHorizon.value.setHex(v.horizon);
-    this.ground.userData.pick = { id: `biome:${v.id}`, scale: Scale.Biome };
-    this.hazeMat.color.setHex(v.fog);
-    this.fogStrength = v.fogStrength;
-    this.rayStrength = v.rayStrength;
-
-    for (const m of this.foliageMats) m.color.setHex(v.canopy);
-    for (const m of this.shrubMats) m.color.setHex(v.shrub);
-    for (const m of this.grassMats) m.color.setHex(v.grass);
-
-    for (const layer of this.vegLayers) {
-      const density = layer.kind === 'tree' ? v.treeDensity : layer.kind === 'grass' ? v.grassDensity : v.shrubDensity;
-      layer.mesh.count = Math.max(0, Math.round(layer.full * density));
-    }
-
-  }
-
-  // ── construction helpers ────────────────────────────────────────────────────
-
-  private lastFoliage: THREE.InstancedMesh | null = null;
-
-  private windMaterial(
-    color: number, roughness: number, sway: number,
-    opts: { map?: THREE.Texture; bumpMap?: THREE.Texture; flat?: boolean } = {},
-  ): THREE.MeshStandardMaterial {
-    const mat = new THREE.MeshStandardMaterial({
-      color, roughness, metalness: 0, transparent: true, opacity: 0, envMapIntensity: 0.5,
-      flatShading: opts.flat ?? true, map: opts.map, bumpMap: opts.bumpMap,
-      bumpScale: opts.bumpMap ? 0.4 : undefined,
-    });
-    mat.onBeforeCompile = (shader) => {
-      shader.uniforms.uWind = this.wind;
-      shader.uniforms.uSway = { value: sway };
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform float uWind;\nuniform float uSway;')
-        .replace('#include <begin_vertex>', `#include <begin_vertex>
-           vec4 wWind = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
-           float wPhase = uWind + wWind.x * 0.18 + wWind.z * 0.18;
-           float wH = max(transformed.y, 0.0);
-           transformed.x += sin(wPhase) * 0.05 * wH * uSway;
-           transformed.z += cos(wPhase * 0.8) * 0.04 * wH * uSway;`);
-    };
-    this.windMats.push(mat);
-    this.fadeables.push(mat);
-    return mat;
-  }
-
-  private trackStd(mat: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
-    mat.transparent = true; mat.opacity = 0;
-    this.fadeables.push(mat);
-    return mat;
-  }
-
-  /** Scatter a layer of trees: instanced trunks + instanced wind-swayed crowns,
-   *  with strong per-tree height, tilt, and colour variation. */
-  private scatterTrees(
-    key: string, count: number, baseH: number, maxR: number, hVar: number, crownR: number, sway: number,
-  ): void {
-    const trunkGeo = new THREE.CylinderGeometry(0.16, 0.42, baseH, 8);
-    trunkGeo.translate(0, baseH / 2, 0);
-    const trunkMat = this.trackStd(new THREE.MeshStandardMaterial({
-      color: 0x6a4a30, roughness: 0.95, map: this.barkTex, bumpMap: this.barkTex, bumpScale: 0.5,
+    const groundMat = this.tracked(v.id, new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: texture,
+      roughness: v.id === 'reef' ? 0.88 : 0.96,
+      metalness: 0,
+      envMapIntensity: 0.35,
     }));
-    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, count);
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.position.y = GROUND_Y;
+    ground.receiveShadow = true;
+    group.add(ground);
+    this.registerPick(v.id, ground);
 
-    // A bushy clump of leaf-textured blobs instead of one faceted ball.
-    const crownGeo = bushyCrown(crownR);
-    crownGeo.translate(0, baseH, 0);
-    const crownMat = this.windMaterial(this.active.canopy, 0.92, sway, {
-      map: this.foliageTex, bumpMap: this.foliageBump, flat: false,
-    });
-    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, count);
-    crowns.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+    const skyMat = this.tracked(v.id, new THREE.MeshBasicMaterial({
+      color: v.sky,
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false,
+    }), 0.92);
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(720, 32, 22), skyMat);
+    sky.frustumCulled = false;
+    group.add(sky);
+
+    const hazeMat = this.tracked(v.id, new THREE.MeshBasicMaterial({
+      color: v.haze,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false,
+    }), v.id === 'reef' ? 0.17 : v.id === 'rainforest' ? 0.10 : 0.065);
+    const haze = new THREE.Mesh(new THREE.SphereGeometry(310, 24, 18), hazeMat);
+    haze.frustumCulled = false;
+    group.add(haze);
+  }
+
+  private scatterTrees(
+    biome: BiomeId,
+    group: THREE.Group,
+    count: number,
+    style: 'rainforest' | 'temperate' | 'acacia',
+    seed: number,
+  ): void {
+    const random = seeded(seed);
+    const trunkGeo = new THREE.CylinderGeometry(0.30, 0.58, 12, 9);
+    trunkGeo.translate(0, 6, 0);
+    const trunkMat = this.tracked(biome, new THREE.MeshStandardMaterial({ color: 0x5b422d, roughness: 0.96 }));
+    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, count);
+    trunks.castShadow = true;
+    trunks.receiveShadow = true;
+
+    const crownGeo = new THREE.SphereGeometry(1, 18, 12);
+    const crownMat = this.tracked(biome, new THREE.MeshStandardMaterial({
+      color: style === 'acacia' ? 0x6b7137 : style === 'rainforest' ? 0x2f7241 : 0x487046,
+      roughness: 0.92,
+      vertexColors: true,
+    }));
+    const crownParts = style === 'rainforest' ? 3 : 2;
+    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, count * crownParts);
+    crowns.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * crownParts * 3), 3);
     crowns.castShadow = true;
 
-    const m = new THREE.Matrix4();
+    const trunkMatrix = new THREE.Matrix4();
+    const crownMatrix = new THREE.Matrix4();
     const q = new THREE.Quaternion();
-    const e = new THREE.Euler();
-    const s = new THREE.Vector3();
     const p = new THREE.Vector3();
-    const up = new THREE.Vector3(0, 1, 0);
-    const base = new THREE.Color(this.active.canopy);
-    const col = new THREE.Color();
+    const scale = new THREE.Vector3();
+    const c = new THREE.Color();
+    let crownIndex = 0;
+
     for (let i = 0; i < count; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = 14 + Math.random() * (maxR - 14);
+      const a = random() * Math.PI * 2;
+      const r = 18 + Math.sqrt(random()) * (RADIUS * 0.90 - 18);
       const x = Math.cos(a) * r;
       const z = Math.sin(a) * r;
-      p.set(x, GROUND_Y + heightAt(x, z), z);
-      // Old-growth giants are rare; most are average; some are saplings.
-      const roll = Math.random();
-      const scale = roll > 0.9 ? 1.5 + Math.random() * 0.8 : roll < 0.25 ? 0.5 + Math.random() * 0.3 : 0.8 + Math.random() * 0.5;
-      const tilt = (Math.random() - 0.5) * 0.18;
-      e.set(tilt, Math.random() * Math.PI * 2, tilt);
-      q.setFromEuler(e);
-      s.set(scale + Math.random() * (hVar / baseH) * 0, scale * (0.9 + Math.random() * 0.4), scale);
-      s.x = s.z = scale;
-      m.compose(p, q, s);
-      trunks.setMatrixAt(i, m);
-      crowns.setMatrixAt(i, m);
-      col.copy(base).offsetHSL((Math.random() - 0.5) * 0.06, (Math.random() - 0.5) * 0.15, (Math.random() - 0.5) * 0.18);
-      crowns.setColorAt(i, col);
+      const y = GROUND_Y + terrainHeight(biome, x, z);
+      const size = style === 'rainforest' ? 0.9 + random() * 1.35 : style === 'acacia' ? 0.75 + random() * 0.65 : 0.75 + random() * 0.95;
+      const tiltX = (random() - 0.5) * 0.08;
+      const tiltZ = (random() - 0.5) * 0.08;
+      q.setFromEuler(new THREE.Euler(tiltX, random() * Math.PI * 2, tiltZ));
+      p.set(x, y, z);
+      scale.set(size, size * (style === 'rainforest' ? 1.20 : 1), size);
+      trunkMatrix.compose(p, q, scale);
+      trunks.setMatrixAt(i, trunkMatrix);
+
+      for (let j = 0; j < crownParts; j++) {
+        const offset = new THREE.Vector3(
+          (random() - 0.5) * 4.4 * size,
+          (10.2 + j * 2.0 + random() * 2.0) * size,
+          (random() - 0.5) * 4.4 * size,
+        ).applyQuaternion(q);
+        const cp = p.clone().add(offset);
+        const sx = style === 'acacia' ? (4.3 + random() * 1.5) * size : (3.1 + random() * 2.4) * size;
+        const sy = style === 'acacia' ? (0.75 + random() * 0.45) * size : (2.0 + random() * 1.7) * size;
+        const sz = style === 'acacia' ? (3.7 + random() * 1.5) * size : (3.0 + random() * 2.3) * size;
+        crownMatrix.compose(cp, q, new THREE.Vector3(sx, sy, sz));
+        crowns.setMatrixAt(crownIndex, crownMatrix);
+        c.set(style === 'acacia' ? 0x70783d : style === 'rainforest' ? 0x2d7541 : 0x4a7147);
+        c.offsetHSL((random() - 0.5) * 0.035, (random() - 0.5) * 0.10, (random() - 0.5) * 0.15);
+        crowns.setColorAt(crownIndex, c);
+        crownIndex++;
+      }
     }
+
     trunks.instanceMatrix.needsUpdate = true;
     crowns.instanceMatrix.needsUpdate = true;
     if (crowns.instanceColor) crowns.instanceColor.needsUpdate = true;
-    trunks.userData.pick = { id: `biome:${this.active.id}`, scale: Scale.Biome };
-    crowns.userData.pick = { id: `biome:${this.active.id}`, scale: Scale.Biome };
-    void up; // (kept for clarity of orientation intent)
-    this.root.add(trunks, crowns);
-    this.pickables.push(trunks, crowns);
-    this.lastFoliage = crowns;
-    this.foliageMats.push(crownMat);
-    this.vegLayers.push({ mesh: trunks, full: count, kind: 'tree' });
-    this.vegLayers.push({ mesh: crowns, full: count, kind: 'tree' });
+    group.add(trunks, crowns);
+    this.registerPick(biome, trunks);
+    this.registerPick(biome, crowns);
   }
 
-  private scatterShrubs(count: number): void {
-    const geo = bushyCrown(1.1);
-    const mat = this.windMaterial(0x356b2e, 0.9, 0.5, { map: this.foliageTex, bumpMap: this.foliageBump, flat: false });
-    const shrubs = new THREE.InstancedMesh(geo, mat, count);
-    shrubs.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
-    const m = new THREE.Matrix4(); const q = new THREE.Quaternion(); const s = new THREE.Vector3(); const p = new THREE.Vector3();
-    const base = new THREE.Color(0x356b2e); const col = new THREE.Color();
+  private scatterGroundCover(biome: BiomeId, group: THREE.Group, count: number, color: number, seed: number, height = 1.2): void {
+    const random = seeded(seed);
+    const geo = new THREE.ConeGeometry(0.055, height, 3);
+    geo.translate(0, height / 2, 0);
+    const mat = this.tracked(biome, new THREE.MeshStandardMaterial({ color, roughness: 0.96, vertexColors: true }));
+    const mesh = new THREE.InstancedMesh(geo, mat, count);
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const c = new THREE.Color();
     for (let i = 0; i < count; i++) {
-      const a = Math.random() * Math.PI * 2; const r = 8 + Math.random() * RADIUS * 0.95;
-      const x = Math.cos(a) * r; const z = Math.sin(a) * r;
-      p.set(x, GROUND_Y + heightAt(x, z), z);
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
-      const sc = 0.5 + Math.random() * 1.4;
-      s.set(sc, sc * (0.6 + Math.random() * 0.7), sc);
-      m.compose(p, q, s);
-      shrubs.setMatrixAt(i, m);
-      col.copy(base).offsetHSL((Math.random() - 0.5) * 0.05, 0, (Math.random() - 0.5) * 0.16);
-      shrubs.setColorAt(i, col);
+      const a = random() * Math.PI * 2;
+      const r = 7 + Math.sqrt(random()) * RADIUS * 0.92;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      const y = GROUND_Y + terrainHeight(biome, x, z);
+      q.setFromEuler(new THREE.Euler((random() - 0.5) * 0.16, random() * Math.PI * 2, (random() - 0.5) * 0.16));
+      const s = 0.55 + random() * 1.15;
+      m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(s, s * (0.7 + random() * 0.8), s));
+      mesh.setMatrixAt(i, m);
+      c.set(color).offsetHSL((random() - 0.5) * 0.03, (random() - 0.5) * 0.08, (random() - 0.5) * 0.12);
+      mesh.setColorAt(i, c);
     }
-    shrubs.instanceMatrix.needsUpdate = true;
-    if (shrubs.instanceColor) shrubs.instanceColor.needsUpdate = true;
-    shrubs.userData.pick = { id: `biome:${this.active.id}`, scale: Scale.Biome };
-    this.root.add(shrubs);
-    this.pickables.push(shrubs);
-    this.shrubMats.push(mat);
-    this.vegLayers.push({ mesh: shrubs, full: count, kind: 'shrub' });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    group.add(mesh);
   }
 
-  private scatterGrass(count: number): void {
-    // A short, slim blade — kept low and clustered densely so the ground reads as
-    // a real grassy floor rather than a field of sparse spikes.
-    const geo = new THREE.ConeGeometry(0.06, 1.05, 3);
-    geo.translate(0, 0.52, 0);
-    const mat = this.windMaterial(0x4f9a3e, 0.95, 1.2, { flat: false });
-    const grass = new THREE.InstancedMesh(geo, mat, count);
-    const m = new THREE.Matrix4(); const q = new THREE.Quaternion(); const s = new THREE.Vector3(); const p = new THREE.Vector3();
+  private scatterRocks(biome: BiomeId, group: THREE.Group, count: number, color: number, seed: number, maxSize = 2.2): void {
+    const random = seeded(seed);
+    const geo = new THREE.IcosahedronGeometry(1, 1);
+    const mat = this.tracked(biome, new THREE.MeshStandardMaterial({ color, roughness: 0.98, vertexColors: true }));
+    const mesh = new THREE.InstancedMesh(geo, mat, count);
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const c = new THREE.Color();
     for (let i = 0; i < count; i++) {
-      const a = Math.random() * Math.PI * 2; const r = 6 + Math.random() * RADIUS * 0.95;
-      const x = Math.cos(a) * r; const z = Math.sin(a) * r;
-      p.set(x, GROUND_Y + heightAt(x, z), z);
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
-      const sc = 0.6 + Math.random();
-      s.set(sc, sc * (0.7 + Math.random()), sc);
-      m.compose(p, q, s);
-      grass.setMatrixAt(i, m);
+      const a = random() * Math.PI * 2;
+      const r = 12 + Math.sqrt(random()) * RADIUS * 0.88;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      const y = GROUND_Y + terrainHeight(biome, x, z) + 0.25;
+      q.setFromEuler(new THREE.Euler(random() * 0.45, random() * Math.PI * 2, random() * 0.45));
+      const s = 0.35 + random() * maxSize;
+      m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(s, s * (0.55 + random() * 0.55), s * (0.7 + random() * 0.6)));
+      mesh.setMatrixAt(i, m);
+      c.set(color).offsetHSL(0, 0, (random() - 0.5) * 0.12);
+      mesh.setColorAt(i, c);
     }
-    grass.instanceMatrix.needsUpdate = true;
-    this.root.add(grass);
-    this.grassMats.push(mat);
-    this.vegLayers.push({ mesh: grass, full: count, kind: 'grass' });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
   }
 
-  /** Forest-floor clutter: fallen logs, rocks, mushrooms, and dead snags. */
-  private scatterClutter(): void {
-    const place = (geo: THREE.BufferGeometry, mat: THREE.MeshStandardMaterial, count: number, lay: boolean, scl: () => number) => {
-      const mesh = new THREE.InstancedMesh(geo, this.trackStd(mat), count);
-      const m = new THREE.Matrix4(); const q = new THREE.Quaternion(); const e = new THREE.Euler(); const s = new THREE.Vector3(); const p = new THREE.Vector3();
-      for (let i = 0; i < count; i++) {
-        const a = Math.random() * Math.PI * 2; const r = 10 + Math.random() * RADIUS * 0.9;
-        const x = Math.cos(a) * r; const z = Math.sin(a) * r;
-        p.set(x, GROUND_Y + heightAt(x, z) + (lay ? 0.4 : 0), z);
-        e.set(lay ? Math.PI / 2 : 0, Math.random() * Math.PI * 2, lay ? (Math.random() - 0.5) * 0.4 : 0);
-        q.setFromEuler(e);
-        const v = scl(); s.set(v, v, v);
-        m.compose(p, q, s);
-        mesh.setMatrixAt(i, m);
+  private buildRainforest(group: THREE.Group): void {
+    this.scatterTrees('rainforest', group, 118, 'rainforest', 1101);
+    this.scatterGroundCover('rainforest', group, 6500, 0x3f8d43, 1102, 1.45);
+    this.scatterRocks('rainforest', group, 75, 0x4e594b, 1103, 1.5);
+
+    // Buttress roots / fallen timber, kept sparse enough to read as structure.
+    const random = seeded(1104);
+    const geo = new THREE.CylinderGeometry(0.32, 0.46, 5.5, 8);
+    const mat = this.tracked('rainforest', new THREE.MeshStandardMaterial({ color: 0x493421, roughness: 0.97 }));
+    for (let i = 0; i < 24; i++) {
+      const mesh = new THREE.Mesh(geo, mat);
+      const a = random() * Math.PI * 2;
+      const r = 18 + random() * 120;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      mesh.position.set(x, GROUND_Y + terrainHeight('rainforest', x, z) + 0.45, z);
+      mesh.rotation.set(Math.PI / 2 + (random() - 0.5) * 0.18, random() * Math.PI * 2, (random() - 0.5) * 0.2);
+      mesh.scale.setScalar(0.65 + random() * 0.8);
+      mesh.castShadow = true;
+      group.add(mesh);
+    }
+  }
+
+  private buildTemperate(group: THREE.Group): void {
+    this.scatterTrees('temperate', group, 86, 'temperate', 2101);
+    this.scatterGroundCover('temperate', group, 4700, 0x65834a, 2102, 1.0);
+    this.scatterRocks('temperate', group, 95, 0x626861, 2103, 1.6);
+  }
+
+  private buildSavanna(group: THREE.Group): void {
+    this.scatterTrees('savanna', group, 28, 'acacia', 3101);
+    this.scatterGroundCover('savanna', group, 7600, 0xb79747, 3102, 1.25);
+    this.scatterRocks('savanna', group, 65, 0x79684e, 3103, 1.35);
+  }
+
+  private buildTundra(group: THREE.Group): void {
+    this.scatterRocks('tundra', group, 210, 0x778283, 4101, 2.3);
+    const random = seeded(4102);
+    const cushionGeo = new THREE.SphereGeometry(1, 14, 9);
+    const cushionMat = this.tracked('tundra', new THREE.MeshStandardMaterial({ color: 0x6e795d, roughness: 0.98, vertexColors: true }));
+    const cushions = new THREE.InstancedMesh(cushionGeo, cushionMat, 760);
+    cushions.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(760 * 3), 3);
+    const m = new THREE.Matrix4();
+    const c = new THREE.Color();
+    for (let i = 0; i < 760; i++) {
+      const a = random() * Math.PI * 2;
+      const r = 10 + Math.sqrt(random()) * 135;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      const y = GROUND_Y + terrainHeight('tundra', x, z) + 0.12;
+      const s = 0.18 + random() * 0.65;
+      m.compose(new THREE.Vector3(x, y, z), new THREE.Quaternion(), new THREE.Vector3(s * 1.7, s * 0.22, s * 1.4));
+      cushions.setMatrixAt(i, m);
+      c.set(random() > 0.45 ? 0x7d8568 : 0x8b7965).offsetHSL(0, 0, (random() - 0.5) * 0.1);
+      cushions.setColorAt(i, c);
+    }
+    cushions.instanceMatrix.needsUpdate = true;
+    if (cushions.instanceColor) cushions.instanceColor.needsUpdate = true;
+    group.add(cushions);
+  }
+
+  private buildDesert(group: THREE.Group): void {
+    this.scatterRocks('desert', group, 170, 0x8c6845, 5101, 2.5);
+    const random = seeded(5102);
+    const stemGeo = new THREE.CylinderGeometry(0.42, 0.58, 8, 10);
+    stemGeo.translate(0, 4, 0);
+    const cactusMat = this.tracked('desert', new THREE.MeshStandardMaterial({ color: 0x557549, roughness: 0.88 }));
+    const stems = new THREE.InstancedMesh(stemGeo, cactusMat, 42);
+    const arms = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.32, 3.3, 9), cactusMat, 84);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    let armIndex = 0;
+    const cactusPositions: THREE.Vector3[] = [];
+    for (let i = 0; i < 42; i++) {
+      const a = random() * Math.PI * 2;
+      const r = 18 + Math.sqrt(random()) * 120;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      const y = GROUND_Y + terrainHeight('desert', x, z);
+      const scale = 0.55 + random() * 0.9;
+      const p = new THREE.Vector3(x, y, z);
+      cactusPositions.push(p.clone());
+      m.compose(p, new THREE.Quaternion(), new THREE.Vector3(scale, scale, scale));
+      stems.setMatrixAt(i, m);
+
+      for (let side = -1; side <= 1; side += 2) {
+        const start = p.clone().add(new THREE.Vector3(side * 0.7 * scale, (3.0 + random() * 2.2) * scale, 0));
+        const end = start.clone().add(new THREE.Vector3(side * (1.4 + random()) * scale, (0.4 + random() * 1.2) * scale, (random() - 0.5) * 0.5));
+        composeAlong(start, end, 0.24 * scale, m);
+        arms.setMatrixAt(armIndex++, m);
       }
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.receiveShadow = true; mesh.castShadow = true;
-      this.root.add(mesh);
-    };
-    // Fallen logs.
-    const logGeo = new THREE.CylinderGeometry(0.4, 0.5, 6, 7); logGeo.translate(0, 3, 0);
-    place(logGeo, new THREE.MeshStandardMaterial({ color: 0x4a3422, roughness: 0.95, flatShading: true }), 16, true, () => 0.7 + Math.random() * 0.8);
-    // Rocks.
-    place(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: 0x6b6b70, roughness: 0.9, flatShading: true }), 44, false, () => 0.5 + Math.random() * 1.6);
-    // Dead snags (bare trunks).
-    const snagGeo = new THREE.CylinderGeometry(0.18, 0.42, 9, 6); snagGeo.translate(0, 4.5, 0);
-    place(snagGeo, new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.95, flatShading: true }), 12, false, () => 0.6 + Math.random() * 0.9);
-    // Mushrooms (cap only, instanced; tiny accent).
-    const capGeo = new THREE.SphereGeometry(0.35, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2); capGeo.translate(0, 0.3, 0);
-    place(capGeo, new THREE.MeshStandardMaterial({ color: 0xc0563f, roughness: 0.7, emissive: 0x3a1208, emissiveIntensity: 0.3, flatShading: true }), 36, false, () => 0.5 + Math.random());
+    }
+    stems.instanceMatrix.needsUpdate = true;
+    arms.instanceMatrix.needsUpdate = true;
+    stems.castShadow = arms.castShadow = true;
+    group.add(stems, arms);
+    this.registerPick('desert', stems);
   }
 
-  private spawnAnimal(model: keyof typeof WILDLIFE_MODELS, pickId: string, height: number, radius: number): void {
+  private buildReef(group: THREE.Group): void {
+    this.scatterRocks('reef', group, 125, 0x6d6b62, 6101, 1.8);
+    const random = seeded(6102);
+    const branchGeo = new THREE.CylinderGeometry(0.17, 0.27, 1, 8);
+    const coralMat = this.tracked('reef', new THREE.MeshStandardMaterial({ color: 0xd16d70, roughness: 0.76, vertexColors: true }));
+    const clusterCount = 64;
+    const perCluster = 7;
+    const branches = new THREE.InstancedMesh(branchGeo, coralMat, clusterCount * perCluster);
+    branches.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(clusterCount * perCluster * 3), 3);
+    const m = new THREE.Matrix4();
+    const c = new THREE.Color();
+    let index = 0;
+    for (let cluster = 0; cluster < clusterCount; cluster++) {
+      const a = random() * Math.PI * 2;
+      const r = 12 + Math.sqrt(random()) * 126;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      const y = GROUND_Y + terrainHeight('reef', x, z) + 0.15;
+      const base = new THREE.Vector3(x, y, z);
+      for (let j = 0; j < perCluster; j++) {
+        const theta = random() * Math.PI * 2;
+        const length = 1.8 + random() * 4.8;
+        const start = base.clone().add(new THREE.Vector3((random() - 0.5) * 1.2, random() * 0.7, (random() - 0.5) * 1.2));
+        const end = start.clone().add(new THREE.Vector3(Math.cos(theta) * length * 0.38, length, Math.sin(theta) * length * 0.38));
+        composeAlong(start, end, 0.20 + random() * 0.12, m);
+        branches.setMatrixAt(index, m);
+        const palette = [0xd16d70, 0xde8f5f, 0xb273a9, 0xd8b268, 0x8d6da8];
+        c.set(palette[Math.floor(random() * palette.length)]).offsetHSL((random() - 0.5) * 0.025, 0, (random() - 0.5) * 0.08);
+        branches.setColorAt(index, c);
+        index++;
+      }
+    }
+    branches.instanceMatrix.needsUpdate = true;
+    if (branches.instanceColor) branches.instanceColor.needsUpdate = true;
+    branches.castShadow = true;
+    group.add(branches);
+    this.registerPick('reef', branches);
+
+    // Seagrass / macroalgae lives here instead of the terrestrial grass mesh.
+    this.scatterGroundCover('reef', group, 3600, 0x397f67, 6103, 1.7);
+  }
+
+  private addAir(v: BiomeVariant, group: THREE.Group): void {
+    const random = seeded(7000 + BIOME_VARIANTS.indexOf(v) * 131);
+    const count = v.id === 'reef' ? 1100 : v.id === 'tundra' ? 1400 : 850;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const a = random() * Math.PI * 2;
+      const r = Math.sqrt(random()) * RADIUS;
+      positions[i * 3] = Math.cos(a) * r;
+      positions[i * 3 + 1] = GROUND_Y + 1 + random() * (v.id === 'reef' ? 48 : 68);
+      positions[i * 3 + 2] = Math.sin(a) * r;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const mat = this.tracked(v.id, new THREE.PointsMaterial({
+      color: v.particle,
+      size: v.id === 'tundra' ? 0.30 : v.id === 'reef' ? 0.16 : 0.11,
+      sizeAttenuation: true,
+      depthWrite: false,
+      blending: v.id === 'reef' ? THREE.NormalBlending : THREE.AdditiveBlending,
+    }), v.id === 'tundra' ? 0.30 : 0.18);
+    const points = new THREE.Points(geo, mat);
+    group.add(points);
+    this.ambient.push({ biome: v.id, object: points, speed: v.id === 'desert' ? 0.012 : 0.004 });
+  }
+
+  private spawnFauna(
+    biome: BiomeId,
+    model: keyof typeof WILDLIFE_MODELS,
+    pickId: string,
+    height: number,
+    radius: number,
+    yOffset: number,
+    speed: number,
+    verticalDrift: number,
+  ): void {
     loadGlb(WILDLIFE_MODELS[model]).then((scene) => {
       if (!scene) return;
       fitModel(scene, height);
-      const group = new THREE.Group();
-      group.add(scene);
-      group.userData.pick = { id: pickId, scale: Scale.Organism };
-      const angle = Math.random() * Math.PI * 2;
-      const x = Math.cos(angle) * radius; const z = Math.sin(angle) * radius;
-      group.position.set(x, GROUND_Y + heightAt(x, z), z);
-      this.root.add(group);
-      this.loadedRoots.push(scene);
-      this.pickables.push(group);
-      this.animals.push({ group, angle, radius, speed: 0.05 + Math.random() * 0.05 });
+      const wrapper = new THREE.Group();
+      wrapper.add(scene);
+      wrapper.userData.pick = { id: pickId, scale: Scale.Organism };
+      wrapper.userData.modelSource = model;
+      scene.traverse((child) => { if (!child.userData.pick) child.userData.pick = wrapper.userData.pick; });
+      const angle = model === 'parrot' ? 0.9 : model === 'barramundi' ? 2.2 : 4.1;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      wrapper.position.set(x, GROUND_Y + terrainHeight(biome, x, z) + yOffset, z);
+      this.groups.get(biome)?.add(wrapper);
+      this.pickables.get(biome)?.push(wrapper);
+      const mixer = scene.userData.animationMixer instanceof THREE.AnimationMixer ? scene.userData.animationMixer : undefined;
+      this.fauna.push({ biome, group: wrapper, radius, angle, speed, yOffset, verticalDrift, mixer });
     });
   }
 
-  // ── SceneLayer ──────────────────────────────────────────────────────────────
-
   setVariant(id: string): void {
-    const variant = BIOME_VARIANTS.find((v) => v.id === id);
-    if (!variant || variant === this.active) return;
-    this.active = variant;
-    this.applyIdentity();
+    const next = BIOME_VARIANTS.find((v) => v.id === id)?.id;
+    if (!next || next === this.activeId) return;
+    this.activeId = next;
+    for (const [biome, group] of this.groups) group.visible = biome === next;
   }
 
   onScaleChange(_scale: Scale, intensity: number): void {
@@ -540,46 +557,40 @@ export class BiomeLayer implements SceneLayer {
   }
 
   update(dt: number, elapsed: number): void {
-    this.wind.value += dt * 1.6;
-    this.skyMat.uniforms.uTime.value = elapsed;
-    for (const mat of this.fadeables) fadeMaterial(mat, this.intensity, dt);
-    this.skyMat.uniforms.uOpacity.value = this.skyMat.opacity;
-    // Re-weight the atmospheric extras below full strength, scaled per biome so a
-    // rainforest is thick and humid while a desert sky stays clear and bright.
-    this.hazeMat.opacity = Math.min(this.hazeMat.opacity, this.intensity * 0.35 * this.fogStrength);
-    // Hold the rays subtle, with a slow shimmer and drift so the beam dazzles
-    // gently rather than sitting as a static slab.
-    this.godRayMat.opacity = Math.min(this.godRayMat.opacity, this.intensity * this.rayStrength * (0.2 + 0.05 * Math.sin(elapsed * 0.6)));
-    this.godRayGroup.rotateY(dt * 0.05);
-    this.markerMats.forEach((mat, i) => {
-      const pulse = 0.5 + 0.5 * Math.sin(elapsed * 1.5 + i);
-      mat.opacity = Math.min(mat.opacity, this.intensity * (0.18 + pulse * 0.22));
-    });
+    for (const { mat, base, biome } of this.fadeables) {
+      fadeMaterial(mat, biome === this.activeId ? this.intensity * base : 0, dt, 4.5);
+    }
 
-    for (const ring of this.markers) ring.rotation.z += dt * 0.4;
+    for (const item of this.ambient) {
+      if (item.biome !== this.activeId) continue;
+      item.object.rotation.y += dt * item.speed;
+      if (item.biome === 'tundra') item.object.position.y = Math.sin(elapsed * 0.12) * 1.2;
+      if (item.biome === 'reef') item.object.position.y = (elapsed * 0.18) % 3;
+      if (item.biome === 'desert') item.object.position.x = Math.sin(elapsed * 0.08) * 2.5;
+    }
 
-    // Roaming animals wander a slow circle and face their heading.
-    for (const a of this.animals) {
-      a.angle += dt * a.speed;
-      const x = Math.cos(a.angle) * a.radius;
-      const z = Math.sin(a.angle) * a.radius;
-      a.group.position.set(x, GROUND_Y + heightAt(x, z), z);
-      a.group.rotation.y = -a.angle + Math.PI / 2;
+    for (const animal of this.fauna) {
+      animal.mixer?.update(dt);
+      animal.angle += dt * animal.speed;
+      const x = Math.cos(animal.angle) * animal.radius;
+      const z = Math.sin(animal.angle) * animal.radius;
+      const base = GROUND_Y + terrainHeight(animal.biome, x, z) + animal.yOffset;
+      animal.group.position.set(x, base + Math.sin(elapsed * 0.8 + animal.angle) * animal.verticalDrift, z);
+      animal.group.rotation.y = -animal.angle + Math.PI / 2;
     }
   }
 
   getPickables(): THREE.Object3D[] {
-    return this.intensity > 0.3 ? this.pickables : [];
+    return this.intensity > 0.25 ? (this.pickables.get(this.activeId) ?? []) : [];
   }
 
   static tagFor(id: string): PickTag | null {
-    const variant = BIOME_VARIANTS.find((v) => `biome:${v.id}` === id);
-    return variant ? { id, scale: Scale.Biome } : null;
+    const biome = BIOME_VARIANTS.find((v) => `biome:${v.id}` === id);
+    return biome ? { id, scale: Scale.Biome } : null;
   }
 
   dispose(): void {
-    for (const r of this.loadedRoots) disposeObject(r);
-    for (const t of this.textures) t.dispose();
+    for (const texture of this.textures) texture.dispose();
     disposeObject(this.root);
   }
 }
