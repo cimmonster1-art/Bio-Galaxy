@@ -2,50 +2,201 @@ import * as THREE from 'three';
 import { Scale } from '../../types';
 import { SceneLayer, fadeMaterial } from '../core/SceneLayer';
 import { disposeObject } from '../core/dispose';
-import { createMuscleTexture } from '../textures/proceduralTextures';
+
+type Fadeable = {
+  mat: THREE.Material & { opacity: number };
+  baseOpacity: number;
+};
+
+type FascicleState = {
+  group: THREE.Group;
+  phase: number;
+  baseScale: number;
+};
+
+type RbcState = {
+  curveIndex: number;
+  offset: number;
+  speed: number;
+  spin: number;
+};
+
+const UP = new THREE.Vector3(0, 1, 0);
+
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a += 0x6d2b79f5;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 /**
- * The tissue scale, rebuilt as ONE place: you are inside skeletal muscle. Giant
- * striated muscle fibres run through the foreground and midground, bundled into a
- * fascicle; an enveloping extracellular-matrix shell wraps the whole view so the
- * tissue itself — not the galaxy — becomes the environment; capillaries thread
- * between the fibres carrying flowing blood, and a motor neuron reaches in to its
- * neuromuscular junction. No floating icons — a single, recognizable tissue.
- *
- * Every structure is selectable, so the detail panel, Wikipedia card, and
- * copilot all respond wherever the user clicks.
+ * A muted sarcomere map. It carries A/I band rhythm and narrow Z-lines without
+ * baking candy-pink colour into the material.
  */
+function createStriationTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
 
-const flowFragment = /* glsl */ `
-  precision highp float;
-  uniform float uTime; uniform float uOpacity; uniform vec3 uColor;
-  varying vec2 vUv;
-  void main() {
-    float base = 0.35;
-    float pulse = pow(max(0.0, 1.0 - abs(fract(vUv.x * 0.5 - uTime * 0.3) - 0.5) * 5.0), 2.0);
-    gl_FragColor = vec4(uColor * (0.7 + pulse), (base + pulse * 0.5) * uOpacity);
-  }
-`;
-const flowVertex = /* glsl */ `
-  varying vec2 vUv;
-  void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
-`;
+  const grad = ctx.createLinearGradient(0, 0, 64, 0);
+  grad.addColorStop(0, '#c0b7b0');
+  grad.addColorStop(0.5, '#f2ece6');
+  grad.addColorStop(1, '#b6aaa4');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 256);
 
-/** Repeating sarcomere band texture (light I-bands, dark Z-lines). */
-function striationTexture(): THREE.Texture {
-  const c = document.createElement('canvas');
-  c.width = 8; c.height = 64;
-  const ctx = c.getContext('2d')!;
-  for (let y = 0; y < 64; y++) {
-    const v = 0.45 + 0.55 * Math.abs(Math.sin((y / 64) * Math.PI * 6));
-    const dark = (y % 16 === 0) ? 0.25 : v;
-    ctx.fillStyle = `rgb(${Math.round(dark * 200)},${Math.round(dark * 120)},${Math.round(dark * 130)})`;
-    ctx.fillRect(0, y, 8, 1);
+  for (let y = 0; y < 256; y++) {
+    const phase = (y % 32) / 32;
+    const broadBand = phase < 0.55 ? 0.88 : 1.04;
+    const zLine = y % 32 < 2 ? 0.48 : 1;
+    const fine = 0.96 + Math.sin(y * 0.65) * 0.035;
+    const value = Math.max(0.35, Math.min(1, broadBand * zLine * fine));
+    ctx.fillStyle = `rgba(104,74,72,${(1 - value) * 0.72})`;
+    ctx.fillRect(0, y, 64, 1);
   }
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(2, 26);
-  return tex;
+
+  for (let x = 2; x < 64; x += 5) {
+    ctx.fillStyle = 'rgba(92,69,67,0.045)';
+    ctx.fillRect(x, 0, 1, 256);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(1.2, 8.5);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+/**
+ * Organic longitudinal geometry with non-uniform radius, mild centre-line drift,
+ * irregular perimeter and capped ends. It reads like deformable living tissue
+ * instead of a mathematically perfect cylinder.
+ */
+function createOrganicFibreGeometry(
+  seed: number,
+  radius = 2.1,
+  length = 174,
+  radialSegments = 18,
+  lengthSegments = 36,
+): THREE.BufferGeometry {
+  const rand = mulberry32(seed);
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  const phaseA = rand() * Math.PI * 2;
+  const phaseB = rand() * Math.PI * 2;
+  const phaseC = rand() * Math.PI * 2;
+  const squash = 0.9 + rand() * 0.16;
+
+  for (let zStep = 0; zStep <= lengthSegments; zStep++) {
+    const t = zStep / lengthSegments;
+    const z = (t - 0.5) * length;
+    const centreX =
+      Math.sin(t * Math.PI * 2 + phaseA) * 0.23 +
+      Math.sin(t * Math.PI * 5 + phaseB) * 0.09;
+    const centreY =
+      Math.cos(t * Math.PI * 1.7 + phaseB) * 0.19 +
+      Math.sin(t * Math.PI * 4.4 + phaseC) * 0.08;
+    const longitudinal =
+      0.965 +
+      Math.sin(t * Math.PI * 2.3 + phaseA) * 0.028 +
+      Math.sin(t * Math.PI * 7.2 + phaseB) * 0.014;
+
+    for (let side = 0; side < radialSegments; side++) {
+      const u = side / radialSegments;
+      const theta = u * Math.PI * 2;
+      const perimeter =
+        1 +
+        Math.sin(theta * 3 + phaseA + t * 2.2) * 0.045 +
+        Math.sin(theta * 5 + phaseB - t * 1.7) * 0.025;
+      const r = radius * longitudinal * perimeter;
+      positions.push(
+        centreX + Math.cos(theta) * r,
+        centreY + Math.sin(theta) * r * squash,
+        z,
+      );
+      uvs.push(u, t);
+    }
+  }
+
+  for (let zStep = 0; zStep < lengthSegments; zStep++) {
+    for (let side = 0; side < radialSegments; side++) {
+      const next = (side + 1) % radialSegments;
+      const a = zStep * radialSegments + side;
+      const b = zStep * radialSegments + next;
+      const c = (zStep + 1) * radialSegments + side;
+      const d = (zStep + 1) * radialSegments + next;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  const startCenter = positions.length / 3;
+  positions.push(0, 0, -length * 0.5);
+  uvs.push(0.5, 0.5);
+  const endCenter = positions.length / 3;
+  positions.push(0, 0, length * 0.5);
+  uvs.push(0.5, 0.5);
+
+  const endOffset = lengthSegments * radialSegments;
+  for (let side = 0; side < radialSegments; side++) {
+    const next = (side + 1) % radialSegments;
+    indices.push(startCenter, next, side);
+    indices.push(endCenter, endOffset + side, endOffset + next);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function packedCrossSection(
+  count: number,
+  radius: number,
+  minDistance: number,
+  seed: number,
+): THREE.Vector2[] {
+  const rand = mulberry32(seed);
+  const points: THREE.Vector2[] = [];
+  let attempts = 0;
+
+  while (points.length < count && attempts < 4000) {
+    attempts++;
+    const angle = rand() * Math.PI * 2;
+    const r = Math.sqrt(rand()) * radius;
+    const p = new THREE.Vector2(Math.cos(angle) * r, Math.sin(angle) * r);
+    if (points.every((other) => other.distanceTo(p) >= minDistance)) points.push(p);
+  }
+
+  return points;
+}
+
+function createRbcGeometry(): THREE.BufferGeometry {
+  const profile = [
+    new THREE.Vector2(0.0, 0.12),
+    new THREE.Vector2(0.28, 0.08),
+    new THREE.Vector2(0.62, 0.13),
+    new THREE.Vector2(0.94, 0.22),
+    new THREE.Vector2(1.12, 0.0),
+    new THREE.Vector2(0.94, -0.22),
+    new THREE.Vector2(0.62, -0.13),
+    new THREE.Vector2(0.28, -0.08),
+    new THREE.Vector2(0.0, -0.12),
+  ];
+  const geometry = new THREE.LatheGeometry(profile, 24);
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 export class TissueField implements SceneLayer {
@@ -53,246 +204,366 @@ export class TissueField implements SceneLayer {
   readonly activeScales = [Scale.Tissue];
 
   private readonly stripes: THREE.Texture;
-  private readonly muscle: THREE.Texture;
-  private readonly fadeables: (THREE.Material & { opacity: number })[] = [];
-  private readonly flowMats: THREE.ShaderMaterial[] = [];
-  private readonly fibres: { mesh: THREE.Mesh; phase: number }[] = [];
-  private readonly blood: THREE.Points;
-  private readonly bloodMat: THREE.PointsMaterial;
+  private readonly grain: THREE.Texture;
+  private readonly fadeables: Fadeable[] = [];
+  private readonly fascicles: FascicleState[] = [];
+  private readonly capillaryCurves: THREE.CatmullRomCurve3[] = [];
+  private readonly rbc: THREE.InstancedMesh;
+  private readonly rbcMat: THREE.MeshPhysicalMaterial;
+  private readonly rbcStates: RbcState[] = [];
   private readonly dust: THREE.Points;
-  private readonly dustMat: THREE.PointsMaterial;
   private readonly fill: THREE.PointLight;
   private readonly rim: THREE.PointLight;
+  private readonly hemi: THREE.HemisphereLight;
   private readonly pickables: THREE.Object3D[] = [];
   private intensity = 0;
 
   constructor() {
     this.root.name = 'TissueField';
     this.root.visible = false;
-    this.stripes = striationTexture();
-    this.muscle = createMuscleTexture(512);
-    this.muscle.repeat.set(1, 6);
+    this.root.rotation.set(-0.06, 0.09, -0.025);
 
-    // ── Extracellular matrix: a huge, deep enveloping volume that becomes the
-    // environment itself — not a contained "ball". Radius is far larger than the
-    // fibre run so the camera is always inside it, reading as endless deep tissue
-    // rather than a sphere you can see the edge of. Kept dim so the lit fibres
-    // dominate. A fainter inner collagen haze adds atmospheric depth.
-    const ecmMat = this.track(new THREE.MeshStandardMaterial({
-      color: 0x3a1016, emissive: 0x10040a, emissiveIntensity: 0.35,
-      roughness: 1, metalness: 0, side: THREE.BackSide, fog: false,
-    }));
-    const ecm = new THREE.Mesh(new THREE.SphereGeometry(320, 32, 24), ecmMat);
-    ecm.frustumCulled = false;
-    ecm.userData.pick = { id: 'tissue:ecm', scale: Scale.Tissue };
-    this.root.add(ecm);
-    this.pickables.push(ecm);
+    this.stripes = createStriationTexture();
+    this.grain = new THREE.TextureLoader().load('/textures/anatomy/tissue_grain.jpg');
+    this.grain.wrapS = this.grain.wrapT = THREE.RepeatWrapping;
+    this.grain.repeat.set(2.5, 18);
+    this.grain.colorSpace = THREE.NoColorSpace;
+    this.grain.anisotropy = 4;
 
-    const hazeMat = this.track(new THREE.MeshBasicMaterial({
-      color: 0x5a1822, transparent: true, opacity: 0, side: THREE.BackSide,
-      blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
-    const haze = new THREE.Mesh(new THREE.SphereGeometry(150, 24, 18), hazeMat);
-    haze.frustumCulled = false;
-    this.root.add(haze);
+    // A dark, matte interstitial environment. No emissive red shell or neon haze.
+    const environmentMat = this.track(
+      new THREE.MeshStandardMaterial({
+        color: 0x1c1113,
+        roughness: 1,
+        metalness: 0,
+        side: THREE.BackSide,
+        transparent: true,
+        opacity: 0.96,
+      }),
+    );
+    const environment = new THREE.Mesh(new THREE.SphereGeometry(280, 28, 20), environmentMat);
+    environment.frustumCulled = false;
+    environment.userData.pick = { id: 'tissue:ecm', scale: Scale.Tissue };
+    this.root.add(environment);
 
-    // Collagen fibres of the matrix, drifting through the deep background.
-    const collagenMat = this.track(new THREE.LineBasicMaterial({
-      color: 0xd8b48c, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
-    const cpts: number[] = [];
-    for (let i = 0; i < 90; i++) {
-      const a = new THREE.Vector3((Math.random() - 0.5) * 130, (Math.random() - 0.5) * 90, (Math.random() - 0.5) * 130);
-      const b = a.clone().add(new THREE.Vector3((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30));
-      cpts.push(a.x, a.y, a.z, b.x, b.y, b.z);
-    }
-    const cgeo = new THREE.BufferGeometry();
-    cgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cpts), 3));
-    this.root.add(new THREE.LineSegments(cgeo, collagenMat));
+    // Four irregular fascicles. Each contains dozens of smaller fibres and a
+    // translucent perimysial sheath, so the eye sees nested tissue architecture.
+    const fascicleSpecs = [
+      { x: -22, y: 15, z: -8, rx: -0.04, ry: 0.12, rz: 0.03, scale: 1.02, seed: 11 },
+      { x: 18, y: 13, z: -17, rx: 0.05, ry: -0.1, rz: -0.04, scale: 0.92, seed: 29 },
+      { x: -16, y: -18, z: 6, rx: 0.08, ry: 0.08, rz: -0.02, scale: 0.86, seed: 47 },
+      { x: 21, y: -17, z: 12, rx: -0.07, ry: -0.06, rz: 0.05, scale: 0.78, seed: 71 },
+    ] as const;
 
-    // ── The muscle fibres: a dense fascicle of giant striated cylinders that run
-    // the length of the view and past the camera in every direction, so you are
-    // submerged among them rather than looking at a few rods in a jar. ─────────
-    const fibreGeo = new THREE.CylinderGeometry(5, 5, 320, 32, 1);
-    fibreGeo.rotateX(Math.PI / 2); // lie along Z; UV.y runs along the length
-    // Hex-packed grid of fibres filling the X/Y plane around the camera.
-    const packing: [number, number, number][] = [];
-    const STEP = 13;
-    for (let gx = -3; gx <= 3; gx++) {
-      for (let gy = -3; gy <= 3; gy++) {
-        const x = gx * STEP + (gy % 2) * STEP * 0.5 + (Math.random() - 0.5) * 3;
-        const y = gy * STEP * 0.9 + (Math.random() - 0.5) * 3;
-        if (Math.hypot(x, y) < 4) continue; // leave a small channel at the centre
-        packing.push([x, y, 0.7 + Math.random() * 0.6]);
-      }
-    }
-    // Peripheral nuclei: skeletal-muscle fibres are multinucleate, with flattened
-    // nuclei pressed just under the sarcolemma. Scattering a few on each fibre is
-    // the detail that reads as "living cell" rather than a smooth rod.
-    const nucleusGeo = new THREE.SphereGeometry(0.7, 14, 10);
-    let fibreIndex = 0;
-    for (const [x, y, s] of packing) {
-      const mat = this.track(new THREE.MeshStandardMaterial({
-        color: 0xa83a47, emissive: 0x300d14, emissiveIntensity: 0.45,
-        map: this.muscle, bumpMap: this.muscle, bumpScale: 0.6,
-        emissiveMap: this.stripes,
-        roughness: 0.62, metalness: 0.0,
-      }));
-      const fibre = new THREE.Mesh(fibreGeo, mat);
-      fibre.position.set(x, y, (Math.random() - 0.5) * 30);
-      fibre.scale.set(s, s, 1);
-      fibre.castShadow = true; fibre.receiveShadow = true;
-      fibre.userData.s = s;
-      fibre.userData.pick = { id: 'tissue:muscle', scale: Scale.Tissue };
-      this.root.add(fibre);
-      this.fibres.push({ mesh: fibre, phase: Math.random() * Math.PI * 2 });
-      this.pickables.push(fibre);
+    fascicleSpecs.forEach((spec, fascicleIndex) => {
+      const group = new THREE.Group();
+      group.position.set(spec.x, spec.y, spec.z);
+      group.rotation.set(spec.rx, spec.ry, spec.rz);
+      group.scale.setScalar(spec.scale);
+      group.userData.pick = { id: 'tissue:muscle', scale: Scale.Tissue };
 
-      if (fibreIndex++ % 2 === 0) {
-        const nucMat = this.track(new THREE.MeshStandardMaterial({
-          color: 0x3a1a40, emissive: 0x180a22, emissiveIntensity: 0.6, roughness: 0.7,
-        }));
-        for (let n = 0; n < 3; n++) {
-          const nuc = new THREE.Mesh(nucleusGeo, nucMat);
-          const theta = Math.random() * Math.PI * 2;
-          // Local fibre space runs along Z; seat the nucleus just under the surface.
-          nuc.position.set(Math.cos(theta) * 4.5, Math.sin(theta) * 4.5, (Math.random() - 0.5) * 280);
-          nuc.scale.set(1.5, 1.5, 2.6); // flattened, elongated along the fibre
-          nuc.userData.pick = fibre.userData.pick;
-          fibre.add(nuc);
-        }
-      }
-    }
-
-    // ── Capillaries: blood vessels winding between the fibres ──────────────────
-    for (let k = 0; k < 3; k++) {
-      const pts: THREE.Vector3[] = [];
-      const baseX = (k - 1) * 11;
-      for (let t = 0; t <= 8; t++) {
-        pts.push(new THREE.Vector3(
-          baseX + Math.sin(t * 0.9 + k) * 6,
-          -4 + Math.cos(t * 0.7 + k) * 7,
-          -70 + t * 18,
-        ));
-      }
-      const curve = new THREE.CatmullRomCurve3(pts);
-      const mat = new THREE.ShaderMaterial({
-        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-        uniforms: { uTime: { value: k }, uOpacity: { value: 0 }, uColor: { value: new THREE.Color(0xff5566) } },
-        vertexShader: flowVertex, fragmentShader: flowFragment,
-      });
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 80, 1.1, 10, false), mat);
-      tube.frustumCulled = false;
-      tube.userData.pick = { id: 'tissue:capillary', scale: Scale.Tissue };
-      this.flowMats.push(mat);
-      this.root.add(tube);
-      this.pickables.push(tube);
-    }
-
-    // Red blood cells drifting through the fascicle.
-    const COUNT = 240;
-    const positions = new Float32Array(COUNT * 3);
-    for (let i = 0; i < COUNT; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 40;
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 30;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 150;
-    }
-    const bgeo = new THREE.BufferGeometry();
-    bgeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    this.bloodMat = this.track(new THREE.PointsMaterial({
-      color: 0xff4d5e, size: 1.0, transparent: true, opacity: 0,
-      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
-    }));
-    this.blood = new THREE.Points(bgeo, this.bloodMat);
-    this.blood.frustumCulled = false;
-    this.root.add(this.blood);
-
-    // ── Motor neuron reaching to its neuromuscular junction ───────────────────
-    const neuron = new THREE.Group();
-    neuron.userData.pick = { id: 'tissue:motor_neuron', scale: Scale.Tissue };
-    const somaMat = this.track(new THREE.MeshStandardMaterial({
-      color: 0xf2e08a, emissive: 0x6a5a14, emissiveIntensity: 0.8, roughness: 0.4,
-    }));
-    const soma = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4, 2), somaMat);
-    soma.position.set(18, 16, -30);
-    neuron.add(soma);
-    const axonMat = this.track(new THREE.LineBasicMaterial({
-      color: 0xffe9a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
-    const apts = [new THREE.Vector3(18, 16, -30), new THREE.Vector3(10, 8, -10), new THREE.Vector3(2, 2, 6)];
-    const ageo = new THREE.BufferGeometry().setFromPoints(apts);
-    neuron.add(new THREE.Line(ageo, axonMat));
-    // Dendrites around the soma.
-    const dpts: number[] = [];
-    for (let d = 0; d < 8; d++) {
-      const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(4);
-      dpts.push(18, 16, -30, 18 + dir.x, 16 + dir.y, -30 + dir.z);
-    }
-    const dgeo = new THREE.BufferGeometry();
-    dgeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(dpts), 3));
-    neuron.add(new THREE.LineSegments(dgeo, axonMat));
-
-    // Neuromuscular junction: the axon terminal arborizes into synaptic boutons
-    // pressed onto a motor end-plate on the central fibre — the point where the
-    // nerve actually drives contraction.
-    const nmj = new THREE.Vector3(2, 2, 6);
-    const boutonMat = this.track(new THREE.MeshStandardMaterial({
-      color: 0xfff0a8, emissive: 0xffd24a, emissiveIntensity: 1.1, roughness: 0.3,
-    }));
-    const boutonGeo = new THREE.SphereGeometry(0.5, 12, 10);
-    for (let b = 0; b < 7; b++) {
-      const bouton = new THREE.Mesh(boutonGeo, boutonMat);
-      bouton.position.set(
-        nmj.x + (Math.random() - 0.5) * 3,
-        nmj.y + (Math.random() - 0.5) * 3,
-        nmj.z + (Math.random() - 0.5) * 4,
+      const fibreGeometry = createOrganicFibreGeometry(spec.seed, 2.05, 176, 18, 38);
+      const fibreMaterial = this.track(
+        new THREE.MeshStandardMaterial({
+          color: 0xa05d5b,
+          map: this.stripes,
+          bumpMap: this.grain,
+          bumpScale: 0.17,
+          roughness: 0.76,
+          metalness: 0,
+          vertexColors: true,
+        }),
       );
-      neuron.add(bouton);
-    }
-    const endPlateMat = this.track(new THREE.MeshBasicMaterial({
-      color: 0xffe07a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
-    const endPlate = new THREE.Mesh(new THREE.CircleGeometry(3.4, 24), endPlateMat);
-    endPlate.position.copy(nmj);
-    endPlate.lookAt(nmj.clone().add(new THREE.Vector3(0.3, 0.3, 1)));
-    neuron.add(endPlate);
 
-    this.root.add(neuron);
-    this.pickables.push(neuron);
+      const points = packedCrossSection(26, 10.7, 3.4, spec.seed * 13);
+      const fibres = new THREE.InstancedMesh(fibreGeometry, fibreMaterial, points.length);
+      fibres.castShadow = true;
+      fibres.receiveShadow = true;
+      fibres.userData.pick = group.userData.pick;
 
-    // ── Atmosphere: fine cytoplasmic dust suspended in the interstitial fluid,
-    // catching the light to give the depth and volume of a real microscopic space.
-    const DUST = 520;
-    const dustPos = new Float32Array(DUST * 3);
-    for (let i = 0; i < DUST; i++) {
-      dustPos[i * 3] = (Math.random() - 0.5) * 110;
-      dustPos[i * 3 + 1] = (Math.random() - 0.5) * 80;
-      dustPos[i * 3 + 2] = (Math.random() - 0.5) * 200;
+      const rng = mulberry32(spec.seed * 97);
+      const dummy = new THREE.Object3D();
+      const color = new THREE.Color();
+      const palette = ['#8f4d50', '#9a5656', '#a6615e', '#7f464a', '#ad6762'];
+
+      points.forEach((point, i) => {
+        dummy.position.set(point.x, point.y, (rng() - 0.5) * 20);
+        dummy.rotation.set(
+          (rng() - 0.5) * 0.018,
+          (rng() - 0.5) * 0.018,
+          (rng() - 0.5) * 0.08,
+        );
+        const radial = 0.78 + rng() * 0.36;
+        dummy.scale.set(
+          radial * (0.94 + rng() * 0.1),
+          radial * (0.9 + rng() * 0.13),
+          0.84 + rng() * 0.23,
+        );
+        dummy.updateMatrix();
+        fibres.setMatrixAt(i, dummy.matrix);
+
+        color.set(palette[Math.floor(rng() * palette.length)]);
+        color.offsetHSL((rng() - 0.5) * 0.015, (rng() - 0.5) * 0.05, (rng() - 0.5) * 0.045);
+        fibres.setColorAt(i, color);
+      });
+      fibres.instanceMatrix.needsUpdate = true;
+      if (fibres.instanceColor) fibres.instanceColor.needsUpdate = true;
+      group.add(fibres);
+
+      // Perimysium is a thin, irregular connective-tissue sleeve, not a solid tube.
+      const sheathGeometry = createOrganicFibreGeometry(spec.seed + 700, 13.35, 191, 24, 30);
+      const sheathMaterial = this.track(
+        new THREE.MeshPhysicalMaterial({
+          color: 0xc5a29a,
+          roughness: 0.86,
+          metalness: 0,
+          transmission: 0.03,
+          thickness: 0.35,
+          transparent: true,
+          opacity: 0.14,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+        }),
+      );
+      const sheath = new THREE.Mesh(sheathGeometry, sheathMaterial);
+      sheath.userData.pick = { id: 'tissue:perimysium', scale: Scale.Tissue };
+      group.add(sheath);
+      this.pickables.push(sheath);
+
+      // Fine endomysial collagen lines between fibres. Kept subtle and non-additive.
+      const collagenSegments: number[] = [];
+      const collagenRng = mulberry32(spec.seed * 131);
+      for (let i = 0; i < 42; i++) {
+        const angle = collagenRng() * Math.PI * 2;
+        const radius = 4 + collagenRng() * 8;
+        const z = (collagenRng() - 0.5) * 160;
+        const length = 8 + collagenRng() * 20;
+        collagenSegments.push(
+          Math.cos(angle) * radius,
+          Math.sin(angle) * radius,
+          z - length * 0.5,
+          Math.cos(angle + 0.05) * (radius + (collagenRng() - 0.5) * 1.4),
+          Math.sin(angle + 0.05) * (radius + (collagenRng() - 0.5) * 1.4),
+          z + length * 0.5,
+        );
+      }
+      const collagenGeometry = new THREE.BufferGeometry();
+      collagenGeometry.setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(collagenSegments, 3),
+      );
+      const collagenMaterial = this.track(
+        new THREE.LineBasicMaterial({
+          color: 0xd8c3b2,
+          transparent: true,
+          opacity: 0.18,
+          depthWrite: false,
+        }),
+      );
+      group.add(new THREE.LineSegments(collagenGeometry, collagenMaterial));
+
+      this.root.add(group);
+      this.pickables.push(fibres);
+      this.fascicles.push({
+        group,
+        phase: fascicleIndex * 1.3 + spec.seed * 0.03,
+        baseScale: spec.scale,
+      });
+    });
+
+    // Capillaries weave between fascicles with a translucent vessel wall.
+    const vesselMaterial = this.track(
+      new THREE.MeshPhysicalMaterial({
+        color: 0x772f36,
+        roughness: 0.48,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.66,
+        transmission: 0.08,
+        thickness: 0.18,
+        depthWrite: false,
+      }),
+    );
+
+    for (let k = 0; k < 5; k++) {
+      const rng = mulberry32(300 + k * 19);
+      const points: THREE.Vector3[] = [];
+      const baseX = (k - 2) * 12;
+      for (let step = 0; step <= 9; step++) {
+        const t = step / 9;
+        points.push(
+          new THREE.Vector3(
+            baseX + Math.sin(t * Math.PI * 2 + k) * (5 + rng() * 3),
+            -8 + Math.cos(t * Math.PI * 1.6 + k * 0.7) * (10 + rng() * 4),
+            -86 + t * 172,
+          ),
+        );
+      }
+      const curve = new THREE.CatmullRomCurve3(points);
+      this.capillaryCurves.push(curve);
+      const vessel = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, 96, 0.78, 10, false),
+        vesselMaterial,
+      );
+      vessel.userData.pick = { id: 'tissue:capillary', scale: Scale.Tissue };
+      vessel.frustumCulled = false;
+      this.root.add(vessel);
+      this.pickables.push(vessel);
     }
-    const dgeo2 = new THREE.BufferGeometry();
-    dgeo2.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
-    this.dustMat = this.track(new THREE.PointsMaterial({
-      color: 0xffd9c4, size: 0.6, transparent: true, opacity: 0,
-      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
-    }));
-    this.dust = new THREE.Points(dgeo2, this.dustMat);
+
+    // Actual biconcave erythrocytes, rather than glowing red point sprites.
+    const rbcGeometry = createRbcGeometry();
+    this.rbcMat = this.track(
+      new THREE.MeshPhysicalMaterial({
+        color: 0x9e3137,
+        roughness: 0.38,
+        metalness: 0,
+        clearcoat: 0.12,
+        transparent: true,
+        opacity: 0.92,
+      }),
+    );
+    const rbcCount = 62;
+    this.rbc = new THREE.InstancedMesh(rbcGeometry, this.rbcMat, rbcCount);
+    this.rbc.frustumCulled = false;
+    this.rbc.userData.pick = { id: 'tissue:red_blood_cell', scale: Scale.Tissue };
+    this.root.add(this.rbc);
+    this.pickables.push(this.rbc);
+
+    for (let i = 0; i < rbcCount; i++) {
+      const rng = mulberry32(900 + i * 17);
+      this.rbcStates.push({
+        curveIndex: i % this.capillaryCurves.length,
+        offset: rng(),
+        speed: 0.025 + rng() * 0.025,
+        spin: rng() * Math.PI * 2,
+      });
+    }
+    this.updateRedBloodCells(0);
+
+    // A restrained motor axon and terminal arbor. It is anatomical context, not a
+    // glowing yellow game-object competing with the tissue.
+    const axonMaterial = this.track(
+      new THREE.MeshStandardMaterial({
+        color: 0xc8b79f,
+        roughness: 0.82,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.72,
+      }),
+    );
+    const axonCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(34, 28, -62),
+      new THREE.Vector3(26, 18, -38),
+      new THREE.Vector3(15, 8, -14),
+      new THREE.Vector3(7, 4, 12),
+    ]);
+    const axon = new THREE.Mesh(new THREE.TubeGeometry(axonCurve, 72, 0.42, 8, false), axonMaterial);
+    axon.userData.pick = { id: 'tissue:motor_neuron', scale: Scale.Tissue };
+    this.root.add(axon);
+    this.pickables.push(axon);
+
+    const terminalMaterial = this.track(
+      new THREE.MeshStandardMaterial({
+        color: 0xbda987,
+        roughness: 0.78,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.82,
+      }),
+    );
+    for (let branch = 0; branch < 5; branch++) {
+      const angle = (branch / 5) * Math.PI * 2;
+      const end = new THREE.Vector3(
+        7 + Math.cos(angle) * (3.8 + (branch % 2)),
+        4 + Math.sin(angle) * 3.2,
+        18 + branch * 1.7,
+      );
+      const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(7, 4, 12),
+        new THREE.Vector3(7 + Math.cos(angle) * 2.0, 4 + Math.sin(angle) * 1.6, 14),
+        end,
+      ]);
+      const branchMesh = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, 24, 0.22, 7, false),
+        terminalMaterial,
+      );
+      branchMesh.userData.pick = axon.userData.pick;
+      this.root.add(branchMesh);
+
+      const bouton = new THREE.Mesh(new THREE.SphereGeometry(0.48, 12, 9), terminalMaterial);
+      bouton.position.copy(end);
+      bouton.scale.set(1.15, 0.8, 0.8);
+      bouton.userData.pick = axon.userData.pick;
+      this.root.add(bouton);
+    }
+
+    // Quiet suspended extracellular particles for depth. No additive sparkle.
+    const particleCount = 360;
+    const particlePositions = new Float32Array(particleCount * 3);
+    const particleRng = mulberry32(4242);
+    for (let i = 0; i < particleCount; i++) {
+      particlePositions[i * 3] = (particleRng() - 0.5) * 112;
+      particlePositions[i * 3 + 1] = (particleRng() - 0.5) * 86;
+      particlePositions[i * 3 + 2] = (particleRng() - 0.5) * 210;
+    }
+    const particleGeometry = new THREE.BufferGeometry();
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    const particleMaterial = this.track(
+      new THREE.PointsMaterial({
+        color: 0xcbb8aa,
+        size: 0.34,
+        transparent: true,
+        opacity: 0.16,
+        depthWrite: false,
+        sizeAttenuation: true,
+      }),
+    );
+    this.dust = new THREE.Points(particleGeometry, particleMaterial);
     this.dust.frustumCulled = false;
     this.root.add(this.dust);
 
-    // Soft biological lighting: a warm key fill from the front and a cool rim
-    // from behind so the fibres read with rounded, translucent volume.
-    this.fill = new THREE.PointLight(0xff9a8a, 0, 160, 1.6);
-    this.fill.position.set(0, 6, 20);
+    // Neutral biological lighting. Warm tissue key + restrained blue-grey fill,
+    // with a hemisphere light to reveal form without emissive materials.
+    this.fill = new THREE.PointLight(0xffd7c8, 0, 175, 1.8);
+    this.fill.position.set(14, 20, 32);
     this.root.add(this.fill);
-    this.rim = new THREE.PointLight(0x6ad0ff, 0, 200, 1.8);
-    this.rim.position.set(-30, 24, -60);
+
+    this.rim = new THREE.PointLight(0x9bb7c7, 0, 190, 1.9);
+    this.rim.position.set(-34, 18, -54);
     this.root.add(this.rim);
+
+    this.hemi = new THREE.HemisphereLight(0xffe8db, 0x251418, 0);
+    this.root.add(this.hemi);
   }
 
   private track<T extends THREE.Material & { opacity: number }>(mat: T): T {
-    mat.transparent = true; mat.opacity = 0;
-    this.fadeables.push(mat);
+    const baseOpacity = mat.opacity;
+    mat.transparent = true;
+    mat.opacity = 0;
+    this.fadeables.push({ mat, baseOpacity });
     return mat;
+  }
+
+  private updateRedBloodCells(elapsed: number): void {
+    const dummy = new THREE.Object3D();
+    const tangent = new THREE.Vector3();
+
+    this.rbcStates.forEach((state, index) => {
+      const curve = this.capillaryCurves[state.curveIndex];
+      const t = (state.offset + elapsed * state.speed) % 1;
+      const position = curve.getPointAt(t);
+      curve.getTangentAt(t, tangent).normalize();
+
+      dummy.position.copy(position);
+      dummy.quaternion.setFromUnitVectors(UP, tangent);
+      dummy.rotateY(state.spin + elapsed * 1.8);
+      dummy.scale.setScalar(0.72);
+      dummy.updateMatrix();
+      this.rbc.setMatrixAt(index, dummy.matrix);
+    });
+
+    this.rbc.instanceMatrix.needsUpdate = true;
   }
 
   onScaleChange(_scale: Scale, intensity: number): void {
@@ -301,39 +572,36 @@ export class TissueField implements SceneLayer {
   }
 
   update(dt: number, elapsed: number): void {
-    for (const mat of this.fadeables) fadeMaterial(mat, this.intensity, dt);
-    for (const mat of this.flowMats) {
-      mat.uniforms.uTime.value += dt;
-      mat.uniforms.uOpacity.value += (this.intensity - mat.uniforms.uOpacity.value) * Math.min(1, dt * 6);
+    for (const { mat, baseOpacity } of this.fadeables) {
+      fadeMaterial(mat, this.intensity * baseOpacity, dt);
     }
-    this.fill.intensity = this.intensity * 2.0;
-    this.rim.intensity = this.intensity * 1.4;
+
+    this.fill.intensity = this.intensity * 1.55;
+    this.rim.intensity = this.intensity * 0.72;
+    this.hemi.intensity = this.intensity * 0.86;
+
     if (this.intensity < 0.02) return;
 
-    // Drift the suspended dust slowly so the fluid feels alive, recycling it
-    // through the volume.
-    const dpos = this.dust.geometry.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < dpos.count; i++) {
-      let z = dpos.getZ(i) + dt * (1.5 + (i % 4));
-      if (z > 100) z = -100;
-      dpos.setZ(i, z);
-      dpos.setY(i, dpos.getY(i) + Math.sin(elapsed * 0.5 + i) * dt * 0.4);
+    // Skeletal muscle is alive, but the motion should be nearly imperceptible.
+    for (const fascicle of this.fascicles) {
+      const contraction = 1 + Math.sin(elapsed * 0.78 + fascicle.phase) * 0.006;
+      fascicle.group.scale.set(
+        fascicle.baseScale * contraction,
+        fascicle.baseScale * contraction,
+        fascicle.baseScale / contraction,
+      );
     }
-    dpos.needsUpdate = true;
 
-    // Subtle contraction ripple across the fibres.
-    for (const f of this.fibres) {
-      const c = 1 + Math.sin(elapsed * 1.2 + f.phase) * 0.025;
-      f.mesh.scale.x = f.mesh.scale.y = (f.mesh.userData.s ?? 1) * c;
+    this.updateRedBloodCells(elapsed);
+
+    const positions = this.dust.geometry.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < positions.count; i++) {
+      let z = positions.getZ(i) + dt * (0.55 + (i % 5) * 0.12);
+      if (z > 105) z = -105;
+      positions.setZ(i, z);
+      positions.setY(i, positions.getY(i) + Math.sin(elapsed * 0.22 + i * 0.37) * dt * 0.06);
     }
-    // Stream blood cells along the fibres and recycle them.
-    const pos = this.blood.geometry.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < pos.count; i++) {
-      let z = pos.getZ(i) + dt * (12 + (i % 6) * 3);
-      if (z > 80) z = -80;
-      pos.setZ(i, z);
-    }
-    pos.needsUpdate = true;
+    positions.needsUpdate = true;
   }
 
   getPickables(): THREE.Object3D[] {
@@ -342,7 +610,7 @@ export class TissueField implements SceneLayer {
 
   dispose(): void {
     this.stripes.dispose();
-    this.muscle.dispose();
+    this.grain.dispose();
     disposeObject(this.root);
   }
 }
