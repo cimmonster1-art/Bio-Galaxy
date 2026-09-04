@@ -22,6 +22,13 @@ const ANATOMY: SearchResult[] = [
   { id: 'cell:rbc', label: 'Red blood cell', sublabel: 'Cell · erythrocyte', scale: Scale.Cell },
 ];
 
+// Curated aliases are kept beside search rather than preview rendering so every
+// term that can produce a convincing preview can also resolve to a real atlas
+// destination. This prevents visually interactive cards from becoming dead ends.
+const OBJECT_ALIASES: Record<string, string[]> = {
+  mitochondrion: ['mitochondria', 'mitochondrium', 'mitochondrial organelle'],
+};
+
 // Marquee cross-scale objects that anchor a signature traversal but live outside
 // the registry; surfaced here with their alternate spellings so a search lands
 // directly on the curated, navigable record.
@@ -51,7 +58,8 @@ export function searchAtlas(query: string, limit = 10): SearchResult[] {
   }
 
   for (const obj of Object.values(BIO_OBJECTS)) {
-    if (obj.name.toLowerCase().includes(q)) {
+    const aliases = OBJECT_ALIASES[obj.id] ?? [];
+    if (obj.name.toLowerCase().includes(q) || aliases.some((alias) => alias.includes(q) || q.includes(alias))) {
       results.push({
         id: obj.id,
         label: obj.name,
