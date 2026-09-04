@@ -96,6 +96,7 @@ export const GlobalSearch: React.FC<Props> = ({ onSelect }) => {
     onSelect(id);
     setOpen(false);
     setQuery('');
+    setActiveIndex(0);
     inputRef.current?.blur();
   };
 
@@ -103,13 +104,13 @@ export const GlobalSearch: React.FC<Props> = ({ onSelect }) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setOpen(true);
-      setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+      setActiveIndex((i) => Math.min(i + 1, Math.max(0, results.length - 1)));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter' && results[activeIndex]) {
+    } else if (e.key === 'Enter' && active) {
       e.preventDefault();
-      choose(results[activeIndex].id);
+      choose(active.id);
     } else if (e.key === 'Escape') {
       setOpen(false);
       inputRef.current?.blur();
@@ -172,45 +173,52 @@ export const GlobalSearch: React.FC<Props> = ({ onSelect }) => {
       {open && query.trim() && (preview || results.length > 0) && (
         <div className="panel absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-md">
           {preview && (
-            <div className="flex items-stretch gap-3 border-b border-white/10 bg-gradient-to-b from-cyan-500/[0.06] to-transparent p-2.5">
-              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-md border border-white/10 bg-[#02040a]">
+            <button
+              type="button"
+              disabled={!active}
+              onClick={() => active && choose(active.id)}
+              className="flex w-full items-stretch gap-3 border-b border-white/10 bg-gradient-to-b from-cyan-500/[0.06] to-transparent p-2.5 text-left transition enabled:hover:bg-cyan-500/[0.09] disabled:cursor-default"
+              aria-label={active ? `Open ${active.label} in the atlas` : `${preview.title} preview`}
+            >
+              <span className="h-24 w-24 shrink-0 overflow-hidden rounded-md border border-white/10 bg-[#02040a]">
                 <SearchPreview3D model={preview} />
-              </div>
-              <div className="flex min-w-0 flex-col justify-center gap-1">
+              </span>
+              <span className="flex min-w-0 flex-col justify-center gap-1">
                 <span className="meta-label text-cyan-300/90">Live 3D preview</span>
                 <span className="truncate text-[13px] font-semibold text-slate-100">{preview.title}</span>
                 <span className="text-[11px] text-slate-400">{previewLabel}</span>
                 <span className="truncate text-[10px] text-slate-500">{preview.source}</span>
-              </div>
-            </div>
+                <span className={`mt-1 text-[10px] font-medium ${active ? 'text-cyan-200' : 'text-slate-600'}`}>{active ? 'Open in atlas · Enter' : 'Preview only · no atlas record'}</span>
+              </span>
+            </button>
           )}
           {results.length > 0 && (
-        <ul
-          id="atlas-search-list"
-          role="listbox"
-          aria-label="Search results"
-          className="max-h-60 overflow-y-auto scroll-thin py-1"
-        >
-          {results.map((r, i) => (
-            <li
-              key={r.id}
-              id={`atlas-search-opt-${i}`}
-              role="option"
-              aria-selected={i === activeIndex}
+            <ul
+              id="atlas-search-list"
+              role="listbox"
+              aria-label="Search results"
+              className="max-h-60 overflow-y-auto scroll-thin py-1"
             >
-              <button
-                onMouseEnter={() => setActiveIndex(i)}
-                onClick={() => choose(r.id)}
-                className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left transition ${
-                  i === activeIndex ? 'bg-cyan-500/10' : 'hover:bg-white/[0.03]'
-                }`}
-              >
-                <span className="truncate text-[12px] text-slate-100">{r.label}</span>
-                <span className="meta-label shrink-0">{r.sublabel}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+              {results.map((r, i) => (
+                <li
+                  key={r.id}
+                  id={`atlas-search-opt-${i}`}
+                  role="option"
+                  aria-selected={i === activeIndex}
+                >
+                  <button
+                    onMouseEnter={() => setActiveIndex(i)}
+                    onClick={() => choose(r.id)}
+                    className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left transition ${
+                      i === activeIndex ? 'bg-cyan-500/10' : 'hover:bg-white/[0.03]'
+                    }`}
+                  >
+                    <span className="truncate text-[12px] text-slate-100">{r.label}</span>
+                    <span className="meta-label shrink-0">{r.sublabel}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
