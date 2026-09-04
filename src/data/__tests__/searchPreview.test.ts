@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { searchAtlas, type SearchResult } from '../search';
 import { asElement, asGalaxy, instantPreview } from '../searchPreview';
-import type { SearchResult } from '../search';
 
 describe('element detection', () => {
   it('recognizes elements by name, with or without "atom"', () => {
@@ -78,6 +78,11 @@ describe('instantPreview resolution', () => {
   it('renders a mitochondrion as an organelle', () => {
     assert.equal(instantPreview('mitochondrion', undefined)?.kind, 'organelle');
     assert.equal(instantPreview('mitochondria', undefined)?.kind, 'organelle');
+  });
+
+  it('keeps preview aliases navigable in atlas search', () => {
+    assert.equal(searchAtlas('mitochondria')[0]?.id, 'mitochondrion');
+    assert.equal(searchAtlas('mitochondrion')[0]?.id, 'mitochondrion');
   });
 
   it('renders a red blood cell as a biconcave disk', () => {
