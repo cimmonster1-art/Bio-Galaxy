@@ -17,7 +17,9 @@ export const LifeCladeExplorer: React.FC<Props> = ({ selectedTaxonId, onSelect, 
   const taxa = useMemo(() => allTaxa(), []);
   const matches = useMemo(() => query.trim() ? taxa.filter((node) => `${node.name} ${node.common ?? ''} ${node.rank}`.toLowerCase().includes(query.toLowerCase())).slice(0, 40) : [], [query, taxa]);
   const selected = useMemo(() => taxa.find((node) => node.id === selectedTaxonId) ?? null, [selectedTaxonId, taxa]);
-  const lineage = useMemo(() => selectedTaxonId ? lineageOf(selectedTaxonId) : TREE_OF_LIFE, [selectedTaxonId]);
+  // A breadcrumb is an ancestry path, never a list of root-level domains. With
+  // no selection there is deliberately no lineage to display.
+  const lineage = useMemo(() => selectedTaxonId ? lineageOf(selectedTaxonId) : [], [selectedTaxonId]);
 
   return <section className="flex min-h-0 flex-1 flex-col bg-[#040911]" aria-label="Tree of Life workspace">
     <header className="flex flex-wrap items-center gap-3 border-b border-white/10 px-3 py-3 sm:flex-nowrap sm:gap-4 sm:px-5">
