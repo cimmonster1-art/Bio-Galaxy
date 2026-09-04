@@ -10,13 +10,14 @@ interface BranchProps extends TaxonSelectionProps {
 
 const TaxonBranch: React.FC<BranchProps> = ({ node, depth, selectedTaxonId, onSelect }) => {
   const [open, setOpen] = useState(depth < 1);
+  const selected = selectedTaxonId === node.id;
   return <li>
-    <div className={`group flex items-center rounded-md ${selectedTaxonId === node.id ? 'bg-cyan-500/12' : 'hover:bg-white/[.035]'}`}>
+    <div className={`group flex items-center rounded-md ${selected ? 'bg-cyan-500/12' : 'hover:bg-white/[.035]'}`}>
       <button type="button" onClick={() => setOpen((value) => !value)} disabled={!node.children.length} className="p-2 text-slate-600 disabled:opacity-0" aria-label={`${open ? 'Collapse' : 'Expand'} ${node.name}`}>
         <ChevronRight className={`h-3 w-3 transition ${open ? 'rotate-90' : ''}`} />
       </button>
       <button type="button" onClick={() => onSelect(node.id)} className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pr-2 text-left">
-        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: `hsl(${node.hue} 70% 62%)` }} />
+        <span className={`h-2 w-2 shrink-0 rounded-full transition ${selected ? 'bg-cyan-300' : 'bg-slate-600 group-hover:bg-cyan-400/60'}`} />
         <span className="min-w-0 flex-1 truncate text-[12px] text-slate-200">{node.name}</span>
         <span className="meta-label">{node.rank}</span>
       </button>
