@@ -47,8 +47,8 @@ export const AtlasCopilot: React.FC<Props> = ({ scale, selected, hovered }) => {
     ask(query);
   };
 
-  return <div className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[100] flex flex-col items-end gap-2">
-    {open && <section className="panel flex h-[min(650px,calc(100dvh-6rem))] w-[min(430px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border-cyan-400/20 shadow-2xl shadow-black/60" aria-label="Bio Galaxy copilot">
+  return <div className="relative flex shrink-0 items-center">
+    {open && <section className="copilot-panel panel fixed right-3 top-[4.5rem] z-[120] flex h-[min(650px,calc(100dvh-6rem))] w-[min(430px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border-cyan-400/20 sm:right-5 sm:top-[4.25rem]" aria-label="Bio Galaxy copilot">
       <header className="flex items-center gap-2 border-b border-white/10 bg-cyan-500/[.06] px-3 py-3">
         <span className="grid h-8 w-8 place-items-center rounded-lg bg-cyan-400/15 text-cyan-200"><Bot className="h-4 w-4"/></span>
         <div className="min-w-0 flex-1"><div className="text-[12px] font-semibold">Atlas copilot</div><div className="meta-label truncate">Observing {observed?.name ?? SCALE_LEVELS[scale].name}</div></div>
@@ -72,7 +72,7 @@ export const AtlasCopilot: React.FC<Props> = ({ scale, selected, hovered }) => {
       </div>
       <form className="flex gap-2 border-t border-white/10 p-3" onSubmit={submit}><input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ask any question about this view" className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 text-[12px] outline-none focus:border-cyan-400/40"/><button className="grid h-9 w-9 place-items-center rounded-lg bg-cyan-400 text-slate-950 disabled:opacity-40" aria-label="Send" disabled={!query.trim()}><Send className="h-3.5 w-3.5"/></button></form>
     </section>}
-    <button onClick={() => setOpen((value) => !value)} className="copilot-launcher flex min-h-12 items-center gap-2 rounded-full border border-cyan-300/40 bg-[#08202b] px-4 py-3 text-[12px] font-semibold text-cyan-100 shadow-xl shadow-black/50 transition hover:scale-105 hover:border-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-300" aria-expanded={open} aria-label="Open atlas copilot"><Bot className="h-4 w-4"/><span>Copilot</span><span className="hidden font-mono text-[9px] text-cyan-300/60 sm:inline">⌘/</span></button>
+    <button onClick={() => setOpen((value) => !value)} className="copilot-launcher flex min-h-9 items-center gap-2 rounded-full border border-cyan-300/35 bg-[#08202b] px-3 py-2 text-[11px] font-semibold text-cyan-100 transition hover:border-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-300" aria-expanded={open} aria-label="Open atlas copilot"><Bot className="h-4 w-4"/><span className="hidden sm:inline">Copilot</span><span className="hidden font-mono text-[9px] text-cyan-300/60 xl:inline">⌘/</span></button>
   </div>;
 };
 
