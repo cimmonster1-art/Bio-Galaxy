@@ -1,5 +1,7 @@
 # Bio Galaxy
 
+[Project overview](PROJECT_OVERVIEW.md) · [Charli Myers portfolio](https://cimmonster1-art.github.io/)
+
 Bio Galaxy is an open-source, interactive 3D biological atlas for exploring the
 universe as one continuous physical object — from the observable cosmos down to a
 single atom — and, in a parallel mode, the whole Tree of Life. It is a
